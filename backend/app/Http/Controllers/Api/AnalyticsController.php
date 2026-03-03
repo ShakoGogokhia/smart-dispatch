@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 
 class AnalyticsController extends Controller
 {
-    // GET /api/analytics/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
     public function summary(Request $request)
     {
         $from = $request->query('from', now()->subDays(7)->toDateString());
