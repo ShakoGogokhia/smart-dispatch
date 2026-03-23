@@ -27,14 +27,10 @@ export default function MyMarketsPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(251,191,36,0.15),_rgba(255,255,255,0.95)),linear-gradient(180deg,_#fffefb_0%,_#f8f4ec_100%)] p-6">
-        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">{t("nav.markets")}</div>
-        <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
-          {t("markets.myTitle")}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          {t("markets.myText")}
-        </p>
+      <div className="intro-panel">
+        <div className="section-kicker">{t("nav.markets")}</div>
+        <h1 className="intro-title">{t("markets.myTitle")}</h1>
+        <p className="intro-copy">{t("markets.myText")}</p>
       </div>
 
       {marketsQ.isLoading ? (

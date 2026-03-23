@@ -13,13 +13,14 @@ class UsersController extends Controller
     {
         return User::query()
             ->with('roles:name')
-            ->select('id', 'name', 'email')
+            ->select('id', 'name', 'email', 'language')
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'language' => $user->language,
                 'roles' => $user->getRoleNames()->values(),
             ])
             ->values();
@@ -30,6 +31,7 @@ class UsersController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'language' => ['nullable', 'string', 'in:en,ka'],
             'password' => ['required', 'string', 'min:6'],
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['string', Rule::in(['admin', 'owner', 'staff', 'customer', 'driver'])],
@@ -38,6 +40,7 @@ class UsersController extends Controller
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
+            'language' => $data['language'] ?? 'en',
             'password' => $data['password'],
         ]);
         $user->syncRoles($data['roles']);
@@ -46,6 +49,7 @@ class UsersController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'language' => $user->language,
             'roles' => $user->getRoleNames()->values(),
         ], 201);
     }
@@ -55,6 +59,7 @@ class UsersController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'language' => ['sometimes', 'string', 'in:en,ka'],
             'password' => ['nullable', 'string', 'min:6'],
             'roles' => ['sometimes', 'array', 'min:1'],
             'roles.*' => ['string', Rule::in(['admin', 'owner', 'staff', 'customer', 'driver'])],
@@ -66,6 +71,9 @@ class UsersController extends Controller
         }
         if (array_key_exists('email', $data)) {
             $updates['email'] = $data['email'];
+        }
+        if (array_key_exists('language', $data)) {
+            $updates['language'] = $data['language'];
         }
         if (!empty($data['password'])) {
             $updates['password'] = $data['password'];
@@ -83,6 +91,7 @@ class UsersController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'language' => $user->language,
             'roles' => $user->getRoleNames()->values(),
         ]);
     }
@@ -91,13 +100,14 @@ class UsersController extends Controller
     {
         return User::query()
             ->with('roles:name')
-            ->select('id','name','email')
+            ->select('id','name','email', 'language')
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'language' => $user->language,
                 'roles' => $user->getRoleNames()->values(),
             ])
             ->values();
@@ -106,13 +116,14 @@ class UsersController extends Controller
     public function assignable(Market $market)
     {
         return User::query()
-            ->select('id', 'name', 'email')
+            ->select('id', 'name', 'email', 'language')
             ->orderBy('name')
             ->get()
             ->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'language' => $user->language,
                 'roles' => $user->getRoleNames()->values(),
                 'is_owner' => (int) $market->owner_user_id === (int) $user->id,
             ])

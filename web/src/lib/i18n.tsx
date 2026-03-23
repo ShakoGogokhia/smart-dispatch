@@ -1,7 +1,22 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import { api } from "@/lib/api";
+import { auth } from "@/lib/auth";
 
 export type Language = "ka" | "en";
+const LANGUAGE_STORAGE_KEY = "smart-dispatch-language";
+
+function normalizeLanguage(value: unknown): Language {
+  return value === "ka" ? "ka" : "en";
+}
+
+function getBrowserLanguage(): Language {
+  if (typeof navigator === "undefined") {
+    return "en";
+  }
+
+  return navigator.language.toLowerCase().startsWith("ka") ? "ka" : "en";
+}
 
 type Dictionary = Record<string, string>;
 
@@ -179,6 +194,193 @@ const dictionaries: Record<Language, Dictionary> = {
     "users.saveChanges": "ცვლილებების შენახვა",
     "users.creating": "იქმნება...",
     "users.saving": "ინახება...",
+    "common.loadingUser": "მომხმარებელი იტვირთება...",
+    "common.location": "მდებარეობა",
+    "common.items": "პროდუქტები",
+    "common.market": "მარკეტი",
+    "common.customer": "მომხმარებელი",
+    "common.driver": "მძღოლი",
+    "common.total": "ჯამი",
+    "common.created": "შექმნილი",
+    "common.status": "სტატუსი",
+    "common.actions": "ქმედებები",
+    "common.unknown": "უცნობი",
+    "common.unassigned": "მინიჭებული არ არის",
+    "common.notProvided": "არ არის მითითებული",
+    "common.optional": "არასავალდებულო",
+    "common.live": "ცოცხალი",
+    "common.deliveryAddress": "მისატანი მისამართი",
+    "common.updated": "განახლდა",
+    "common.from": "დან",
+    "common.to": "მდე",
+    "common.yes": "კი",
+    "common.no": "არა",
+    "role.admin": "ადმინი",
+    "role.owner": "მფლობელი",
+    "role.staff": "თანამშრომელი",
+    "role.customer": "მომხმარებელი",
+    "role.driver": "მძღოლი",
+    "nav.driverHub": "მძღოლის ჰაბი",
+    "nav.drivers": "მძღოლები",
+    "layout.workspaceLabel": "სამუშაო სივრცე",
+    "layout.workspaceTitle": "Smart Dispatch სამუშაო სივრცე",
+    "layout.workspaceCopy": "შეკვეთები, მარშრუტები, ცოცხალი ხედები და მარკეტის ხელსაწყოები ერთ მშვიდ სივრცეში.",
+    "layout.globalWorkspace": "გლობალური სივრცე",
+    "login.kicker": "კომერცია, მარშრუტები და ცოცხალი ოპერაციები",
+    "login.pillUnified": "ერთიანი შეკვეთები",
+    "login.pillHandoffs": "გასაგები გადაბარება",
+    "login.pillMobile": "მარტივი მობილურზე",
+    "login.whySimple": "რატომ არის უფრო მარტივი",
+    "login.accessNode": "წვდომა",
+    "auth.loginFailed": "შესვლა ვერ მოხერხდა",
+    "auth.registerFailed": "რეგისტრაცია ვერ მოხერხდა",
+    "public.marketplace": "საჯარო მარკეტი",
+    "public.heroKicker": "მარკეტი, კალათა, შეკვეთა, დისპეტჩინგი",
+    "public.liveAvailability": "მიმდინარე ხელმისაწვდომობა",
+    "public.readyForOrders": "მარკეტები ახლა გახსნილია და მზადაა შეკვეთებისთვის.",
+    "public.totalStorefronts": "სულ ვიტრინები",
+    "public.palette": "სტილი",
+    "public.howItWorks": "როგორ მუშაობს",
+    "public.threeSteps": "შეუკვეთე სამი მარტივი ნაბიჯით",
+    "public.openNow": "ახლა გახსნილია",
+    "public.activeNow": "აქტიური ახლა",
+    "public.location": "მდებარეობა",
+    "public.addressComingSoon": "მისამართი მალე დაემატება",
+    "public.browseTitle": "დაათვალიერე აქტიური მარკეტები",
+    "public.step.pickMarket.title": "აირჩიე მარკეტი",
+    "public.step.pickMarket.text": "დაიწყე ცოცხალი ვიტრინებიდან, რომლებსაც უკვე აქვთ ოპერაციული კონტექსტი.",
+    "public.step.buildCart.title": "შეავსე კალათა",
+    "public.step.buildCart.text": "ფასი, რაოდენობა და დაზოგვა კითხვისთვის მარტივად რჩება.",
+    "public.step.handoff.title": "გადასცე დისპეტჩინგს",
+    "public.step.handoff.text": "შეკვეთა გამარტივებულად გადადის მიწოდების პროცესში.",
+    "public.loadingMarket": "მარკეტი იტვირთება...",
+    "market.pillPersistentCart": "შენახული კალათა",
+    "market.pillLiveSavings": "ცოცხალი ფასდაკლება",
+    "market.pillDispatchReady": "დისპეტჩინგისთვის მზად",
+    "market.storefrontMode": "ვიტრინის რეჟიმი",
+    "market.fastLane": "სწრაფი ზოლი",
+    "market.fastLaneCopy": "ერთი და იგივე სუფთა იერარქია მუშაობს როგორც ღია, ისე მუქ თემაში.",
+    "market.itemsVisible": "ხილული პროდუქტები",
+    "market.marketState": "მარკეტის მდგომარეობა",
+    "market.catalogTitle": "კატალოგის დათვალიერება",
+    "market.discountAppliedPercent": "გამოყენებულია {value}% ფასდაკლება",
+    "market.discountAppliedFixed": "გამოყენებულია {value} ფასდაკლება",
+    "market.readyToAdd": "დასამატებლად მზადაა",
+    "market.availableForCheckout": "შეკვეთისთვის ხელმისაწვდომია",
+    "market.unavailableNow": "ამჟამად მიუწვდომელია",
+    "market.marketIdMissing": "მარკეტის ID არ არის მითითებული.",
+    "checkout.introTitle": "ნამდვილი მარკეტის შეკვეთის გაგზავნა",
+    "checkout.introCopy": "ეს გვერდი აგზავნის სტრუქტურირებულ შეკვეთას მომხმარებლის მონაცემებით, ხაზებით, პრომო კოდით და კოორდინატებით.",
+    "checkout.deliveryNotes": "მიტანის შენიშვნები",
+    "checkout.each": "ცალი",
+    "checkout.noMarketSelected": "მარკეტი არჩეული არ არის.",
+    "checkout.optional": "არასავალდებულო",
+    "checkout.liveDispatch": "ცოცხალი დისპეტჩინგი",
+    "checkout.liveDispatchText": "შეკვეთა ჯერ მარკეტში მიდის. ცოცხალი თვალთვალი იწყება მხოლოდ აყვანის შემდეგ.",
+    "orders.customerDesk": "მომხმარებლის შეკვეთები",
+    "orders.customerHeroTitle": "მიწოდების ქრონოლოგია, რომელიც კითხვისთვის მარტივია",
+    "orders.customerHeroText": "მარკეტი, მძღოლი და თვალთვალი ერთ გასაგებ ნაკადად ჩანს.",
+    "orders.ordersVisible": "ხილული შეკვეთები",
+    "orders.deliveredCount": "მიტანილი",
+    "orders.refreshMode": "განახლების რეჟიმი",
+    "orders.refreshCopy": "ეს დაფა ავტომატურად ახლდება, სანამ შეკვეთა მოძრაობს.",
+    "orders.liveCount": "ცოცხალი რაოდენობა",
+    "orders.readableStatusPath": "გასაგები სტატუსები",
+    "orders.readableStatusCopy": "მარკეტი, მძღოლი, ჯამი და თვალთვალი ერთად ჩანს.",
+    "orders.loadingCustomer": "თქვენი შეკვეთები იტვირთება...",
+    "orders.noneYet": "თქვენ ჯერ შეკვეთა არ გაგიკეთებიათ.",
+    "orders.placed": "შექმნილი",
+    "orders.pickup": "აყვანა",
+    "orders.unknownMarket": "უცნობი მარკეტი",
+    "orders.marketPickupPoint": "მარკეტის აყვანის წერტილი",
+    "orders.waitingForAssignment": "დანიშვნას ელოდება",
+    "orders.itemsLabel": "პროდუქტები",
+    "orders.liveDriverTracking": "მძღოლის ცოცხალი თვალთვალი",
+    "orders.trackingAfterPickup": "ეს ნაწილი გამოჩნდება მას შემდეგ, რაც მძღოლი შეკვეთას აიღებს.",
+    "orders.deliveryAddress": "მისატანი მისამართი",
+    "orders.customerDestination": "მომხმარებლის მისამართი",
+    "orders.trackingLater": "ცოცხალი თვალთვალი აყვანის შემდეგ გამოჩნდება.",
+    "orders.commandBoard": "შეკვეთების დაფა",
+    "orders.opsHeroTitle": "სუფთა დისპეტჩინგის დაფა ყოველდღიური მუშაობისთვის",
+    "orders.opsHeroText": "მოძებნე, შექმენი და გადაიყვანე შეკვეთები ერთი გასაგები ზედაპირიდან.",
+    "orders.visibleOrders": "ხილული შეკვეთები",
+    "orders.marketPendingCount": "მარკეტს ელოდება",
+    "orders.inDriverFlow": "მძღოლის პროცესში",
+    "orders.createOpsOrder": "ოპერაციული შეკვეთის შექმნა",
+    "orders.createOpsText": "ხელით მიღება ქოლ ცენტრის ან დისპეტჩერის შემთხვევებისთვის.",
+    "orders.howToRead": "როგორ წავიკითხოთ დაფა",
+    "orders.howToReadText": "ძებნა ცოცხლად ავიწროებს ჩანაწერებს. სტატუსები აჩენს პრიორიტეტს, ქმედებები კი მხოლოდ შემდეგ ეტაპზე ჩნდება.",
+    "orders.tableTitle": "ოპერაციული შეკვეთების ცხრილი",
+    "orders.tableText": "კმარა რეალური დისპეტჩინგისთვის და მაინც ადვილად იკითხება.",
+    "orders.searchPlaceholder": "შეკვეთების ძებნა",
+    "orders.directOrder": "პირდაპირი შეკვეთა",
+    "orders.accept": "დადასტურება",
+    "orders.decline": "უარყოფა",
+    "orders.markReady": "მზადაა",
+    "orders.waitingForDriver": "მძღოლს ელოდება",
+    "orders.inDeliveryFlow": "მიწოდების პროცესში",
+    "routes.introCopy": "`/api/live/routes`-დან დატვირთული გეგმები მიმდინარე მარშრუტების სანახავად.",
+    "routes.routeNumber": "მარშრუტი #{id}",
+    "routes.driverNumber": "მძღოლი #{id}",
+    "routes.distanceKm": "{value} კმ",
+    "routes.durationMin": "{value} წთ",
+    "live.board": "ცოცხალი ტელემეტრია",
+    "live.titleLong": "თვალთვალის კედელი, რომელიც სიჩქარისთვის იკითხება",
+    "live.metricCopy": "მძღოლების ლოკაციები ახლდება ყოველ {value} მწმ-ში.",
+    "live.mapCenter": "რუკის ცენტრი",
+    "live.mapNotesTitle": "რუკის შენიშვნები",
+    "live.latestPingsOnly": "მხოლოდ ბოლო პინგები",
+    "live.latestPingsText": "ყოველი მარკერი backend-იდან დაბრუნებულ ბოლო ლოკაციას აჩვენებს.",
+    "live.operationalUse": "ოპერაციული გამოყენება",
+    "live.operationalUseText": "ეს ხედი უკეთესია თავისუფალი ზონების, დაყოვნებული ტრეკინგის და დაჯგუფებების სანახავად.",
+    "live.driverNumber": "მძღოლი #{id}",
+    "analytics.board": "ანალიტიკის დაფა",
+    "analytics.titleLong": "ოპერაციული სურათი, დაყვანილი მთავარ სიგნალებზე",
+    "analytics.reportingRange": "ანგარიშის დიაპაზონი",
+    "analytics.readingGuide": "კითხვის გზამკვლევი",
+    "analytics.fastSummary": "ჯერ სწრაფი შეჯამება",
+    "analytics.fastSummaryText": "დაფა იწყება მაჩვენებლებით, რომ გუნდმა სწრაფად დაინახოს პრობლემა.",
+    "analytics.backendContract": "backend კონტრაქტი შენარჩუნებულია",
+    "analytics.backendContractText": "ეს გვერდი ისევ პირდაპირ მიჰყვება `/api/analytics/summary` პასუხს.",
+    "drivers.onlyAdmin": "მძღოლებისა და მანქანების მართვა მხოლოდ ადმინს შეუძლია.",
+    "drivers.kicker": "ფლოტის მართვა",
+    "drivers.title": "მძღოლები, მანქანები და მიწოდების რესურსი",
+    "drivers.copy": "შექმენი მძღოლები, მიუბი მანქანები და აკონტროლე ვინ არის ონლაინ.",
+    "drivers.vehicles": "მანქანები",
+    "drivers.addVehicle": "მანქანის დამატება",
+    "drivers.createVehicle": "მანქანის შექმნა",
+    "drivers.type": "ტიპი",
+    "drivers.capacity": "ტევადობა",
+    "drivers.maxStops": "მაქს. გაჩერებები",
+    "drivers.nA": "არ არის",
+    "drivers.addDriver": "მძღოლის დამატება",
+    "drivers.createDriver": "მძღოლის შექმნა",
+    "drivers.vehicle": "მანქანა",
+    "drivers.optionalVehicle": "სურვილისამებრ მანქანა",
+    "drivers.shift": "ცვლა",
+    "drivers.offShift": "ცვლის გარეთ",
+    "drivers.active": "აქტიური",
+    "driverHub.onlyDrivers": "ეს სივრცე მხოლოდ მძღოლებისთვისაა.",
+    "driverHub.kicker": "მძღოლის ჰაბი",
+    "driverHub.title": "ცვლა, შეთავაზებები და მინიჭებული მიწოდებები",
+    "driverHub.copy": "დაიწყე ცვლა, გააგზავნე ლოკაცია, მიიღე შეთავაზებები და დახურე მიწოდება ერთი ეკრიდან.",
+    "driverHub.statusTitle": "მძღოლის სტატუსი",
+    "driverHub.currentState": "მიმდინარე მდგომარეობა",
+    "driverHub.shiftStarted": "ცვლა დაიწყო {time}-ზე",
+    "driverHub.noActiveShift": "აქტიური ცვლა არ არის",
+    "driverHub.startShift": "ცვლის დაწყება",
+    "driverHub.starting": "იწყება...",
+    "driverHub.endShift": "ცვლის დასრულება",
+    "driverHub.ending": "მთავრდება...",
+    "driverHub.sendLocation": "ლოკაციის გაგზავნა",
+    "driverHub.sendPing": "პინგის გაგზავნა",
+    "driverHub.sending": "იგზავნება...",
+    "driverHub.incomingOffers": "შემომავალი შეთავაზებები",
+    "driverHub.noOffers": "აქტიური შეთავაზებები ჯერ არ არის. შეინარჩუნე ცვლა აქტიური და გააგზავნე ახალი პინგები.",
+    "driverHub.assignedDeliveries": "მინიჭებული მიწოდებები",
+    "driverHub.noAssigned": "მინიჭებული მიწოდებები ჯერ არ არის.",
+    "driverHub.markPickedUp": "აღებული მონიშნე",
+    "driverHub.markDelivered": "მიტანილი მონიშნე",
   },
   en: {
     "lang.ka": "ქართული",
@@ -353,33 +555,264 @@ const dictionaries: Record<Language, Dictionary> = {
     "users.saveChanges": "Save changes",
     "users.creating": "Creating...",
     "users.saving": "Saving...",
+    "common.loadingUser": "Loading user...",
+    "common.location": "Location",
+    "common.items": "Items",
+    "common.market": "Market",
+    "common.customer": "Customer",
+    "common.driver": "Driver",
+    "common.total": "Total",
+    "common.created": "Created",
+    "common.status": "Status",
+    "common.actions": "Actions",
+    "common.unknown": "Unknown",
+    "common.unassigned": "Unassigned",
+    "common.notProvided": "Not provided",
+    "common.optional": "Optional",
+    "common.live": "Live",
+    "common.deliveryAddress": "Delivery address",
+    "common.updated": "Updated",
+    "common.from": "From",
+    "common.to": "To",
+    "common.yes": "Yes",
+    "common.no": "No",
+    "role.admin": "Admin",
+    "role.owner": "Owner",
+    "role.staff": "Staff",
+    "role.customer": "Customer",
+    "role.driver": "Driver",
+    "nav.driverHub": "Driver Hub",
+    "nav.drivers": "Drivers",
+    "layout.workspaceLabel": "Workspace",
+    "layout.workspaceTitle": "Smart dispatch workspace",
+    "layout.workspaceCopy": "Orders, routes, live visibility, and market tools in one calmer workspace.",
+    "layout.globalWorkspace": "Global workspace",
+    "login.kicker": "Commerce, routing, and live operations",
+    "login.pillUnified": "Unified orders",
+    "login.pillHandoffs": "Cleaner handoffs",
+    "login.pillMobile": "Better mobile scan",
+    "login.whySimple": "Why it feels simpler",
+    "login.accessNode": "Access",
+    "auth.loginFailed": "Login failed",
+    "auth.registerFailed": "Registration failed",
+    "public.marketplace": "Public marketplace",
+    "public.heroKicker": "Marketplace, cart, checkout, dispatch",
+    "public.liveAvailability": "Live availability",
+    "public.readyForOrders": "Markets open right now and ready for orders.",
+    "public.totalStorefronts": "Total storefronts",
+    "public.palette": "Palette",
+    "public.howItWorks": "How it works",
+    "public.threeSteps": "Order in three simple steps",
+    "public.openNow": "Open now",
+    "public.activeNow": "active now",
+    "public.location": "Location",
+    "public.addressComingSoon": "Address coming soon",
+    "public.browseTitle": "Browse live storefronts",
+    "public.step.pickMarket.title": "Pick a market",
+    "public.step.pickMarket.text": "Start from live storefronts that already know their operational context.",
+    "public.step.buildCart.title": "Build a fast cart",
+    "public.step.buildCart.text": "Pricing, quantity, and savings stay readable while you shop.",
+    "public.step.handoff.title": "Handoff to dispatch",
+    "public.step.handoff.text": "Checkout feeds cleanly into the delivery workflow without losing signal.",
+    "public.loadingMarket": "Loading market...",
+    "market.pillPersistentCart": "Persistent cart",
+    "market.pillLiveSavings": "Live savings",
+    "market.pillDispatchReady": "Dispatch-ready checkout",
+    "market.storefrontMode": "Storefront mode",
+    "market.fastLane": "Fast lane",
+    "market.fastLaneCopy": "Focused around the same clean hierarchy in both light and dark mode.",
+    "market.itemsVisible": "Items visible",
+    "market.marketState": "Market state",
+    "market.catalogTitle": "Shop the catalog",
+    "market.discountAppliedPercent": "{value}% discount applied",
+    "market.discountAppliedFixed": "{value} discount applied",
+    "market.readyToAdd": "Ready to add",
+    "market.availableForCheckout": "Available for checkout",
+    "market.unavailableNow": "Unavailable right now",
+    "market.marketIdMissing": "Market id is missing.",
+    "checkout.introTitle": "Place a real market order",
+    "checkout.introCopy": "This checkout sends structured market orders with customer details, line items, promo code, and delivery coordinates.",
+    "checkout.deliveryNotes": "Delivery notes",
+    "checkout.each": "each",
+    "checkout.noMarketSelected": "No market selected.",
+    "checkout.optional": "Optional",
+    "checkout.liveDispatch": "Live dispatch",
+    "checkout.liveDispatchText": "Orders go to the market first. Live driver tracking starts only after pickup.",
+    "orders.customerDesk": "Customer order desk",
+    "orders.customerHeroTitle": "Your delivery timeline, designed to stay clear in light and dark mode.",
+    "orders.customerHeroText": "Market ownership, driver state, and live tracking stay visible in one readable flow.",
+    "orders.ordersVisible": "Orders visible",
+    "orders.deliveredCount": "Delivered",
+    "orders.refreshMode": "Refresh mode",
+    "orders.refreshCopy": "This board refreshes automatically while your order moves through the workflow.",
+    "orders.liveCount": "Live count",
+    "orders.readableStatusPath": "Readable status path",
+    "orders.readableStatusCopy": "Market, driver, total, and tracking state stay together inside each order card.",
+    "orders.loadingCustomer": "Loading your orders...",
+    "orders.noneYet": "You have not placed any orders yet.",
+    "orders.placed": "Placed",
+    "orders.pickup": "Pickup",
+    "orders.unknownMarket": "Unknown market",
+    "orders.marketPickupPoint": "Market pickup point",
+    "orders.waitingForAssignment": "Waiting for assignment",
+    "orders.itemsLabel": "Items",
+    "orders.liveDriverTracking": "Live driver tracking",
+    "orders.trackingAfterPickup": "This appears once the driver has picked up your order.",
+    "orders.deliveryAddress": "Delivery address",
+    "orders.customerDestination": "Customer destination",
+    "orders.trackingLater": "Live tracking appears after pickup so the timeline only surfaces movement when it becomes useful.",
+    "orders.commandBoard": "Orders command board",
+    "orders.opsHeroTitle": "A cleaner dispatch board for everyday operations.",
+    "orders.opsHeroText": "Search, create, and move orders from one clear surface in both light and dark mode.",
+    "orders.visibleOrders": "Visible orders",
+    "orders.marketPendingCount": "Market pending",
+    "orders.inDriverFlow": "In driver flow",
+    "orders.createOpsOrder": "Create ops order",
+    "orders.createOpsText": "Manual intake for call center or dispatch situations that need instant order creation.",
+    "orders.howToRead": "How to read the board",
+    "orders.howToReadText": "Search narrows the records live. Status chips surface urgency, and action buttons only appear when the order is ready for its next handoff.",
+    "orders.tableTitle": "Operations order table",
+    "orders.tableText": "Dense enough for real dispatch use, but still legible on smaller screens.",
+    "orders.searchPlaceholder": "Search orders",
+    "orders.directOrder": "Direct order",
+    "orders.accept": "Accept",
+    "orders.decline": "Decline",
+    "orders.markReady": "Mark ready",
+    "orders.waitingForDriver": "Waiting for driver",
+    "orders.inDeliveryFlow": "In delivery flow",
+    "routes.introCopy": "Pulled from `/api/live/routes` so dispatch can monitor current plans and stop sequences.",
+    "routes.routeNumber": "Route #{id}",
+    "routes.driverNumber": "Driver #{id}",
+    "routes.distanceKm": "{value} km",
+    "routes.durationMin": "{value} min",
+    "live.board": "Live telemetry",
+    "live.titleLong": "A tracking wall built for scan speed, not decoration.",
+    "live.metricCopy": "Driver locations update every {value} ms.",
+    "live.mapCenter": "Map center",
+    "live.mapNotesTitle": "Map notes",
+    "live.latestPingsOnly": "Latest pings only",
+    "live.latestPingsText": "Each marker is the most recent driver location returned by the backend payload.",
+    "live.operationalUse": "Operational use",
+    "live.operationalUseText": "This view is better for spotting idle clusters, empty zones, and stale tracking than for consumer-facing map polish.",
+    "live.driverNumber": "Driver #{id}",
+    "analytics.board": "Analytics board",
+    "analytics.titleLong": "Operational performance, stripped down to the signals that matter.",
+    "analytics.reportingRange": "Reporting range",
+    "analytics.readingGuide": "Reading guide",
+    "analytics.fastSummary": "Fast summary first",
+    "analytics.fastSummaryText": "The board starts with rate and volume so the team can spot whether today is a fulfillment problem or a demand problem.",
+    "analytics.backendContract": "Backend contract preserved",
+    "analytics.backendContractText": "This page still mirrors the current `/api/analytics/summary` payload without inventing extra data.",
+    "drivers.onlyAdmin": "Only admins can manage drivers and vehicles.",
+    "drivers.kicker": "Fleet admin",
+    "drivers.title": "Drivers, vehicles, and delivery capacity",
+    "drivers.copy": "Create driver accounts, connect them to vehicles, and monitor who is online and actively working.",
+    "drivers.vehicles": "Vehicles",
+    "drivers.addVehicle": "Add vehicle",
+    "drivers.createVehicle": "Create vehicle",
+    "drivers.type": "Type",
+    "drivers.capacity": "Capacity",
+    "drivers.maxStops": "Max stops",
+    "drivers.nA": "n/a",
+    "drivers.addDriver": "Add driver",
+    "drivers.createDriver": "Create driver",
+    "drivers.vehicle": "Vehicle",
+    "drivers.optionalVehicle": "Optional vehicle",
+    "drivers.shift": "Shift",
+    "drivers.offShift": "Off shift",
+    "drivers.active": "Active",
+    "driverHub.onlyDrivers": "This workspace is only available for driver accounts.",
+    "driverHub.kicker": "Driver hub",
+    "driverHub.title": "Shift, offers, and assigned deliveries",
+    "driverHub.copy": "Start a shift, send location pings, accept offers, and finish deliveries from one screen.",
+    "driverHub.statusTitle": "Driver status",
+    "driverHub.currentState": "Current state",
+    "driverHub.shiftStarted": "Shift started {time}",
+    "driverHub.noActiveShift": "No active shift",
+    "driverHub.startShift": "Start shift",
+    "driverHub.starting": "Starting...",
+    "driverHub.endShift": "End shift",
+    "driverHub.ending": "Ending...",
+    "driverHub.sendLocation": "Send location update",
+    "driverHub.sendPing": "Send ping",
+    "driverHub.sending": "Sending...",
+    "driverHub.incomingOffers": "Incoming offers",
+    "driverHub.noOffers": "No active offers right now. Keep your shift active and send fresh location pings.",
+    "driverHub.assignedDeliveries": "Assigned deliveries",
+    "driverHub.noAssigned": "No deliveries assigned yet.",
+    "driverHub.markPickedUp": "Mark picked up",
+    "driverHub.markDelivered": "Mark delivered",
   },
 };
 
 type I18nContextValue = {
   language: Language;
   setLanguage: (language: Language) => void;
-  t: (key: string) => string;
+  t: (key: string, vars?: Record<string, string | number>) => string;
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>(() => {
-    const saved = localStorage.getItem("smart-dispatch-language");
-    return saved === "en" ? "en" : "ka";
+  const [language, setLanguageState] = useState<Language>(() => {
+    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return saved === "ka" || saved === "en" ? saved : getBrowserLanguage();
   });
 
   useEffect(() => {
-    localStorage.setItem("smart-dispatch-language", language);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncLanguageFromBackend() {
+      if (!auth.getToken()) {
+        return;
+      }
+
+      try {
+        const response = await api.get("/api/me");
+        const nextLanguage = normalizeLanguage(response.data?.language);
+
+        if (!cancelled) {
+          setLanguageState(nextLanguage);
+        }
+      } catch {
+        // Keep local preference when backend lookup fails.
+      }
+    }
+
+    void syncLanguageFromBackend();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function setLanguage(language: Language) {
+    setLanguageState(language);
+
+    if (!auth.getToken()) {
+      return;
+    }
+
+    void api.post("/api/me/language", { language }).catch(() => {
+      // Keep the UI responsive even if preference sync fails.
+    });
+  }
 
   const value = useMemo<I18nContextValue>(
     () => ({
       language,
       setLanguage,
-      t: (key) => dictionaries[language][key] ?? dictionaries.en[key] ?? key,
+      t: (key, vars) => {
+        const template = dictionaries[language][key] ?? dictionaries.en[key] ?? key;
+        if (!vars) return template;
+
+        return template.replace(/\{(\w+)\}/g, (_, name: string) => String(vars[name] ?? `{${name}}`));
+      },
     }),
     [language],
   );

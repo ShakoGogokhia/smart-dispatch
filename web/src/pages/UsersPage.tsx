@@ -24,6 +24,10 @@ type UserRecord = {
 const ROLE_OPTIONS = ["admin", "owner", "staff", "customer", "driver"] as const;
 
 function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
   const axiosError = error as AxiosError<{ message?: string }>;
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
@@ -35,6 +39,8 @@ function RolePicker({
   value: string[];
   onChange: (roles: string[]) => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="flex flex-wrap gap-2">
       {ROLE_OPTIONS.map((role) => {
@@ -51,7 +57,7 @@ function RolePicker({
               active ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200",
             ].join(" ")}
           >
-            {role}
+            {t(`role.${role}`)}
           </button>
         );
       })}
@@ -139,14 +145,10 @@ export default function UsersPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(59,130,246,0.15),_rgba(255,255,255,0.96)),linear-gradient(180deg,_#fdfefe_0%,_#f3f7ff_100%)] p-6">
-        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">{t("users.adminTitle")}</div>
-        <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
-          {t("users.adminTitle")}
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          {t("users.adminText")}
-        </p>
+      <div className="intro-panel">
+        <div className="section-kicker">{t("users.adminTitle")}</div>
+        <h1 className="intro-title">{t("users.adminTitle")}</h1>
+        <p className="intro-copy">{t("users.adminText")}</p>
       </div>
 
       <Card className="rounded-[30px]">
@@ -220,7 +222,7 @@ export default function UsersPage() {
                         <div className="flex flex-wrap gap-2">
                           {user.roles.map((role) => (
                             <Badge key={role} variant="secondary" className="rounded-full">
-                              {role}
+                              {t(`role.${role}`)}
                             </Badge>
                           ))}
                         </div>

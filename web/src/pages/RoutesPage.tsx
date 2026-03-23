@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -28,6 +29,7 @@ type RoutePlan = {
 };
 
 export default function RoutesPage() {
+  const { t } = useI18n();
   const routesQ = useQuery({
     queryKey: ["live-routes"],
     queryFn: async () => (await api.get("/api/live/routes")).data as RoutePlan[],
@@ -37,31 +39,23 @@ export default function RoutesPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(59,130,246,0.16),_rgba(255,255,255,0.95)),linear-gradient(180deg,_#fcfdff_0%,_#f3f7ff_100%)] p-6">
-        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Routes</div>
-        <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
-          Today's route plans
-        </h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Pulled from `/api/live/routes` so dispatch can monitor current plans and stop sequences.
-        </p>
+      <div className="intro-panel">
+        <div className="section-kicker">{t("nav.routes")}</div>
+        <h1 className="intro-title">{t("routes.title")}</h1>
+        <p className="intro-copy">{t("routes.introCopy")}</p>
       </div>
 
       {routesQ.isLoading ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600">Loading routes...</CardContent>
+          <CardContent className="p-8 text-sm text-slate-600">{t("routes.loading")}</CardContent>
         </Card>
       ) : routesQ.isError ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-red-700">
-            Failed to load routes from `/api/live/routes`.
-          </CardContent>
+          <CardContent className="p-8 text-sm text-red-700">{t("routes.failed")}</CardContent>
         </Card>
       ) : routes.length === 0 ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600">
-            No routes are planned for today yet.
-          </CardContent>
+          <CardContent className="p-8 text-sm text-slate-600">{t("routes.empty")}</CardContent>
         </Card>
       ) : (
         routes.map((route) => (
@@ -70,12 +64,12 @@ export default function RoutesPage() {
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <CardTitle className="font-display text-3xl">
-                    Route #{route.id}
+                    {t("routes.routeNumber", { id: route.id })}
                   </CardTitle>
                   <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-600">
                     <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
                       <Truck className="h-4 w-4" />
-                      {route.driver?.user?.name || `Driver #${route.driver_id}`}
+                      {route.driver?.user?.name || t("routes.driverNumber", { id: route.driver_id })}
                     </div>
                     <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
                       <CalendarDays className="h-4 w-4" />
@@ -84,13 +78,13 @@ export default function RoutesPage() {
                     {route.planned_distance_km != null && (
                       <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
                         <Route className="h-4 w-4" />
-                        {route.planned_distance_km} km
+                        {t("routes.distanceKm", { value: route.planned_distance_km })}
                       </div>
                     )}
                     {route.planned_duration_min != null && (
                       <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
                         <Timer className="h-4 w-4" />
-                        {route.planned_duration_min} min
+                        {t("routes.durationMin", { value: route.planned_duration_min })}
                       </div>
                     )}
                   </div>
@@ -105,11 +99,11 @@ export default function RoutesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Stop</TableHead>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>ETA</TableHead>
+                      <TableHead>{t("routes.stop")}</TableHead>
+                      <TableHead>{t("routes.order")}</TableHead>
+                      <TableHead>{t("routes.address")}</TableHead>
+                      <TableHead>{t("common.status")}</TableHead>
+                      <TableHead>{t("routes.eta")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -117,7 +111,7 @@ export default function RoutesPage() {
                       <TableRow key={stop.id}>
                         <TableCell className="font-semibold">{stop.sequence}</TableCell>
                         <TableCell>{stop.order?.code || stop.order_id}</TableCell>
-                        <TableCell>{stop.order?.dropoff_address || "No dropoff address"}</TableCell>
+                        <TableCell>{stop.order?.dropoff_address || t("orders.noAddress")}</TableCell>
                         <TableCell>{stop.status}</TableCell>
                         <TableCell>{formatDateTime(stop.eta)}</TableCell>
                       </TableRow>
@@ -125,7 +119,7 @@ export default function RoutesPage() {
                     {(route.stops ?? []).length === 0 && (
                       <TableRow>
                         <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500">
-                          This route does not have any stops yet.
+                          {t("routes.noStops")}
                         </TableCell>
                       </TableRow>
                     )}

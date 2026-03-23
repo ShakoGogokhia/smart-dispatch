@@ -5,6 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 
 use App\Http\Middleware\EnsureMarketAccess;
+use App\Http\Middleware\SetRequestLocale;
 
 // ✅ Spatie middleware imports (IMPORTANT)
 use Spatie\Permission\Middleware\RoleMiddleware;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $middleware->appendToGroup('api', SetRequestLocale::class);
 
         $middleware->alias([
             'role' => RoleMiddleware::class,

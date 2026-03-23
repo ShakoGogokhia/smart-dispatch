@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 type AnalyticsSummary = {
   range: { from: string; to: string };
@@ -17,6 +18,7 @@ type AnalyticsSummary = {
 };
 
 export default function AnalyticsPage() {
+  const { t } = useI18n();
   const summaryQ = useQuery({
     queryKey: ["analytics-summary"],
     queryFn: async () => (await api.get("/api/analytics/summary")).data as AnalyticsSummary,
@@ -32,63 +34,60 @@ export default function AnalyticsPage() {
     <div className="grid gap-6">
       <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="dashboard-card page-enter">
-          <div className="command-chip">Analytics board</div>
-          <h1 className="section-title mt-5">Operational performance, stripped down to the signals that matter.</h1>
+          <div className="command-chip">{t("analytics.board")}</div>
+          <h1 className="section-title mt-5">{t("analytics.titleLong")}</h1>
           <p className="section-copy mt-4 max-w-3xl">
-            This layout behaves more like a reporting board than a dashboard demo. It prioritizes strong labels,
-            compact metrics, and a clear read of delivery health.
+            {t("analytics.heroText")}
           </p>
           <div className="mt-6">
             <Button variant="secondary" className="h-12" onClick={() => summaryQ.refetch()}>
-              Refresh analytics
+              {t("analytics.refresh")}
             </Button>
           </div>
         </div>
 
         <div className="metric-dark page-enter page-enter-delay-1">
-          <div className="section-kicker text-slate-300">Delivery rate</div>
+          <div className="section-kicker text-slate-300">{t("analytics.deliveryRate")}</div>
           <div className="mt-3 font-display text-7xl font-semibold tracking-[-0.06em]">{deliveredRate}%</div>
           <div className="mt-4 h-4 rounded-full border border-white/20 bg-white/10 p-1">
             <div className="h-full rounded-full bg-[#ffd67d]" style={{ width: `${Math.min(deliveredRate, 100)}%` }} />
           </div>
           <div className="mt-4 text-sm leading-7 text-slate-300">
-            Delivered orders divided by total orders in the currently reported backend range.
+            {t("analytics.deliveryRateText")}
           </div>
         </div>
       </section>
 
       {summaryQ.isLoading ? (
         <Card>
-          <CardContent className="p-8 text-sm text-slate-600">Loading analytics...</CardContent>
+          <CardContent className="p-8 text-sm text-slate-600">{t("analytics.loading")}</CardContent>
         </Card>
       ) : summaryQ.isError || !summary ? (
         <Card>
-          <CardContent className="p-8 text-sm text-red-700">
-            Failed to load analytics from `/api/analytics/summary`.
-          </CardContent>
+          <CardContent className="p-8 text-sm text-red-700">{t("analytics.failed")}</CardContent>
         </Card>
       ) : (
         <>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard title="Total orders" value={summary.orders.total} icon={Package2} tone="light" />
-            <StatCard title="Delivered" value={summary.orders.delivered} icon={CheckCircle2} tone="green" />
-            <StatCard title="Failed" value={summary.orders.failed} icon={XCircle} tone="red" />
-            <StatCard title="Cancelled" value={summary.orders.cancelled} icon={BarChart3} tone="sand" />
-            <StatCard title="Routes planned" value={summary.routes_planned} icon={Route} tone="dark" />
+            <StatCard title={t("analytics.totalOrders")} value={summary.orders.total} icon={Package2} tone="light" />
+            <StatCard title={t("analytics.delivered")} value={summary.orders.delivered} icon={CheckCircle2} tone="green" />
+            <StatCard title={t("analytics.failedCount")} value={summary.orders.failed} icon={XCircle} tone="red" />
+            <StatCard title={t("analytics.cancelled")} value={summary.orders.cancelled} icon={BarChart3} tone="sand" />
+            <StatCard title={t("analytics.routesPlanned")} value={summary.routes_planned} icon={Route} tone="dark" />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-            <Card className="bg-[#efe6d6]">
+            <Card>
               <CardHeader>
-                <CardTitle className="font-display text-3xl font-semibold tracking-[-0.04em]">Reporting range</CardTitle>
+                <CardTitle className="font-display text-3xl font-semibold tracking-[-0.04em]">{t("analytics.reportingRange")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 text-sm leading-7 text-slate-700">
                 <div className="metric-block">
-                  <div className="section-kicker">From</div>
+                  <div className="section-kicker">{t("common.from")}</div>
                   <div className="mt-2 font-semibold text-slate-950">{summary.range.from}</div>
                 </div>
                 <div className="metric-block">
-                  <div className="section-kicker">To</div>
+                  <div className="section-kicker">{t("common.to")}</div>
                   <div className="mt-2 font-semibold text-slate-950">{summary.range.to}</div>
                 </div>
               </CardContent>
@@ -96,21 +95,21 @@ export default function AnalyticsPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle className="font-display text-3xl font-semibold tracking-[-0.04em]">Reading guide</CardTitle>
+                <CardTitle className="font-display text-3xl font-semibold tracking-[-0.04em]">{t("analytics.readingGuide")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2">
                 <div className="metric-block">
                   <TrendingUp className="h-5 w-5" />
-                  <div className="mt-4 font-semibold text-slate-950">Fast summary first</div>
+                  <div className="mt-4 font-semibold text-slate-950">{t("analytics.fastSummary")}</div>
                   <div className="mt-2 text-sm leading-7 text-slate-600">
-                    The board starts with rate and volume so the team can spot whether today is a fulfillment problem or a demand problem.
+                    {t("analytics.fastSummaryText")}
                   </div>
                 </div>
                 <div className="metric-block">
                   <BarChart3 className="h-5 w-5" />
-                  <div className="mt-4 font-semibold text-slate-950">Backend contract preserved</div>
+                  <div className="mt-4 font-semibold text-slate-950">{t("analytics.backendContract")}</div>
                   <div className="mt-2 text-sm leading-7 text-slate-600">
-                    This page still mirrors the current `/api/analytics/summary` payload without inventing extra data.
+                    {t("analytics.backendContractText")}
                   </div>
                 </div>
               </CardContent>
@@ -134,11 +133,11 @@ function StatCard({
   tone: "light" | "green" | "red" | "sand" | "dark";
 }) {
   const toneMap: Record<typeof tone, string> = {
-    light: "bg-white",
-    green: "bg-[#dff3e8]",
-    red: "bg-[#f9ddd8]",
-    sand: "bg-[#efe6d6]",
-    dark: "bg-[#10313a] text-white",
+    light: "bg-white dark:bg-white/6",
+    green: "bg-emerald-50 dark:bg-emerald-300/12",
+    red: "bg-rose-50 dark:bg-rose-300/12",
+    sand: "bg-amber-50 dark:bg-amber-300/12",
+    dark: "bg-slate-950 text-white dark:bg-slate-900",
   };
 
   return (
@@ -149,7 +148,7 @@ function StatCard({
           <div className="mt-3 font-display text-5xl font-semibold tracking-[-0.05em]">{value}</div>
         </div>
         <div
-          className={`flex h-12 w-12 items-center justify-center rounded-[16px] border-2 border-slate-950 ${tone === "dark" ? "bg-[#fff4d7] text-slate-950" : "bg-white"}`}
+          className={`flex h-12 w-12 items-center justify-center rounded-[16px] border border-slate-200 dark:border-white/10 ${tone === "dark" ? "bg-amber-100 text-slate-950 dark:bg-amber-200" : "bg-white dark:bg-white/10"}`}
         >
           <Icon className="h-5 w-5" />
         </div>

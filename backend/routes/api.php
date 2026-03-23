@@ -60,6 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/me', [AuthController::class, 'me']);
+    Route::match(['patch', 'post'], '/me/language', [AuthController::class, 'updateLanguage']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
     /*

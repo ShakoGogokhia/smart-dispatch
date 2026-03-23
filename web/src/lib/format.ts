@@ -1,10 +1,26 @@
+function getCurrentLanguage() {
+  if (typeof document !== "undefined" && document.documentElement.lang === "ka") {
+    return "ka";
+  }
+
+  if (typeof localStorage !== "undefined") {
+    return localStorage.getItem("smart-dispatch-language") === "ka" ? "ka" : "en";
+  }
+
+  return "en";
+}
+
+function getCurrentLocale() {
+  return getCurrentLanguage() === "ka" ? "ka-GE" : "en-US";
+}
+
 export function toNumber(value: number | string | null | undefined, fallback = 0) {
   const parsed = Number(value ?? fallback);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export function formatMoney(value: number | string | null | undefined, currency = "USD") {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat(getCurrentLocale(), {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
@@ -12,12 +28,12 @@ export function formatMoney(value: number | string | null | undefined, currency 
 }
 
 export function formatDateTime(value?: string | null) {
-  if (!value) return "No timestamp";
+  if (!value) return getCurrentLanguage() === "ka" ? "დრო არ არის მითითებული" : "No timestamp";
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat(getCurrentLocale(), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
@@ -47,26 +63,28 @@ export function getOrderStatusTone(status?: string | null) {
 }
 
 export function formatOrderStatus(status?: string | null) {
+  const ka = getCurrentLanguage() === "ka";
+
   switch ((status ?? "").toUpperCase()) {
     case "MARKET_PENDING":
-      return "Waiting for market";
+      return ka ? "მარკეტს ელოდება" : "Waiting for market";
     case "MARKET_ACCEPTED":
-      return "Market accepted";
+      return ka ? "მარკეტმა მიიღო" : "Market accepted";
     case "READY_FOR_PICKUP":
-      return "Ready for pickup";
+      return ka ? "აყვანისთვის მზადაა" : "Ready for pickup";
     case "OFFERED":
-      return "Driver offer sent";
+      return ka ? "მძღოლს შეთავაზება გაეგზავნა" : "Driver offer sent";
     case "ASSIGNED":
-      return "Driver assigned";
+      return ka ? "მძღოლი მინიჭებულია" : "Driver assigned";
     case "PICKED_UP":
-      return "Picked up";
+      return ka ? "აღებულია" : "Picked up";
     case "DELIVERED":
-      return "Delivered";
+      return ka ? "მიტანილია" : "Delivered";
     case "FAILED":
-      return "Failed";
+      return ka ? "ვერ შესრულდა" : "Failed";
     case "CANCELLED":
-      return "Cancelled";
+      return ka ? "გაუქმებულია" : "Cancelled";
     default:
-      return status?.trim() || "Unknown";
+      return status?.trim() || (ka ? "უცნობი" : "Unknown");
   }
 }

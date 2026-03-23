@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,11 +31,16 @@ type Driver = {
 };
 
 function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
   const axiosError = error as AxiosError<{ message?: string }>;
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
 export default function DriversPage() {
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const meQ = useMe();
   const isAdmin = (meQ.data?.roles ?? []).includes("admin");
@@ -110,7 +116,7 @@ export default function DriversPage() {
     return (
       <Card className="rounded-[30px]">
         <CardContent className="p-8 text-sm text-slate-600">
-          Only admins can manage drivers and vehicles.
+          {t("drivers.onlyAdmin")}
         </CardContent>
       </Card>
     );
@@ -121,53 +127,49 @@ export default function DriversPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(14,165,233,0.15),_rgba(255,255,255,0.96)),linear-gradient(180deg,_#fdfeff_0%,_#f0f8ff_100%)] p-6">
-        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Fleet admin</div>
-        <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
-          Drivers, vehicles, and delivery capacity
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          Create driver accounts, connect them to vehicles, and monitor who is online and actively working.
-        </p>
+      <div className="intro-panel">
+        <div className="section-kicker">{t("drivers.kicker")}</div>
+        <h1 className="intro-title">{t("drivers.title")}</h1>
+        <p className="intro-copy">{t("drivers.copy")}</p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="rounded-[30px]">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <CardTitle className="font-display text-3xl">Vehicles</CardTitle>
+            <CardTitle className="font-display text-3xl">{t("drivers.vehicles")}</CardTitle>
             <Dialog open={createVehicleOpen} onOpenChange={setCreateVehicleOpen}>
               <DialogTrigger asChild>
                 <Button className="rounded-2xl">
                   <CarFront className="mr-2 h-4 w-4" />
-                  Add vehicle
+                  {t("drivers.addVehicle")}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create vehicle</DialogTitle>
+                  <DialogTitle>{t("drivers.createVehicle")}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label>Name</Label>
+                    <Label>{t("auth.name")}</Label>
                     <Input value={vehicleName} onChange={(event) => setVehicleName(event.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Type</Label>
+                    <Label>{t("drivers.type")}</Label>
                     <Input value={vehicleType} onChange={(event) => setVehicleType(event.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Capacity</Label>
+                    <Label>{t("drivers.capacity")}</Label>
                     <Input value={vehicleCapacity} onChange={(event) => setVehicleCapacity(event.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Max stops</Label>
+                    <Label>{t("drivers.maxStops")}</Label>
                     <Input value={vehicleStops} onChange={(event) => setVehicleStops(event.target.value)} />
                   </div>
                   {vehicleError && <div className="text-sm text-red-700">{vehicleError}</div>}
                 </div>
                 <DialogFooter>
                   <Button onClick={() => createVehicleM.mutate()} disabled={createVehicleM.isPending || !vehicleName.trim()}>
-                    {createVehicleM.isPending ? "Creating..." : "Create vehicle"}
+                    {createVehicleM.isPending ? t("users.creating") : t("drivers.createVehicle")}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -178,19 +180,19 @@ export default function DriversPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Capacity</TableHead>
-                    <TableHead>Max stops</TableHead>
+                    <TableHead>{t("auth.name")}</TableHead>
+                    <TableHead>{t("drivers.type")}</TableHead>
+                    <TableHead>{t("drivers.capacity")}</TableHead>
+                    <TableHead>{t("drivers.maxStops")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(vehiclesQ.data ?? []).map((vehicle) => (
                     <TableRow key={vehicle.id}>
                       <TableCell className="font-semibold">{vehicle.name}</TableCell>
-                      <TableCell>{vehicle.type || "n/a"}</TableCell>
-                      <TableCell>{vehicle.capacity || "n/a"}</TableCell>
-                      <TableCell>{vehicle.max_stops || "n/a"}</TableCell>
+                      <TableCell>{vehicle.type || t("drivers.nA")}</TableCell>
+                      <TableCell>{vehicle.capacity || t("drivers.nA")}</TableCell>
+                      <TableCell>{vehicle.max_stops || t("drivers.nA")}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -201,36 +203,36 @@ export default function DriversPage() {
 
         <Card className="rounded-[30px]">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
-            <CardTitle className="font-display text-3xl">Drivers</CardTitle>
+            <CardTitle className="font-display text-3xl">{t("nav.drivers")}</CardTitle>
             <Dialog open={createDriverOpen} onOpenChange={setCreateDriverOpen}>
               <DialogTrigger asChild>
                 <Button className="rounded-2xl">
                   <UserRoundPlus className="mr-2 h-4 w-4" />
-                  Add driver
+                  {t("drivers.addDriver")}
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create driver</DialogTitle>
+                  <DialogTitle>{t("drivers.createDriver")}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label>Name</Label>
+                    <Label>{t("auth.name")}</Label>
                     <Input value={driverName} onChange={(event) => setDriverName(event.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Email</Label>
+                    <Label>{t("auth.email")}</Label>
                     <Input value={driverEmail} onChange={(event) => setDriverEmail(event.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Password</Label>
+                    <Label>{t("auth.password")}</Label>
                     <Input type="password" value={driverPassword} onChange={(event) => setDriverPassword(event.target.value)} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Vehicle</Label>
+                    <Label>{t("drivers.vehicle")}</Label>
                     <Select value={driverVehicleId} onValueChange={setDriverVehicleId}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Optional vehicle" />
+                        <SelectValue placeholder={t("drivers.optionalVehicle")} />
                       </SelectTrigger>
                       <SelectContent>
                         {(vehiclesQ.data ?? []).map((vehicle) => (
@@ -248,7 +250,7 @@ export default function DriversPage() {
                     onClick={() => createDriverM.mutate()}
                     disabled={createDriverM.isPending || !driverName.trim() || !driverEmail.trim() || !driverPassword}
                   >
-                    {createDriverM.isPending ? "Creating..." : "Create driver"}
+                    {createDriverM.isPending ? t("users.creating") : t("drivers.createDriver")}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -259,10 +261,10 @@ export default function DriversPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Vehicle</TableHead>
-                    <TableHead>Shift</TableHead>
+                    <TableHead>{t("auth.name")}</TableHead>
+                    <TableHead>{t("common.status")}</TableHead>
+                    <TableHead>{t("drivers.vehicle")}</TableHead>
+                    <TableHead>{t("drivers.shift")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -273,8 +275,8 @@ export default function DriversPage() {
                         <div className="text-xs text-slate-500">{driver.user?.email}</div>
                       </TableCell>
                       <TableCell>{driver.status}</TableCell>
-                      <TableCell>{driver.vehicle?.name || "Unassigned"}</TableCell>
-                      <TableCell>{driver.active_shift ? "Active" : "Off shift"}</TableCell>
+                      <TableCell>{driver.vehicle?.name || t("common.unassigned")}</TableCell>
+                      <TableCell>{driver.active_shift ? t("drivers.active") : t("drivers.offShift")}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

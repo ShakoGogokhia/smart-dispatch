@@ -10,17 +10,30 @@ use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
 {
+    protected function serializeUser(User $user): array
+    {
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'language' => $user->language,
+            'roles' => $user->getRoleNames()->values(),
+        ];
+    }
+
     public function register(Request $request)
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'language' => ['nullable', 'string', 'in:en,ka'],
             'password' => ['required', 'confirmed', Password::min(6)],
         ]);
 
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
+            'language' => $data['language'] ?? 'en',
             'password' => $data['password'],
         ]);
 
@@ -30,12 +43,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'roles' => $user->getRoleNames(),
-            ],
+            'user' => $this->serializeUser($user),
         ], 201);
     }
 
@@ -56,12 +64,7 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'roles' => $user->getRoleNames(),
-            ],
+            'user' => $this->serializeUser($user),
         ]);
     }
 
@@ -77,6 +80,7 @@ class AuthController extends Controller
             'id' => $u->id,
             'name' => $u->name,
             'email' => $u->email,
+            'language' => $u->language,
             'roles' => $u->getRoleNames()->values(),
             'driver' => $u->driver ? [
                 'id' => $u->driver->id,
@@ -85,6 +89,23 @@ class AuthController extends Controller
                 'active_shift' => $u->driver->activeShift,
                 'latest_ping' => $u->driver->latestPing,
             ] : null,
+        ]);
+    }
+
+    public function updateLanguage(Request $request)
+    {
+        $data = $request->validate([
+            'language' => ['required', 'string', 'in:en,ka'],
+        ]);
+
+        $user = $request->user();
+        $user->forceFill([
+            'language' => $data['language'],
+        ])->save();
+
+        return response()->json([
+            'language' => $user->language,
+            'user' => $this->serializeUser($user),
         ]);
     }
 

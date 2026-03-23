@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { clearCart, getActiveMarketId, loadCart, saveCart } from "@/lib/cart";
 import type { CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ function getErrorMessage(error: unknown) {
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const meQ = useMe();
+  const { t } = useI18n();
   const [marketId] = useState(() => getActiveMarketId());
   const [cart, setCart] = useState<CartItem[]>(() => (marketId ? loadCart(marketId) : []));
   const [customerName, setCustomerName] = useState("");
@@ -63,8 +65,8 @@ export default function CheckoutPage() {
 
   const createOrderM = useMutation({
     mutationFn: async () => {
-      if (!cart.length) throw new Error("Your cart is empty.");
-      if (!marketId) throw new Error("No market selected.");
+      if (!cart.length) throw new Error(t("checkout.emptyCart"));
+      if (!marketId) throw new Error(t("checkout.noMarketSelected"));
 
       const payload = {
         market_id: Number(marketId),
@@ -128,21 +130,16 @@ export default function CheckoutPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(251,191,36,0.18),_rgba(255,255,255,0.92)),linear-gradient(180deg,_#fffefc_0%,_#fff7ec_100%)] p-6">
+      <div className="intro-panel">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Checkout</div>
-            <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
-              Place a real market order
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              This checkout now sends structured market orders with customer details, line items,
-              promo code, and delivery coordinates so the market accepts first, then marks the order ready for a driver.
-            </p>
+            <div className="section-kicker">{t("checkout.title")}</div>
+            <h1 className="intro-title">{t("checkout.introTitle")}</h1>
+            <p className="intro-copy">{t("checkout.introCopy")}</p>
           </div>
-          <Button variant="secondary" className="rounded-2xl" onClick={() => navigate(-1)}>
+          <Button variant="secondary" className="rounded-[16px]" onClick={() => navigate(-1)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
+            {t("checkout.back")}
           </Button>
         </div>
       </div>
@@ -151,43 +148,43 @@ export default function CheckoutPage() {
         <div className="grid gap-6">
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">Customer and delivery details</CardTitle>
+              <CardTitle className="font-display text-2xl">{t("checkout.customerDetails")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-2">
-                <Label>Name</Label>
+                <Label>{t("auth.name")}</Label>
                 <Input value={effectiveCustomerName} onChange={(event) => setCustomerName(event.target.value)} className="h-11 rounded-2xl" />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>Phone</Label>
+                  <Label>{t("checkout.phone")}</Label>
                   <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Priority</Label>
+                  <Label>{t("checkout.priority")}</Label>
                   <Input value={priority} onChange={(event) => setPriority(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label>Delivery address</Label>
+                <Label>{t("checkout.address")}</Label>
                 <Input value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} className="h-11 rounded-2xl" />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>Dropoff latitude</Label>
+                  <Label>{t("checkout.lat")}</Label>
                   <Input value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Dropoff longitude</Label>
+                  <Label>{t("checkout.lng")}</Label>
                   <Input value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label>Notes for delivery</Label>
+                <Label>{t("checkout.deliveryNotes")}</Label>
                 <Input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 rounded-2xl" />
               </div>
             </CardContent>
@@ -195,7 +192,7 @@ export default function CheckoutPage() {
 
           <Card className="rounded-[30px]">
             <CardHeader className="flex flex-row items-center justify-between gap-4">
-              <CardTitle className="font-display text-2xl">Cart review</CardTitle>
+              <CardTitle className="font-display text-2xl">{t("checkout.cartReview")}</CardTitle>
               <Button
                 variant="secondary"
                 className="rounded-2xl"
@@ -206,13 +203,13 @@ export default function CheckoutPage() {
                 }}
                 disabled={!cart.length}
               >
-                Clear
+                {t("checkout.clear")}
               </Button>
             </CardHeader>
             <CardContent className="grid gap-3">
               {cart.length === 0 ? (
                 <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
-                  Your cart is empty. Add items from a market first.
+                  {t("checkout.emptyCart")}
                 </div>
               ) : (
                 cart.map((item) => (
@@ -222,7 +219,7 @@ export default function CheckoutPage() {
                   >
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-slate-950">{item.name}</div>
-                      <div className="text-sm text-slate-500">{formatMoney(item.price)} each</div>
+                      <div className="text-sm text-slate-500">{formatMoney(item.price)} {t("checkout.each")}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="secondary" className="rounded-xl" onClick={() => decrement(item.item_id)}>
@@ -243,7 +240,7 @@ export default function CheckoutPage() {
         <div className="grid gap-6">
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">Summary</CardTitle>
+              <CardTitle className="font-display text-2xl">{t("checkout.summary")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="rounded-[24px] bg-slate-950 p-5 text-white">
@@ -252,9 +249,9 @@ export default function CheckoutPage() {
                     <ShoppingBag className="h-5 w-5 text-amber-300" />
                   </div>
                   <div>
-                    <div className="text-sm text-slate-300">Active market</div>
+                    <div className="text-sm text-slate-300">{t("checkout.activeMarket")}</div>
                     <div className="font-semibold text-white">
-                      {marketQ.data?.name || (marketId ? `Market #${marketId}` : "No market selected")}
+                      {marketQ.data?.name || (marketId ? `#${marketId}` : t("checkout.noMarketSelected"))}
                     </div>
                   </div>
                 </div>
@@ -267,22 +264,22 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Items</span>
+                <span className="text-slate-500">{t("common.items")}</span>
                 <span className="font-semibold">{totals.items}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">Subtotal</span>
+                <span className="text-slate-500">{t("market.subtotal")}</span>
                 <span className="font-semibold">{formatMoney(totals.subtotal)}</span>
               </div>
 
               <Separator />
 
               <div className="grid gap-2">
-                <Label>Promo code</Label>
+                <Label>{t("checkout.promo")}</Label>
                 <Input
                   value={promoCode}
                   onChange={(event) => setPromoCode(event.target.value)}
-                  placeholder="Optional"
+                  placeholder={t("checkout.optional")}
                   className="h-11 rounded-2xl"
                 />
               </div>
@@ -298,12 +295,12 @@ export default function CheckoutPage() {
                 onClick={() => createOrderM.mutate()}
                 disabled={!canSubmit || createOrderM.isPending}
               >
-                {createOrderM.isPending ? "Placing order..." : "Place order"}
+                {createOrderM.isPending ? t("checkout.placingOrder") : t("checkout.placeOrder")}
               </Button>
 
               <div className="rounded-[24px] border border-teal-200 bg-teal-50/70 p-4 text-sm text-teal-900">
-                <Badge variant="secondary" className="mr-2 rounded-full">Live dispatch</Badge>
-                Orders go to the market first. Live driver tracking starts only after pickup.
+                <Badge variant="secondary" className="mr-2 rounded-full">{t("checkout.liveDispatch")}</Badge>
+                {t("checkout.liveDispatchText")}
               </div>
             </CardContent>
           </Card>

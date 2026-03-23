@@ -10,6 +10,7 @@ export function useMe() {
       return {
         ...data,
         roles: normalizeRoles(data?.roles),
+        language: data?.language === "ka" ? "ka" : "en",
       };
     },
     retry: false,

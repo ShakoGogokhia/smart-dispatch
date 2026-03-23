@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PackagePlus, Search } from "lucide-react";
+import { PackagePlus, Search, Sparkles, Zap } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
@@ -13,19 +13,20 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus, getOrderStatusTone } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import type { Order, Paginated } from "@/types/api";
 
 function statusBadgeClass(status: string) {
   switch (getOrderStatusTone(status)) {
     case "success":
-      return "bg-[#dff3e8] text-emerald-900";
+      return "status-good";
     case "warning":
-      return "bg-[#fff0c7] text-amber-950";
+      return "status-warn";
     case "danger":
-      return "bg-[#f9ddd8] text-red-900";
+      return "status-bad";
     default:
-      return "bg-[#efe6d6] text-slate-700";
+      return "status-neutral";
   }
 }
 
@@ -47,8 +48,105 @@ function canManageMarketOrder(order: Order, isOpsUser: boolean) {
   return isOpsUser && !!order.market;
 }
 
+function CustomerOrderCard({ order }: { order: Order }) {
+  const { t } = useI18n();
+
+  return (
+    <Card>
+      <CardContent className="grid gap-5 p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="section-kicker">{order.market?.code || t("orders.title")}</div>
+            <div className="font-display theme-ink mt-2 text-4xl font-semibold tracking-[-0.05em]">{order.code}</div>
+            <div className="theme-muted mt-2 text-sm">{order.dropoff_address || t("orders.noAddress")}</div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className={`status-chip ${statusBadgeClass(getStatusLabel(order.status))}`}>{getStatusLabel(order.status)}</span>
+            {order.total != null && <Badge className="status-chip status-neutral">{formatMoney(order.total)}</Badge>}
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="metric-block py-4">
+            <div className="section-kicker">{t("orders.placed")}</div>
+            <div className="theme-ink mt-2 text-sm font-semibold">{formatDateTime(order.created_at)}</div>
+          </div>
+          <div className="metric-block py-4">
+            <div className="section-kicker">{t("common.market")}</div>
+            <div className="theme-ink mt-2 text-sm font-semibold">{order.market?.name || t("orders.unknownMarket")}</div>
+          </div>
+          <div className="metric-block py-4">
+            <div className="section-kicker">{t("orders.pickup")}</div>
+            <div className="theme-ink mt-2 text-sm font-semibold">{order.pickup_address || order.market?.address || t("orders.marketPickupPoint")}</div>
+          </div>
+          <div className="metric-block py-4">
+            <div className="section-kicker">{t("common.driver")}</div>
+            <div className="theme-ink mt-2 text-sm font-semibold">
+              {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || t("orders.waitingForAssignment")}
+            </div>
+          </div>
+        </div>
+
+        {order.items?.length ? (
+          <div className="subpanel p-4 text-sm">
+            <span className="theme-ink font-semibold">{t("orders.itemsLabel")}:</span>{" "}
+            <span className="theme-copy">{order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}</span>
+          </div>
+        ) : null}
+
+        {canShowCustomerTracking(order) ? (
+          <div className="grid gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="theme-ink font-semibold">{t("orders.liveDriverTracking")}</div>
+                <div className="theme-muted text-sm">{t("orders.trackingAfterPickup")}</div>
+              </div>
+              <div className="status-chip status-good">{t("common.live")}</div>
+            </div>
+            <div className="map-frame h-[300px]">
+              <MapContainer
+                center={[Number(order.assigned_driver?.latest_ping?.lat), Number(order.assigned_driver?.latest_ping?.lng)]}
+                zoom={13}
+                style={{ height: "100%", width: "100%" }}
+              >
+                <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <Marker position={[Number(order.assigned_driver?.latest_ping?.lat), Number(order.assigned_driver?.latest_ping?.lng)]}>
+                  <Popup>
+                    <div className="text-sm">
+                      <div className="font-semibold">{order.assigned_driver?.user?.name || t("common.driver")}</div>
+                      <div>
+                        {t("common.updated")}{" "}
+                        {formatDateTime(
+                          order.assigned_driver?.latest_ping?.updated_at || order.assigned_driver?.latest_ping?.created_at,
+                        )}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+                <Marker position={[Number(order.dropoff_lat), Number(order.dropoff_lng)]}>
+                  <Popup>
+                    <div className="text-sm">
+                      <div className="font-semibold">{t("orders.deliveryAddress")}</div>
+                      <div>{order.dropoff_address || t("orders.customerDestination")}</div>
+                    </div>
+                  </Popup>
+                </Marker>
+              </MapContainer>
+            </div>
+          </div>
+        ) : (
+          <div className="subpanel p-4 text-sm">
+            <div className="theme-muted">{t("orders.trackingLater")}</div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function OrdersPage() {
   const meQ = useMe();
+  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [dropoffAddress, setDropoffAddress] = useState("Tbilisi Center");
   const [dropoffLat, setDropoffLat] = useState("41.7151");
@@ -103,125 +201,78 @@ export default function OrdersPage() {
     );
   }, [ordersQ.data?.data, search]);
 
+  const createError = getErrorMessage(createOrderM.error);
+  const marketActionError = getErrorMessage(marketActionM.error);
+  const marketPendingCount = filteredOrders.filter((order) => order.status === "MARKET_PENDING").length;
+  const driverFlowCount = filteredOrders.filter((order) =>
+    ["READY_FOR_PICKUP", "OFFERED", "ASSIGNED", "PICKED_UP"].includes(order.status),
+  ).length;
+  const deliveredCount = filteredOrders.filter((order) => order.status === "DELIVERED").length;
+
   if (isCustomerOnly) {
     return (
       <div className="grid gap-6">
-        <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="dashboard-card">
-            <div className="command-chip">Customer order desk</div>
-            <h1 className="section-title mt-5">Everything you ordered, organized like a timeline instead of a ticket pile.</h1>
-            <p className="section-copy mt-4">
-              The customer view now leans into order clarity: status, market, items, and live driver tracking only when it becomes useful.
+        <section className="hero-grid">
+          <div className="hero-panel">
+            <div className="command-chip">
+              <Sparkles className="h-3.5 w-3.5" />
+              {t("orders.customerDesk")}
+            </div>
+            <h1 className="font-display mt-5 text-5xl font-semibold tracking-[-0.06em] text-white md:text-6xl">
+              {t("orders.customerHeroTitle")}
+            </h1>
+            <p className="mt-4 max-w-2xl text-base leading-8 text-slate-300">
+              {t("orders.customerHeroText")}
             </p>
+
+            <div className="mt-8 data-grid">
+              <div className="metric-block">
+                <div className="section-kicker">{t("orders.ordersVisible")}</div>
+                <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{filteredOrders.length}</div>
+              </div>
+              <div className="metric-block">
+                <div className="section-kicker">{t("orders.deliveredCount")}</div>
+                <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{deliveredCount}</div>
+              </div>
+              <div className="metric-block md:col-span-2">
+                <div className="section-kicker">{t("orders.refreshMode")}</div>
+                <div className="theme-copy mt-3 text-sm leading-7">
+                  {t("orders.refreshCopy")}
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="metric-dark">
-            <div className="section-kicker text-slate-300">Orders visible</div>
-            <div className="mt-3 font-display text-7xl font-semibold tracking-[-0.06em]">{filteredOrders.length}</div>
-            <div className="mt-4 text-sm leading-7 text-slate-300">This board refreshes automatically while you watch delivery progress.</div>
+
+          <div className="hero-stats">
+            <div className="metric-dark">
+              <div className="section-kicker">{t("orders.liveCount")}</div>
+              <div className="mt-3 font-display text-7xl font-semibold tracking-[-0.05em]">{filteredOrders.length}</div>
+            </div>
+            <div className="frost-panel">
+              <div className="theme-ink font-semibold">{t("orders.readableStatusPath")}</div>
+              <div className="theme-copy mt-2 text-sm leading-7">
+                {t("orders.readableStatusCopy")}
+              </div>
+            </div>
           </div>
         </section>
 
         {ordersQ.isLoading ? (
           <Card>
-            <CardContent className="p-8 text-sm text-slate-600">Loading your orders...</CardContent>
+            <CardContent className="theme-copy p-8 text-sm">{t("orders.loadingCustomer")}</CardContent>
           </Card>
         ) : ordersQ.isError ? (
           <Card>
-            <CardContent className="p-8 text-sm text-red-700">Failed to load your orders.</CardContent>
+            <CardContent className="p-8 text-sm text-rose-700 dark:text-rose-100">{t("orders.failed")}</CardContent>
           </Card>
         ) : filteredOrders.length === 0 ? (
           <Card>
-            <CardContent className="p-8 text-sm text-slate-600">You have not placed any orders yet.</CardContent>
+            <CardContent className="theme-copy p-8 text-sm">{t("orders.noneYet")}</CardContent>
           </Card>
         ) : (
           <div className="grid gap-4">
             {filteredOrders.map((order) => (
-              <Card key={order.id} className="bg-[#fffaf0]">
-                <CardContent className="grid gap-5 p-6">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <div className="section-kicker">{order.market?.code || "Order"}</div>
-                      <div className="font-display mt-2 text-4xl font-semibold tracking-[-0.05em] text-slate-950">{order.code}</div>
-                      <div className="mt-2 text-sm text-slate-600">{order.dropoff_address || "No delivery address"}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <span className={`status-chip ${statusBadgeClass(getStatusLabel(order.status))}`}>{getStatusLabel(order.status)}</span>
-                      {order.total != null && <Badge className="status-chip bg-white text-slate-950">{formatMoney(order.total)}</Badge>}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    <div className="metric-block py-4">
-                      <div className="section-kicker">Placed</div>
-                      <div className="mt-2 text-sm font-semibold text-slate-950">{formatDateTime(order.created_at)}</div>
-                    </div>
-                    <div className="metric-block py-4">
-                      <div className="section-kicker">Market</div>
-                      <div className="mt-2 text-sm font-semibold text-slate-950">{order.market?.name || "Unknown market"}</div>
-                    </div>
-                    <div className="metric-block py-4">
-                      <div className="section-kicker">Pickup</div>
-                      <div className="mt-2 text-sm font-semibold text-slate-950">{order.pickup_address || order.market?.address || "Market pickup point"}</div>
-                    </div>
-                    <div className="metric-block py-4">
-                      <div className="section-kicker">Driver</div>
-                      <div className="mt-2 text-sm font-semibold text-slate-950">{order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Waiting for assignment"}</div>
-                    </div>
-                  </div>
-
-                  {order.items?.length ? (
-                    <div className="rounded-[22px] border-2 border-slate-950 bg-[#efe6d6] p-4 text-sm text-slate-700">
-                      <span className="font-semibold text-slate-950">Items:</span> {order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}
-                    </div>
-                  ) : null}
-
-                  {canShowCustomerTracking(order) ? (
-                    <div className="grid gap-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-semibold text-slate-950">Live driver tracking</div>
-                          <div className="text-sm text-slate-600">This appears once the driver has picked up your order.</div>
-                        </div>
-                        <div className="status-chip bg-[#dff3e8] text-emerald-900">Live</div>
-                      </div>
-                      <div className="map-frame h-[300px]">
-                        <MapContainer
-                          center={[Number(order.assigned_driver?.latest_ping?.lat), Number(order.assigned_driver?.latest_ping?.lng)]}
-                          zoom={13}
-                          style={{ height: "100%", width: "100%" }}
-                        >
-                          <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                          <Marker position={[Number(order.assigned_driver?.latest_ping?.lat), Number(order.assigned_driver?.latest_ping?.lng)]}>
-                            <Popup>
-                              <div className="text-sm">
-                                <div className="font-semibold">{order.assigned_driver?.user?.name || "Driver"}</div>
-                                <div>
-                                  Updated{" "}
-                                  {formatDateTime(
-                                    order.assigned_driver?.latest_ping?.updated_at || order.assigned_driver?.latest_ping?.created_at,
-                                  )}
-                                </div>
-                              </div>
-                            </Popup>
-                          </Marker>
-                          <Marker position={[Number(order.dropoff_lat), Number(order.dropoff_lng)]}>
-                            <Popup>
-                              <div className="text-sm">
-                                <div className="font-semibold">Delivery address</div>
-                                <div>{order.dropoff_address || "Customer destination"}</div>
-                              </div>
-                            </Popup>
-                          </Marker>
-                        </MapContainer>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="rounded-[22px] border-2 border-slate-950 bg-white p-4 text-sm text-slate-600">
-                      Live map appears after pickup so the tracking view stays useful instead of noisy.
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <CustomerOrderCard key={order.id} order={order} />
             ))}
           </div>
         )}
@@ -229,145 +280,223 @@ export default function OrdersPage() {
     );
   }
 
-  const createError = getErrorMessage(createOrderM.error);
-  const marketActionError = getErrorMessage(marketActionM.error);
-
   return (
     <div className="grid gap-6">
-      <section className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-        {isOpsUser && (
-          <Card className="bg-[#efe6d6]">
-            <CardHeader>
-              <CardTitle className="font-display text-4xl font-semibold tracking-[-0.05em]">Create ops order</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <p className="section-copy">Manual creation for dispatch or call-center use, now surfaced as a dedicated command block.</p>
+      <section className="hero-grid">
+        <div className="hero-panel">
+          <div className="command-chip">
+            <Zap className="h-3.5 w-3.5" />
+            {t("orders.commandBoard")}
+          </div>
+          <h1 className="font-display mt-5 text-5xl font-semibold tracking-[-0.06em] text-white md:text-6xl">
+            {t("orders.opsHeroTitle")}
+          </h1>
+          <p className="mt-4 max-w-3xl text-base leading-8 text-slate-300">
+            {t("orders.opsHeroText")}
+          </p>
 
-              <div className="grid gap-2">
-                <Label>Dropoff address</Label>
-                <Input value={dropoffAddress} onChange={(event) => setDropoffAddress(event.target.value)} className="h-12" />
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label>Latitude</Label>
-                  <Input value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} className="h-12" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Longitude</Label>
-                  <Input value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} className="h-12" />
-                </div>
-              </div>
-
-              {createError && <div className="rounded-[18px] border-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700">{createError}</div>}
-              {marketActionError && <div className="rounded-[18px] border-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700">{marketActionError}</div>}
-
-              <Button className="h-12" onClick={() => createOrderM.mutate()} disabled={createOrderM.isPending}>
-                <PackagePlus className="h-4 w-4" />
-                {createOrderM.isPending ? "Creating..." : "Create order"}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        <div className="dashboard-card">
-          <div className="command-chip">Orders board</div>
-          <h1 className="section-title mt-5">{isOpsUser ? "A dispatch table with faster visual triage." : "Orders"}</h1>
-          <p className="section-copy mt-4">Search by code, customer, market, or status. The structure is flatter and denser so teams can scan actionability faster.</p>
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <div className="metric-block py-4">
-              <div className="section-kicker">Visible orders</div>
-              <div className="mt-2 font-display text-4xl font-semibold tracking-[-0.05em]">{filteredOrders.length}</div>
+          <div className="mt-8 data-grid">
+            <div className="metric-block">
+              <div className="section-kicker">{t("orders.visibleOrders")}</div>
+              <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{filteredOrders.length}</div>
             </div>
-            <div className="metric-block py-4">
-              <div className="section-kicker">Board mode</div>
-              <div className="mt-2 text-sm font-semibold text-slate-950">{isOpsUser ? "Operations" : "Customer"}</div>
+            <div className="metric-block">
+              <div className="section-kicker">{t("orders.marketPendingCount")}</div>
+              <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{marketPendingCount}</div>
             </div>
-            <div className="metric-block py-4">
-              <div className="section-kicker">Search state</div>
-              <div className="mt-2 text-sm font-semibold text-slate-950">{search ? "Filtered" : "All visible"}</div>
+            <div className="metric-block">
+              <div className="section-kicker">{t("orders.inDriverFlow")}</div>
+              <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{driverFlowCount}</div>
+            </div>
+            <div className="metric-block">
+              <div className="section-kicker">{t("orders.deliveredCount")}</div>
+              <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{deliveredCount}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          {isOpsUser && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="panel-title">{t("orders.createOpsOrder")}</CardTitle>
+                <p className="panel-copy">{t("orders.createOpsText")}</p>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="field-group">
+                  <Label className="field-label">{t("orders.dropoffAddress")}</Label>
+                  <Input value={dropoffAddress} onChange={(event) => setDropoffAddress(event.target.value)} className="input-shell" />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="field-group">
+                    <Label className="field-label">{t("orders.latitude")}</Label>
+                    <Input value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} className="input-shell" />
+                  </div>
+                  <div className="field-group">
+                    <Label className="field-label">{t("orders.longitude")}</Label>
+                    <Input value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} className="input-shell" />
+                  </div>
+                </div>
+
+                {createError && <div className="rounded-[18px] border border-rose-300/20 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-300/12 dark:text-rose-100">{createError}</div>}
+                {marketActionError && (
+                  <div className="rounded-[18px] border border-rose-300/20 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-300/12 dark:text-rose-100">
+                    {marketActionError}
+                  </div>
+                )}
+
+                <Button className="h-12" onClick={() => createOrderM.mutate()} disabled={createOrderM.isPending}>
+                  <PackagePlus className="h-4 w-4" />
+                  {createOrderM.isPending ? t("orders.creating") : t("orders.createButton")}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="frost-panel">
+            <div className="section-kicker">{t("orders.howToRead")}</div>
+            <div className="theme-copy mt-3 text-sm leading-7">
+              {t("orders.howToReadText")}
             </div>
           </div>
         </div>
       </section>
 
       <Card>
-        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <CardHeader className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <CardTitle className="font-display text-4xl font-semibold tracking-[-0.05em]">Operations order table</CardTitle>
-            <p className="mt-2 text-sm leading-7 text-slate-600">Compact actions, strong status labels, and lower visual noise.</p>
+            <CardTitle className="panel-title">{t("orders.tableTitle")}</CardTitle>
+            <p className="panel-copy mt-2">{t("orders.tableText")}</p>
           </div>
           <div className="relative w-full md:max-w-sm">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search orders" className="h-12 pl-11" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("orders.searchPlaceholder")} className="input-shell pl-11" />
           </div>
         </CardHeader>
         <CardContent>
           {ordersQ.isLoading ? (
-            <div className="text-sm text-slate-600">Loading orders...</div>
+            <div className="theme-copy text-sm">{t("orders.loading")}</div>
           ) : ordersQ.isError ? (
-            <div className="text-sm text-red-700">Failed to load orders.</div>
+            <div className="text-sm text-rose-700 dark:text-rose-100">{t("orders.failed")}</div>
           ) : (
-            <div className="overflow-hidden rounded-[22px] border-2 border-slate-950">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-[#efe6d6]">
-                    <TableHead>Code</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Market</TableHead>
-                    <TableHead>Customer</TableHead>
-                    <TableHead>Driver</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="bg-white">
-                      <TableCell className="font-semibold text-slate-950">{order.code}</TableCell>
-                      <TableCell>
-                        <span className={`status-chip ${statusBadgeClass(getStatusLabel(order.status))}`}>{getStatusLabel(order.status)}</span>
-                      </TableCell>
-                      <TableCell>{order.market?.name || "Direct order"}</TableCell>
-                      <TableCell>{order.customer_name || order.customer?.name || "Unknown"}</TableCell>
-                      <TableCell>{order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}</TableCell>
-                      <TableCell>{order.total != null ? formatMoney(order.total) : "-"}</TableCell>
-                      <TableCell>{formatDateTime(order.created_at)}</TableCell>
-                      <TableCell>
-                        {canManageMarketOrder(order, isOpsUser) ? (
-                          <div className="flex flex-wrap gap-2">
-                            {order.status === "MARKET_PENDING" && (
-                              <Button size="sm" onClick={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })} disabled={marketActionM.isPending}>
-                                Accept
-                              </Button>
-                            )}
-                            {order.status === "MARKET_ACCEPTED" && (
-                              <Button size="sm" onClick={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })} disabled={marketActionM.isPending}>
-                                Mark ready
-                              </Button>
-                            )}
-                            {order.status === "READY_FOR_PICKUP" && <span className="text-xs font-semibold text-emerald-800">Waiting for driver</span>}
-                            {["OFFERED", "ASSIGNED", "PICKED_UP", "DELIVERED"].includes(order.status) && (
-                              <span className="text-xs font-semibold text-slate-500">In delivery flow</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">-</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredOrders.length === 0 && (
+            <>
+              <div className="table-desktop table-shell">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={8} className="py-8 text-center text-sm text-slate-500">
-                        No orders matched your search.
-                      </TableCell>
+                      <TableHead>{t("orders.code")}</TableHead>
+                      <TableHead>{t("common.status")}</TableHead>
+                      <TableHead>{t("common.market")}</TableHead>
+                      <TableHead>{t("common.customer")}</TableHead>
+                      <TableHead>{t("common.driver")}</TableHead>
+                      <TableHead>{t("common.total")}</TableHead>
+                      <TableHead>{t("common.created")}</TableHead>
+                      <TableHead>{t("common.actions")}</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredOrders.map((order) => (
+                      <TableRow key={order.id}>
+                        <TableCell className="theme-ink font-semibold">{order.code}</TableCell>
+                        <TableCell>
+                          <span className={`status-chip ${statusBadgeClass(getStatusLabel(order.status))}`}>{getStatusLabel(order.status)}</span>
+                        </TableCell>
+                        <TableCell>{order.market?.name || t("orders.directOrder")}</TableCell>
+                        <TableCell>{order.customer_name || order.customer?.name || t("common.unknown")}</TableCell>
+                        <TableCell>{order.assigned_driver?.user?.name || order.offered_driver?.user?.name || t("common.unassigned")}</TableCell>
+                        <TableCell>{order.total != null ? formatMoney(order.total) : "-"}</TableCell>
+                        <TableCell>{formatDateTime(order.created_at)}</TableCell>
+                        <TableCell>
+                          {canManageMarketOrder(order, isOpsUser) ? (
+                            <div className="flex flex-wrap gap-2">
+                              {order.status === "MARKET_PENDING" && (
+                                <Button size="sm" onClick={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })} disabled={marketActionM.isPending}>
+                                  {t("orders.accept")}
+                                </Button>
+                              )}
+                              {order.status === "MARKET_ACCEPTED" && (
+                                <Button size="sm" onClick={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })} disabled={marketActionM.isPending}>
+                                  {t("orders.markReady")}
+                                </Button>
+                              )}
+                              {order.status === "READY_FOR_PICKUP" && <span className="data-pill">{t("orders.waitingForDriver")}</span>}
+                              {["OFFERED", "ASSIGNED", "PICKED_UP", "DELIVERED"].includes(order.status) && (
+                                <span className="data-pill">{t("orders.inDeliveryFlow")}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-500">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {filteredOrders.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-8 text-center text-sm text-slate-400">
+                          {t("orders.noResults")}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="mobile-stack-table">
+                {filteredOrders.map((order) => (
+                  <div key={order.id} className="mobile-record">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="section-kicker">{order.market?.code || t("orders.title")}</div>
+                        <div className="font-display theme-ink mt-2 text-3xl font-semibold tracking-[-0.04em]">{order.code}</div>
+                      </div>
+                      <span className={`status-chip ${statusBadgeClass(getStatusLabel(order.status))}`}>{getStatusLabel(order.status)}</span>
+                    </div>
+
+                    <div className="mobile-record-row">
+                      <div className="mobile-record-label">{t("common.customer")}</div>
+                      <div className="theme-copy max-w-[65%] text-right text-sm">{order.customer_name || order.customer?.name || t("common.unknown")}</div>
+                    </div>
+                    <div className="mobile-record-row">
+                      <div className="mobile-record-label">{t("common.market")}</div>
+                      <div className="theme-copy max-w-[65%] text-right text-sm">{order.market?.name || t("orders.directOrder")}</div>
+                    </div>
+                    <div className="mobile-record-row">
+                      <div className="mobile-record-label">{t("common.driver")}</div>
+                      <div className="theme-copy max-w-[65%] text-right text-sm">
+                        {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || t("common.unassigned")}
+                      </div>
+                    </div>
+                    <div className="mobile-record-row">
+                      <div className="mobile-record-label">{t("common.created")}</div>
+                      <div className="theme-copy max-w-[65%] text-right text-sm">{formatDateTime(order.created_at)}</div>
+                    </div>
+                    <div className="mobile-record-row">
+                      <div className="mobile-record-label">{t("common.total")}</div>
+                      <div className="theme-copy max-w-[65%] text-right text-sm">{order.total != null ? formatMoney(order.total) : "-"}</div>
+                    </div>
+
+                    {canManageMarketOrder(order, isOpsUser) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {order.status === "MARKET_PENDING" && (
+                          <Button size="sm" onClick={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })} disabled={marketActionM.isPending}>
+                            {t("orders.accept")}
+                          </Button>
+                        )}
+                        {order.status === "MARKET_ACCEPTED" && (
+                          <Button size="sm" onClick={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })} disabled={marketActionM.isPending}>
+                            {t("orders.markReady")}
+                          </Button>
+                        )}
+                        {order.status === "READY_FOR_PICKUP" && <span className="data-pill">{t("orders.waitingForDriver")}</span>}
+                        {["OFFERED", "ASSIGNED", "PICKED_UP", "DELIVERED"].includes(order.status) && <span className="data-pill">{t("orders.inDeliveryFlow")}</span>}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+                {filteredOrders.length === 0 && <div className="mobile-record theme-muted text-sm">{t("orders.noResults")}</div>}
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
