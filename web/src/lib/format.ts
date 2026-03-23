@@ -3,7 +3,7 @@ export function toNumber(value: number | string | null | undefined, fallback = 0
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function formatMoney(value: number | string, currency = "USD") {
+export function formatMoney(value: number | string | null | undefined, currency = "USD") {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
@@ -27,10 +27,14 @@ export function formatRelativeCount(value: number, singular: string, plural = `$
   return `${value} ${value === 1 ? singular : plural}`;
 }
 
-export function getOrderStatusTone(status: string) {
-  switch (status.toUpperCase()) {
+export function getOrderStatusTone(status?: string | null) {
+  switch ((status ?? "").toUpperCase()) {
     case "DELIVERED":
       return "success";
+    case "PICKED_UP":
+    case "OFFERED":
+    case "ON_ROUTE":
+      return "warning";
     case "FAILED":
     case "CANCELLED":
       return "danger";

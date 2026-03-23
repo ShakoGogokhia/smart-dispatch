@@ -53,4 +53,11 @@ class User extends Authenticatable
     {
         return $this->hasOne(\App\Models\Driver::class);
     }
+
+    public function markets()
+    {
+        return $this->belongsToMany(\App\Models\Market::class, 'market_users')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
 }

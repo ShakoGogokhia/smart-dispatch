@@ -1,8 +1,17 @@
-import { ArrowRight, Clock3, MapPin, ShoppingBasket, Store } from "lucide-react";
+import {
+  ArrowRight,
+  Clock3,
+  MapPin,
+  ShoppingBasket,
+  Sparkles,
+  Store,
+  Truck,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -15,121 +24,202 @@ type Market = {
 };
 
 export default function PublicMarketsPage() {
+  const { language, setLanguage, t } = useI18n();
   const marketsQ = useQuery({
     queryKey: ["public-markets"],
     queryFn: async () => (await api.get("/api/public/markets")).data as Market[],
   });
 
   const markets = marketsQ.data ?? [];
+  const activeMarkets = markets.filter((market) => market.is_active).length;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,191,36,0.28),_transparent_22%),radial-gradient(circle_at_bottom_right,_rgba(45,212,191,0.20),_transparent_28%),linear-gradient(180deg,_#071120_0%,_#11203b_34%,_#f7f1e8_34%,_#f7f1e8_100%)] px-4 py-5 md:px-6">
-      <div className="mx-auto max-w-7xl">
-        <header className="grid gap-6 rounded-[36px] border border-white/10 bg-slate-950/78 p-7 text-white shadow-[0_28px_70px_rgba(15,23,42,0.4)] backdrop-blur md:p-10 lg:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-              <Store className="h-4 w-4 text-amber-300" />
-              Order from active markets
-            </div>
-            <h1 className="font-display mt-6 max-w-3xl text-4xl font-semibold tracking-tight md:text-6xl">
-              A polished storefront for every market connected to Smart Dispatch.
-            </h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
-              Browse available markets, open their item catalogs, fill your cart, and send
-              orders straight into the dispatch workflow.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3 text-sm text-slate-200">
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                Public catalog browsing
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                Cart persistence per market
-              </div>
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                Dispatch-ready checkout
-              </div>
-            </div>
-          </div>
+    <div className="relative min-h-screen overflow-hidden px-4 py-5 md:px-6 md:py-6">
+      <div className="aurora-orb left-[6%] top-[7%] h-44 w-44 bg-orange-400/24" />
+      <div className="aurora-orb right-[8%] top-[20%] h-56 w-56 bg-teal-400/18 [animation-delay:1.2s]" />
+      <div className="aurora-orb bottom-[8%] left-[42%] h-40 w-40 bg-amber-200/18 [animation-delay:2.1s]" />
 
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
-            <div className="rounded-[28px] border border-white/10 bg-white/6 p-5">
-              <ShoppingBasket className="h-5 w-5 text-amber-300" />
-              <div className="mt-4 text-3xl font-semibold">{markets.length}</div>
-              <div className="mt-1 text-sm text-slate-300">Active markets available now</div>
-            </div>
-            <div className="rounded-[28px] border border-white/10 bg-white/6 p-5">
-              <MapPin className="h-5 w-5 text-teal-300" />
-              <div className="mt-4 text-xl font-semibold">Location-aware delivery inputs</div>
-              <div className="mt-1 text-sm text-slate-300">
-                Checkout captures address and coordinates for dispatch.
+      <div className="relative mx-auto max-w-7xl">
+        <header className="hero-surface animated-enter px-6 py-7 md:px-10 md:py-10">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.12),_transparent_28%),linear-gradient(135deg,_rgba(255,176,86,0.16),_transparent_40%)]" />
+
+          <div className="relative grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="animated-enter animated-enter-delay-1">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/7 px-4 py-2 text-sm text-slate-100">
+                <Sparkles className="h-4 w-4 text-amber-300" />
+                {t("public.badge")}
+              </div>
+
+              <h1 className="font-display mt-6 max-w-3xl text-4xl font-bold tracking-[-0.05em] md:text-6xl xl:text-7xl">
+                {t("public.heroTitle")}
+              </h1>
+
+              <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
+                {t("public.heroText")}
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                {[t("public.feature.catalog"), t("public.feature.cart"), t("public.feature.checkout")].map((feature) => (
+                  <div
+                    key={feature}
+                    className="rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-slate-100 backdrop-blur"
+                  >
+                    {feature}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild className="h-12 rounded-2xl px-6 text-base">
+                  <Link to={markets[0] ? `/m/${markets[0].id}` : "/"}>
+                    {t("public.openMarket")}
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary" className="h-12 rounded-2xl border-0 bg-white/10 px-6 text-white hover:bg-white/16">
+                  <Link to="/login">{t("public.staffWorkspace")}</Link>
+                </Button>
+              </div>
+
+              <div className="mt-8 flex gap-2">
+                <Button
+                  variant={language === "ka" ? "default" : "secondary"}
+                  className="rounded-2xl"
+                  onClick={() => setLanguage("ka")}
+                >
+                  {t("lang.ka")}
+                </Button>
+                <Button
+                  variant={language === "en" ? "default" : "secondary"}
+                  className="rounded-2xl"
+                  onClick={() => setLanguage("en")}
+                >
+                  {t("lang.en")}
+                </Button>
               </div>
             </div>
-            <div className="rounded-[28px] border border-white/10 bg-white/6 p-5">
-              <Clock3 className="h-5 w-5 text-orange-300" />
-              <div className="mt-4 text-xl font-semibold">Designed for fast handoff</div>
-              <div className="mt-1 text-sm text-slate-300">
-                The public flow moves cleanly into the authenticated workspace.
+
+            <div className="animated-enter animated-enter-delay-2 grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="metric-card relative overflow-hidden">
+                  <div className="absolute right-4 top-4 rounded-2xl bg-white/10 p-3">
+                    <ShoppingBasket className="h-5 w-5 text-amber-300" />
+                  </div>
+                  <div className="text-sm uppercase tracking-[0.24em] text-slate-400">{t("public.availableMarkets")}</div>
+                  <div className="mt-4 text-4xl font-bold text-white">{markets.length}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-300">
+                    Browse nearby storefronts and jump straight into ordering.
+                  </div>
+                </div>
+
+                <div className="metric-card relative overflow-hidden">
+                  <div className="absolute right-4 top-4 rounded-2xl bg-white/10 p-3">
+                    <Clock3 className="h-5 w-5 text-teal-300" />
+                  </div>
+                  <div className="text-sm uppercase tracking-[0.24em] text-slate-400">Live ready</div>
+                  <div className="mt-4 text-4xl font-bold text-white">{activeMarkets}</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-300">
+                    Active markets can move from catalog to dispatch without extra friction.
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[30px] border border-white/10 bg-white/6 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-white/10 p-3">
+                    <Truck className="h-5 w-5 text-orange-300" />
+                  </div>
+                  <div>
+                    <div className="text-sm uppercase tracking-[0.24em] text-slate-400">Flow</div>
+                    <div className="font-display text-2xl font-bold text-white">Browse to doorstep</div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {[
+                    { icon: Store, title: "Choose market", text: "Jump into any storefront without losing speed." },
+                    { icon: ShoppingBasket, title: "Build cart", text: "Keep quantities, discounts, and intent visible." },
+                    { icon: MapPin, title: "Hand off cleanly", text: "Location context carries into the delivery flow." },
+                  ].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div key={item.title} className="rounded-[24px] border border-white/8 bg-black/10 p-4">
+                        <Icon className="h-5 w-5 text-white" />
+                        <div className="mt-4 font-semibold text-white">{item.title}</div>
+                        <div className="mt-2 text-sm leading-6 text-slate-300">{item.text}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
         </header>
 
         <section className="mt-8">
-          <div className="mb-5 flex items-end justify-between gap-4">
+          <div className="animated-enter animated-enter-delay-3 mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="section-heading">Available markets</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Customers can browse publicly. Staff can sign in for operational tools.
+              <h2 className="section-heading">{t("public.availableMarkets")}</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-600 md:text-base">
+                {t("public.availableMarketsText")}
               </p>
             </div>
-            <Button asChild variant="secondary" className="hidden rounded-2xl md:inline-flex">
-              <Link to="/login">Open staff workspace</Link>
-            </Button>
+            <div className="rounded-full border border-slate-200/80 bg-white/75 px-4 py-2 text-sm text-slate-700 shadow-sm backdrop-blur">
+              {activeMarkets} active now
+            </div>
           </div>
 
           {marketsQ.isLoading ? (
-            <div className="glass-panel p-8 text-sm text-slate-600">Loading markets...</div>
+            <div className="glass-panel p-8 text-sm text-slate-600">{t("public.loadingMarkets")}</div>
           ) : marketsQ.isError ? (
-            <div className="glass-panel p-8 text-sm text-red-700">
-              Could not load markets from `/api/public/markets`.
-            </div>
+            <div className="glass-panel p-8 text-sm text-red-700">{t("public.failedMarkets")}</div>
           ) : (
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {markets.map((market) => (
+              {markets.map((market, index) => (
                 <Card
                   key={market.id}
-                  className="overflow-hidden rounded-[30px] border-white/30 bg-white/82 shadow-[0_24px_60px_rgba(15,23,42,0.10)]"
+                  className={`mesh-card animated-enter ${index % 3 === 1 ? "animated-enter-delay-1" : index % 3 === 2 ? "animated-enter-delay-2" : ""}`}
                 >
                   <CardContent className="p-0">
-                    <div className="bg-[linear-gradient(135deg,_rgba(251,191,36,0.22),_rgba(255,255,255,0)),linear-gradient(180deg,_#fffefb_0%,_#fff8ef_100%)] p-6">
-                      <div className="flex items-start justify-between gap-4">
+                    <div className="relative overflow-hidden p-6">
+                      <div className="absolute right-0 top-0 h-28 w-28 rounded-full bg-orange-200/35 blur-3xl" />
+                      <div className="relative flex items-start justify-between gap-4">
                         <div>
-                          <div className="text-xs uppercase tracking-[0.24em] text-slate-500">
-                            {market.code}
-                          </div>
-                          <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight text-slate-950">
+                          <div className="text-xs uppercase tracking-[0.24em] text-slate-500">{market.code}</div>
+                          <h3 className="font-display mt-2 text-3xl font-bold tracking-[-0.04em] text-slate-950">
                             {market.name}
                           </h3>
                         </div>
-                        <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
-                          {market.is_active ? "Open" : "Closed"}
+                        <div
+                          className={[
+                            "rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
+                            market.is_active
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-500",
+                          ].join(" ")}
+                        >
+                          {market.is_active ? t("public.open") : t("public.closed")}
                         </div>
                       </div>
-                      <div className="mt-5 flex items-start gap-2 text-sm text-slate-600">
-                        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                        <span>{market.address || "Address not provided yet"}</span>
+
+                      <div className="mt-6 flex items-start gap-2 text-sm leading-6 text-slate-600">
+                        <MapPin className="mt-1 h-4 w-4 shrink-0 text-slate-400" />
+                        <span>{market.address || "Address coming soon"}</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between p-6">
-                      <p className="max-w-[16rem] text-sm leading-6 text-slate-600">
-                        Browse available items, collect discounts, and start checkout when you are
-                        ready.
-                      </p>
-                      <Button asChild className="rounded-2xl">
+                    <div className="border-t border-slate-200/70 p-6">
+                      <div className="mb-5 rounded-[24px] bg-slate-950 px-4 py-4 text-white">
+                        <div className="text-xs uppercase tracking-[0.24em] text-slate-400">Experience</div>
+                        <div className="mt-2 text-sm leading-6 text-slate-300">
+                          Fast catalog browsing, saved cart state, and a smoother route into checkout.
+                        </div>
+                      </div>
+
+                      <Button asChild className="group h-12 w-full rounded-2xl">
                         <Link to={`/m/${market.id}`}>
-                          Open market
-                          <ArrowRight className="ml-2 h-4 w-4" />
+                          {t("public.openMarket")}
+                          <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                         </Link>
                       </Button>
                     </div>

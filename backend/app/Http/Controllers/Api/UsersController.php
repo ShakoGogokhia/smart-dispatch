@@ -32,7 +32,7 @@ class UsersController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6'],
             'roles' => ['required', 'array', 'min:1'],
-            'roles.*' => ['string', Rule::in(['admin', 'owner', 'staff', 'customer'])],
+            'roles.*' => ['string', Rule::in(['admin', 'owner', 'staff', 'customer', 'driver'])],
         ]);
 
         $user = User::create([
@@ -57,7 +57,7 @@ class UsersController extends Controller
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:6'],
             'roles' => ['sometimes', 'array', 'min:1'],
-            'roles.*' => ['string', Rule::in(['admin', 'owner', 'staff', 'customer'])],
+            'roles.*' => ['string', Rule::in(['admin', 'owner', 'staff', 'customer', 'driver'])],
         ]);
 
         $updates = [];

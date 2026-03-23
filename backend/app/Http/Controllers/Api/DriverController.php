@@ -5,14 +5,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class DriverController extends Controller
 {
     public function index()
     {
         return response()->json(
-            Driver::query()->with(['user','vehicle'])->latest()->get()
+            Driver::query()->with(['user.roles', 'vehicle', 'activeShift', 'latestPing'])->latest()->get()
         );
     }
 
@@ -29,8 +28,9 @@ class DriverController extends Controller
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
-            'password' => Hash::make($data['password']),
+            'password' => $data['password'],
         ]);
+        $user->assignRole('driver');
 
         $driver = Driver::create([
             'user_id' => $user->id,
@@ -38,7 +38,7 @@ class DriverController extends Controller
             'status' => 'OFFLINE',
         ]);
 
-        return response()->json($driver->load(['user','vehicle']), 201);
+        return response()->json($driver->load(['user.roles','vehicle', 'activeShift', 'latestPing']), 201);
     }
 
     public function updateStatus(Request $request, Driver $driver)
@@ -54,6 +54,6 @@ class DriverController extends Controller
 
         $driver->update(['status' => $data['status']]);
 
-        return response()->json($driver->load(['user','vehicle']));
+        return response()->json($driver->load(['user.roles','vehicle', 'activeShift', 'latestPing']));
     }
 }

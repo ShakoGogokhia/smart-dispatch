@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\PromoCodeController;
 use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\PublicMarketController;
+use App\Http\Controllers\Api\DriverOrderController;
 
 /*
 |--------------------------------------------------------------------------
@@ -89,6 +90,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/drivers', [DriverController::class, 'store']);
     Route::patch('/drivers/{driver}/status', [DriverController::class, 'updateStatus']);
     Route::get('/driver/routes/today', [DriverRouteController::class, 'today']);
+    Route::get('/driver/orders/feed', [DriverOrderController::class, 'feed']);
+    Route::post('/driver/orders/{order}/accept', [DriverOrderController::class, 'accept']);
+    Route::post('/driver/orders/{order}/decline', [DriverOrderController::class, 'decline']);
+    Route::post('/driver/orders/{order}/picked-up', [DriverOrderController::class, 'pickedUp']);
+    Route::post('/driver/orders/{order}/delivered', [DriverOrderController::class, 'delivered']);
 
     /*
     |--------------------------------------------------------------------------

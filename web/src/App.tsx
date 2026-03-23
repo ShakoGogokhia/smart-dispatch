@@ -5,6 +5,8 @@ import RequireAuth from "@/components/RequireAuth";
 
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import CheckoutPage from "@/pages/CheckoutPage";
+import DriverHubPage from "@/pages/DriverHubPage";
+import DriversPage from "@/pages/DriversPage";
 import LiveMapPage from "@/pages/LiveMapPage";
 import LoginPage from "@/pages/LoginPage";
 import MarketItemsPage from "@/pages/MarketItemsPage";
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="/routes" element={<RoutesPage />} />
         <Route path="/live-map" element={<LiveMapPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/driver-hub" element={<DriverHubPage />} />
+        <Route path="/drivers" element={<DriversPage />} />
         <Route path="/users" element={<UsersPage />} />
 
         <Route path="/markets">

@@ -25,7 +25,33 @@ export function loadCart(marketId: string): CartItem[] {
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed
+      .map((item) => {
+        if (!item || typeof item !== "object") {
+          return null;
+        }
+
+        const entry = item as Partial<CartItem>;
+        const itemId = Number(entry.item_id);
+        const qty = Number(entry.qty);
+        const price = Number(entry.price);
+
+        if (!Number.isFinite(itemId) || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price)) {
+          return null;
+        }
+
+        return {
+          item_id: itemId,
+          name: typeof entry.name === "string" && entry.name.trim() ? entry.name : `Item #${itemId}`,
+          price,
+          qty,
+        } satisfies CartItem;
+      })
+      .filter((item): item is CartItem => item !== null);
   } catch {
     return [];
   }

@@ -37,7 +37,7 @@ class LiveController extends Controller
         $date = $request->query('date', now()->toDateString());
 
         $routes = RoutePlan::query()
-            ->with(['driver.user','stops'])
+            ->with(['driver.user','stops.order'])
             ->where('route_date', $date)
             ->latest('id')
             ->get();

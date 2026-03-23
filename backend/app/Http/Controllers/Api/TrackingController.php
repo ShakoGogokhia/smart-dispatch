@@ -4,9 +4,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\LocationPing;
 use Illuminate\Http\Request;
+use App\Services\OrderDispatchService;
 
 class TrackingController extends Controller
 {
+    public function __construct(private OrderDispatchService $dispatchService)
+    {
+    }
+
     public function ping(Request $request)
     {
         $driver = $request->user()->driver;
@@ -28,6 +33,8 @@ class TrackingController extends Controller
         ]);
 
         // Later: broadcast DriverLocationUpdated event here
+
+        $this->dispatchService->refreshPendingOrders();
 
         return response()->json($ping, 201);
     }

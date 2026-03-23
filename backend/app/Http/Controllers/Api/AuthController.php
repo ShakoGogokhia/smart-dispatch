@@ -67,13 +67,24 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        $u = $request->user();
+        $u = $request->user()->load([
+            'driver.vehicle',
+            'driver.activeShift',
+            'driver.latestPing',
+        ]);
 
         return response()->json([
             'id' => $u->id,
             'name' => $u->name,
             'email' => $u->email,
             'roles' => $u->getRoleNames()->values(),
+            'driver' => $u->driver ? [
+                'id' => $u->driver->id,
+                'status' => $u->driver->status,
+                'vehicle' => $u->driver->vehicle,
+                'active_shift' => $u->driver->activeShift,
+                'latest_ping' => $u->driver->latestPing,
+            ] : null,
         ]);
     }
 

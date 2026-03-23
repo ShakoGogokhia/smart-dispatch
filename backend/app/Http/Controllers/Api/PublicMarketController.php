@@ -63,6 +63,12 @@ class PublicMarketController extends Controller
 
         if (!$promo) return null;
 
-        return $promo->only(['id', 'code', 'discount_type', 'discount_value', 'is_active']);
+        return [
+            'id' => $promo->id,
+            'code' => $promo->code,
+            'type' => $promo->discount_type,
+            'value' => $promo->discount_value,
+            'is_active' => $promo->is_active,
+        ];
     }
 }

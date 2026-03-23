@@ -4,9 +4,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Shift;
 use Illuminate\Http\Request;
+use App\Services\OrderDispatchService;
 
 class ShiftController extends Controller
 {
+    public function __construct(private OrderDispatchService $dispatchService)
+    {
+    }
+
     public function start(Request $request)
     {
         $user = $request->user();
@@ -27,7 +32,10 @@ class ShiftController extends Controller
             'status' => 'ACTIVE',
         ]);
 
-        return response()->json($shift, 201);
+        $driver->update(['status' => 'ONLINE']);
+        $this->dispatchService->refreshPendingOrders();
+
+        return response()->json($shift->load('driver'), 201);
     }
 
     public function end(Request $request)
@@ -49,6 +57,9 @@ class ShiftController extends Controller
             'status' => 'ENDED',
         ]);
 
-        return response()->json($shift);
+        $driver->update(['status' => 'OFFLINE']);
+        $this->dispatchService->refreshPendingOrders();
+
+        return response()->json($shift->load('driver'));
     }
 }
