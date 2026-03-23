@@ -36,6 +36,7 @@ use App\Http\Controllers\Api\PublicMarketController;
 */
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 
 
 Route::prefix('public')->group(function () {
@@ -150,7 +151,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
 
         // Get all users to assign as owner
+        Route::get('/users', [UsersController::class, 'index']);
         Route::get('/users/owners', [UsersController::class, 'owners']);
+        Route::post('/users', [UsersController::class, 'store']);
+        Route::patch('/users/{user}', [UsersController::class, 'update']);
 
         // Markets CRUD
         Route::get('/markets', [MarketController::class, 'index']);
@@ -184,6 +188,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/markets/{market}/staff', [MarketController::class, 'staff']);
         Route::post('/markets/{market}/staff', [MarketController::class, 'addStaff']);
         Route::delete('/markets/{market}/staff/{userId}', [MarketController::class, 'removeStaff']);
+        Route::get('/markets/{market}/assignable-users', [UsersController::class, 'assignable']);
     });
 
 });

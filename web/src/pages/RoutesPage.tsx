@@ -1,7 +1,10 @@
+import { CalendarDays, Route, Timer, Truck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDateTime } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type RouteStop = {
@@ -26,52 +29,83 @@ type RoutePlan = {
 
 export default function RoutesPage() {
   const routesQ = useQuery({
-    queryKey: ["routes"],
-    queryFn: async () => {
-      const res = await api.get("/api/live/routes");
-      return res.data as RoutePlan[];
-    },
+    queryKey: ["live-routes"],
+    queryFn: async () => (await api.get("/api/live/routes")).data as RoutePlan[],
   });
+
+  const routes = routesQ.data ?? [];
 
   return (
     <div className="grid gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Routes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {routesQ.isLoading && <div>Loading...</div>}
-          {routesQ.error && (
-            <div className="text-red-600">
-              Failed to load routes. (Do you have GET /api/routes?)
-            </div>
-          )}
+      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(59,130,246,0.16),_rgba(255,255,255,0.95)),linear-gradient(180deg,_#fcfdff_0%,_#f3f7ff_100%)] p-6">
+        <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Routes</div>
+        <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
+          Today's route plans
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          Pulled from `/api/live/routes` so dispatch can monitor current plans and stop sequences.
+        </p>
+      </div>
 
-          {routesQ.data && routesQ.data.length === 0 && (
-            <div className="text-sm text-muted-foreground">
-              No routes yet. Run planning/commit on backend first.
-            </div>
-          )}
-
-          {routesQ.data?.map((r) => (
-            <Card key={r.id} className="mb-4">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base">
-                  Route #{r.id} — Driver {r.driver?.user?.name ?? r.driver_id}
-                </CardTitle>
-                <Badge variant="secondary">{r.status}</Badge>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                <div className="text-sm text-muted-foreground">
-                  Date: {r.route_date}
-                  {r.planned_distance_km != null && ` • Distance: ${r.planned_distance_km}km`}
-                  {r.planned_duration_min != null && ` • Duration: ${r.planned_duration_min}min`}
+      {routesQ.isLoading ? (
+        <Card className="rounded-[30px]">
+          <CardContent className="p-8 text-sm text-slate-600">Loading routes...</CardContent>
+        </Card>
+      ) : routesQ.isError ? (
+        <Card className="rounded-[30px]">
+          <CardContent className="p-8 text-sm text-red-700">
+            Failed to load routes from `/api/live/routes`.
+          </CardContent>
+        </Card>
+      ) : routes.length === 0 ? (
+        <Card className="rounded-[30px]">
+          <CardContent className="p-8 text-sm text-slate-600">
+            No routes are planned for today yet.
+          </CardContent>
+        </Card>
+      ) : (
+        routes.map((route) => (
+          <Card key={route.id} className="rounded-[30px]">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="font-display text-3xl">
+                    Route #{route.id}
+                  </CardTitle>
+                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-600">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                      <Truck className="h-4 w-4" />
+                      {route.driver?.user?.name || `Driver #${route.driver_id}`}
+                    </div>
+                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                      <CalendarDays className="h-4 w-4" />
+                      {route.route_date}
+                    </div>
+                    {route.planned_distance_km != null && (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                        <Route className="h-4 w-4" />
+                        {route.planned_distance_km} km
+                      </div>
+                    )}
+                    {route.planned_duration_min != null && (
+                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                        <Timer className="h-4 w-4" />
+                        {route.planned_duration_min} min
+                      </div>
+                    )}
+                  </div>
                 </div>
-
+                <Badge className="rounded-full border-0 bg-slate-950 px-4 py-2 text-white shadow-none">
+                  {route.status}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="overflow-hidden rounded-[24px] border border-slate-200/80">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>#</TableHead>
+                      <TableHead>Stop</TableHead>
                       <TableHead>Order</TableHead>
                       <TableHead>Address</TableHead>
                       <TableHead>Status</TableHead>
@@ -79,24 +113,29 @@ export default function RoutesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(r.stops ?? []).map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell className="font-medium">{s.sequence}</TableCell>
-                        <TableCell>{s.order?.code ?? s.order_id}</TableCell>
-                        <TableCell>{s.order?.dropoff_address ?? "-"}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{s.status}</Badge>
-                        </TableCell>
-                        <TableCell>{s.eta ? new Date(s.eta).toLocaleString() : "-"}</TableCell>
+                    {(route.stops ?? []).map((stop) => (
+                      <TableRow key={stop.id}>
+                        <TableCell className="font-semibold">{stop.sequence}</TableCell>
+                        <TableCell>{stop.order?.code || stop.order_id}</TableCell>
+                        <TableCell>{stop.order?.dropoff_address || "No dropoff address"}</TableCell>
+                        <TableCell>{stop.status}</TableCell>
+                        <TableCell>{formatDateTime(stop.eta)}</TableCell>
                       </TableRow>
                     ))}
+                    {(route.stops ?? []).length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500">
+                          This route does not have any stops yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          ))}
-        </CardContent>
-      </Card>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

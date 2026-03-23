@@ -1,19 +1,33 @@
-import { Navigate } from "react-router-dom";
+import type { ReactNode } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+
 import { auth } from "@/lib/auth";
 import { useMe } from "@/lib/useMe";
 
-export default function RequireAuth({ children }: { children: JSX.Element }) {
+export default function RequireAuth({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const token = auth.getToken();
   const meQ = useMe();
 
-  if (!token) return <Navigate to="/login" replace />;
+  if (!token) {
+    const next = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?next=${next}`} replace />;
+  }
 
-  if (meQ.isLoading) return <div className="p-6">Loading...</div>;
+  if (meQ.isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <div className="glass-panel w-full max-w-md p-8 text-center">
+          <div className="text-sm font-medium text-muted-foreground">Checking your workspace access...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (meQ.isError) {
     auth.clear();
     return <Navigate to="/login" replace />;
   }
 
-  return children;
+  return <>{children}</>;
 }

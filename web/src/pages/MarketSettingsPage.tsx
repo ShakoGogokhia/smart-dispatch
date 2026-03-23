@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -25,6 +25,8 @@ type StaffUser = {
   id: number;
   name: string;
   email: string;
+  roles?: string[];
+  is_owner?: boolean;
   pivot?: { role?: string };
 };
 
@@ -60,12 +62,11 @@ export default function MarketSettingsPage() {
   const [isActive, setIsActive] = useState(true);
 
   // when market arrives, initialize local state once
-  useMemo(() => {
+  useEffect(() => {
     if (!market) return;
     setName((prev) => (prev ? prev : market.name ?? ""));
     setAddress((prev) => (prev ? prev : market.address ?? ""));
     setIsActive(typeof market.is_active === "boolean" ? market.is_active : true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [market?.id]);
 
   // Tabs (simple)
@@ -122,6 +123,16 @@ export default function MarketSettingsPage() {
   });
 
   const [staffUserId, setStaffUserId] = useState("");
+
+  const assignableUsersQ = useQuery({
+    queryKey: ["market-assignable-users", id],
+    queryFn: async () => {
+      const res = await api.get(`/api/markets/${id}/assignable-users`);
+      return res.data as StaffUser[];
+    },
+    enabled: Number.isFinite(id) && tab === "staff",
+    retry: false,
+  });
 
   const addStaffM = useMutation({
     mutationFn: async () => {
@@ -305,7 +316,7 @@ export default function MarketSettingsPage() {
                       <div className="text-sm text-red-600">
                         {logoError}{" "}
                         <span className="text-xs text-muted-foreground">
-                          (If 404 → you haven’t added POST /api/markets/{market}/logo yet.)
+                          If you get a 404, confirm the logo upload route exists on the backend.
                         </span>
                       </div>
                     )}
@@ -327,15 +338,24 @@ export default function MarketSettingsPage() {
                     <div className="font-medium">Add Staff</div>
 
                     <div className="text-sm text-muted-foreground">
-                      Enter user id (you can add later a user search UI).
+                      Select a user to add as staff for this market.
                     </div>
 
                     <div className="flex gap-2">
-                      <Input
-                        value={staffUserId}
-                        onChange={(e) => setStaffUserId(e.target.value)}
-                        placeholder="User ID"
-                      />
+                      <div className="flex-1">
+                        <select
+                          value={staffUserId}
+                          onChange={(e) => setStaffUserId(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        >
+                          <option value="">Select user</option>
+                          {(assignableUsersQ.data ?? []).map((user) => (
+                            <option key={user.id} value={String(user.id)} disabled={user.is_owner}>
+                              {user.name} ({user.email}){user.is_owner ? " - owner" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <Button
                         onClick={() => addStaffM.mutate()}
                         disabled={addStaffM.isPending || !staffUserId.trim()}
@@ -345,6 +365,11 @@ export default function MarketSettingsPage() {
                     </div>
 
                     {addStaffError && <div className="text-sm text-red-600">{addStaffError}</div>}
+                    {assignableUsersQ.error && (
+                      <div className="text-sm text-red-600">
+                        Failed to load available users for staff assignment.
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-md border p-4 grid gap-3">
@@ -354,7 +379,7 @@ export default function MarketSettingsPage() {
                       <div className="text-sm text-red-600">
                         {staffError}{" "}
                         <span className="text-xs text-muted-foreground">
-                          (If 404 → add GET /api/markets/{market}/staff)
+                          If you get a 404, confirm the market staff route exists on the backend.
                         </span>
                       </div>
                     )}
