@@ -1,24 +1,16 @@
 import { useMemo, useState } from "react";
-import {
-  ArrowRight,
-  LockKeyhole,
-  ShieldCheck,
-  Sparkles,
-  Store,
-  Truck,
-  UserRoundPlus,
-} from "lucide-react";
+import { ArrowRight, LockKeyhole, ShieldCheck, Store, Truck, UserRoundPlus } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AxiosError } from "axios";
 
-import { api } from "@/lib/api";
-import { auth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
-import { getDefaultAuthedPath, normalizeRoles } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { api } from "@/lib/api";
+import { auth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n";
+import { getDefaultAuthedPath, normalizeRoles } from "@/lib/session";
 
 function getErrorMessage(error: unknown, fallback: string) {
   const axiosError = error as AxiosError<{ message?: string }>;
@@ -45,7 +37,6 @@ export default function LoginPage() {
     auth.setToken(token);
     const roles = normalizeRoles(rolesInput);
     const fallbackPath = getDefaultAuthedPath(roles);
-
     navigate(nextPath ?? fallbackPath, { replace: true });
   }
 
@@ -57,8 +48,8 @@ export default function LoginPage() {
     try {
       const res = await api.post("/api/login", { email, password });
       finishAuth(res.data.token, res.data?.user?.roles);
-    } catch (error: unknown) {
-      setError(getErrorMessage(error, "Login failed"));
+    } catch (nextError: unknown) {
+      setError(getErrorMessage(nextError, "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -77,124 +68,119 @@ export default function LoginPage() {
         password_confirmation: passwordConfirmation,
       });
       finishAuth(res.data.token, res.data?.user?.roles ?? ["customer"]);
-    } catch (error: unknown) {
-      setError(getErrorMessage(error, "Registration failed"));
+    } catch (nextError: unknown) {
+      setError(getErrorMessage(nextError, "Registration failed"));
     } finally {
       setLoading(false);
     }
   }
 
+  const highlights = [
+    { icon: Store, title: "Storefront ready", text: "Public browsing, saved cart state, and structured checkout." },
+    { icon: Truck, title: "Dispatch aware", text: "Orders, routing, and live location data in the same workspace." },
+    { icon: ShieldCheck, title: "Role driven", text: "Customers, staff, drivers, and admins land in the right flow." },
+  ];
+
   return (
-    <div className="relative min-h-screen overflow-hidden px-4 py-6 md:px-6 md:py-8">
-      <div className="aurora-orb left-[7%] top-[9%] h-44 w-44 bg-orange-400/24" />
-      <div className="aurora-orb right-[9%] top-[18%] h-56 w-56 bg-teal-400/16 [animation-delay:1.2s]" />
-      <div className="aurora-orb bottom-[12%] left-[42%] h-40 w-40 bg-amber-200/16 [animation-delay:2.1s]" />
-
-      <div className="relative mx-auto grid min-h-[calc(100vh-3rem)] max-w-7xl items-center gap-8 lg:grid-cols-[1.08fr_0.92fr]">
-        <section className="hero-surface animated-enter p-7 md:p-10">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.12),_transparent_28%),linear-gradient(135deg,_rgba(255,176,86,0.16),_transparent_40%)]" />
-
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100">
-              <Store className="h-4 w-4 text-amber-300" />
-              {t("app.name")}
-            </div>
-
-            <h1 className="font-display mt-6 max-w-3xl text-4xl font-bold tracking-[-0.05em] md:text-6xl xl:text-7xl">
-              {t("auth.heroTitle")}
-            </h1>
-
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
-              {t("auth.heroText")}
-            </p>
-
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              {[
-                { label: t("auth.customer"), title: t("auth.customerDesc"), icon: Sparkles },
-                { label: t("auth.owner"), title: t("auth.ownerDesc"), icon: Truck },
-                { label: t("auth.admin"), title: t("auth.adminDesc"), icon: ShieldCheck },
-              ].map((entry) => {
-                const Icon = entry.icon;
-                return (
-                  <div key={entry.label} className="rounded-[28px] border border-white/10 bg-white/6 p-5">
-                    <Icon className="h-5 w-5 text-white" />
-                    <div className="mt-4 text-sm uppercase tracking-[0.22em] text-slate-400">{entry.label}</div>
-                    <div className="mt-2 text-lg font-semibold leading-7 text-white">{entry.title}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-8 flex gap-2">
+    <div className="app-shell">
+      <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+        <section className="ink-panel page-enter overflow-hidden p-6 md:p-10">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="command-chip">Smart Dispatch</div>
+            <div className="flex gap-2">
               <Button
-                variant={language === "ka" ? "default" : "secondary"}
-                className="rounded-2xl"
+                variant={language === "ka" ? "secondary" : "ghost"}
+                className="h-10 rounded-[16px] border-white/20 text-white hover:bg-white/10"
                 onClick={() => setLanguage("ka")}
               >
                 {t("lang.ka")}
               </Button>
               <Button
-                variant={language === "en" ? "default" : "secondary"}
-                className="rounded-2xl"
+                variant={language === "en" ? "secondary" : "ghost"}
+                className="h-10 rounded-[16px] border-white/20 text-white hover:bg-white/10"
                 onClick={() => setLanguage("en")}
               >
                 {t("lang.en")}
               </Button>
             </div>
           </div>
+
+          <div className="mt-8 max-w-3xl">
+            <div className="section-kicker text-slate-300">Commerce + delivery operating system</div>
+            <h1 className="font-display mt-3 text-5xl font-semibold tracking-[-0.06em] text-white md:text-7xl">
+              A calmer, tougher workspace for orders that actually move.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-8 text-slate-300 md:text-lg">
+              This version drops the glossy marketing look and shifts into a more editorial, control-room style:
+              strong hierarchy, clear blocks, and fast scanability for public shoppers and ops teams.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {highlights.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="rounded-[24px] border border-white/15 bg-white/6 p-5">
+                  <Icon className="h-6 w-6 text-[#ffd67d]" />
+                  <div className="mt-4 font-display text-2xl font-semibold text-white">{item.title}</div>
+                  <div className="mt-2 text-sm leading-7 text-slate-300">{item.text}</div>
+                </div>
+              );
+            })}
+          </div>
         </section>
 
-        <Card className="glass-panel animated-enter animated-enter-delay-2 border-white/40 bg-white/80 p-2">
-          <CardHeader className="pb-3">
-            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-14 w-14 items-center justify-center rounded-[22px] bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 text-slate-950 shadow-[0_18px_42px_rgba(249,115,22,0.28)]">
-                  {mode === "login" ? <LockKeyhole className="h-5 w-5" /> : <UserRoundPlus className="h-5 w-5" />}
-                </div>
-                <div>
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Secure access</div>
-                  <div className="font-display text-2xl font-bold tracking-[-0.04em] text-slate-950">
-                    {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
-                  </div>
-                </div>
+        <Card className="page-enter page-enter-delay-2 bg-[#fffaf0]">
+          <CardHeader className="pb-0">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="section-kicker">Access</div>
+                <CardTitle className="font-display mt-2 text-4xl font-semibold tracking-[-0.05em]">
+                  {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
+                </CardTitle>
               </div>
-
-              <div className="flex rounded-2xl bg-slate-100 p-1">
+              <div className="rounded-[18px] border-2 border-slate-950 bg-[#efe6d6] p-1">
                 <button
                   type="button"
+                  className={[
+                    "rounded-[12px] px-4 py-2 text-sm font-semibold",
+                    mode === "login" ? "bg-white text-slate-950" : "text-slate-600",
+                  ].join(" ")}
                   onClick={() => setMode("login")}
-                  className={`rounded-xl px-4 py-2 text-sm ${mode === "login" ? "bg-white text-slate-950 shadow" : "text-slate-600"}`}
                 >
                   {t("auth.login")}
                 </button>
                 <button
                   type="button"
+                  className={[
+                    "rounded-[12px] px-4 py-2 text-sm font-semibold",
+                    mode === "register" ? "bg-white text-slate-950" : "text-slate-600",
+                  ].join(" ")}
                   onClick={() => setMode("register")}
-                  className={`rounded-xl px-4 py-2 text-sm ${mode === "register" ? "bg-white text-slate-950 shadow" : "text-slate-600"}`}
                 >
                   {t("auth.register")}
                 </button>
               </div>
             </div>
-
-            <CardTitle className="font-display text-3xl font-bold tracking-[-0.04em] text-slate-950">
-              {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
-            </CardTitle>
-            <p className="max-w-xl text-sm leading-7 text-slate-600">
-              {mode === "login" ? t("auth.loginText") : t("auth.registerText")}
-            </p>
           </CardHeader>
 
-          <CardContent>
-            <form onSubmit={mode === "login" ? onLogin : onRegister} className="grid gap-5">
+          <CardContent className="grid gap-6">
+            <div className="rounded-[22px] border-2 border-slate-950 bg-[#efe6d6] p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border-2 border-slate-950 bg-white">
+                  {mode === "login" ? <LockKeyhole className="h-5 w-5" /> : <UserRoundPlus className="h-5 w-5" />}
+                </div>
+                <div className="text-sm leading-6 text-slate-700">
+                  {mode === "login" ? t("auth.loginText") : t("auth.registerText")}
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={mode === "login" ? onLogin : onRegister} className="grid gap-4">
               {mode === "register" && (
                 <div className="grid gap-2">
                   <Label>{t("auth.name")}</Label>
-                  <Input
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    className="h-12 rounded-2xl border-white/60 bg-white/90"
-                  />
+                  <Input value={name} onChange={(event) => setName(event.target.value)} className="h-12" />
                 </div>
               )}
 
@@ -204,7 +190,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@example.com"
-                  className="h-12 rounded-2xl border-white/60 bg-white/90"
+                  className="h-12"
                 />
               </div>
 
@@ -215,7 +201,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="Enter your password"
-                  className="h-12 rounded-2xl border-white/60 bg-white/90"
+                  className="h-12"
                 />
               </div>
 
@@ -226,14 +212,14 @@ export default function LoginPage() {
                     type="password"
                     value={passwordConfirmation}
                     onChange={(event) => setPasswordConfirmation(event.target.value)}
-                    className="h-12 rounded-2xl border-white/60 bg-white/90"
+                    className="h-12"
                   />
                 </div>
               )}
 
-              {error && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+              {error && <div className="rounded-[18px] border-2 border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-              <Button className="h-12 rounded-2xl text-base" disabled={loading}>
+              <Button className="h-12 text-base" disabled={loading}>
                 {loading
                   ? mode === "login"
                     ? t("auth.signingIn")
@@ -241,7 +227,7 @@ export default function LoginPage() {
                   : mode === "login"
                     ? t("auth.continue")
                     : t("auth.create")}
-                {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
+                {!loading && <ArrowRight className="h-4 w-4" />}
               </Button>
             </form>
           </CardContent>
