@@ -28,6 +28,7 @@ use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\PromoCodeController;
 use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\PublicMarketController;
+use App\Http\Controllers\Api\DriverOrderController;
 
 /*
 |--------------------------------------------------------------------------
@@ -36,6 +37,7 @@ use App\Http\Controllers\Api\PublicMarketController;
 */
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 
 
 Route::prefix('public')->group(function () {
@@ -69,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::patch('/orders/{order}', [OrderController::class, 'update']);
+    Route::post('/orders/{order}/market-accept', [OrderController::class, 'marketAccept']);
+    Route::post('/orders/{order}/mark-ready', [OrderController::class, 'markReady']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
 
     /*
@@ -88,6 +92,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/drivers', [DriverController::class, 'store']);
     Route::patch('/drivers/{driver}/status', [DriverController::class, 'updateStatus']);
     Route::get('/driver/routes/today', [DriverRouteController::class, 'today']);
+    Route::get('/driver/orders/feed', [DriverOrderController::class, 'feed']);
+    Route::post('/driver/orders/{order}/accept', [DriverOrderController::class, 'accept']);
+    Route::post('/driver/orders/{order}/decline', [DriverOrderController::class, 'decline']);
+    Route::post('/driver/orders/{order}/picked-up', [DriverOrderController::class, 'pickedUp']);
+    Route::post('/driver/orders/{order}/delivered', [DriverOrderController::class, 'delivered']);
 
     /*
     |--------------------------------------------------------------------------
@@ -150,7 +159,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:admin')->group(function () {
 
         // Get all users to assign as owner
+        Route::get('/users', [UsersController::class, 'index']);
         Route::get('/users/owners', [UsersController::class, 'owners']);
+        Route::post('/users', [UsersController::class, 'store']);
+        Route::patch('/users/{user}', [UsersController::class, 'update']);
 
         // Markets CRUD
         Route::get('/markets', [MarketController::class, 'index']);
@@ -184,6 +196,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/markets/{market}/staff', [MarketController::class, 'staff']);
         Route::post('/markets/{market}/staff', [MarketController::class, 'addStaff']);
         Route::delete('/markets/{market}/staff/{userId}', [MarketController::class, 'removeStaff']);
+        Route::get('/markets/{market}/assignable-users', [UsersController::class, 'assignable']);
     });
 
 });

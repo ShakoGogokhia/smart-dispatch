@@ -1,344 +1,310 @@
-// src/pages/CheckoutPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { ArrowLeft, MapPinned, ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
+import { clearCart, getActiveMarketId, loadCart, saveCart } from "@/lib/cart";
+import type { CartItem } from "@/lib/cart";
+import { formatMoney, toNumber } from "@/lib/format";
 import { useMe } from "@/lib/useMe";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-type MarketLite = { id: number; name: string; code: string; address?: string | null };
-
-type CartItem = {
-  item_id: number;
+type Market = {
+  id: number;
   name: string;
-  price: number; // final price (after item discount) stored in cart
-  qty: number;
+  code: string;
+  address?: string | null;
 };
 
-type CreateOrderPayload = {
-  market_id: number;
-  items: { item_id: number; qty: number }[];
-  promo_code?: string | null;
-  customer_name?: string | null;
-  customer_phone?: string | null;
-  customer_address?: string | null;
-  notes?: string | null;
-};
-
-function cartKey(marketId: string) {
-  return `cart_market_${marketId}`;
-}
-
-function loadCart(marketId: string): CartItem[] {
-  try {
-    const raw = localStorage.getItem(cartKey(marketId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(Boolean);
-  } catch {
-    return [];
+function getErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
   }
-}
 
-function saveCart(marketId: string, cart: CartItem[]) {
-  localStorage.setItem(cartKey(marketId), JSON.stringify(cart));
-}
-
-function money(n: number) {
-  return `${n.toFixed(2)}`;
+  const axiosError = error as AxiosError<{ message?: string }>;
+  return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
 export default function CheckoutPage() {
-  const nav = useNavigate();
+  const navigate = useNavigate();
   const meQ = useMe();
-
-  // ✅ active market comes from sidebar logic
-  const storedMarketId = localStorage.getItem("activeMarketId") || "";
-  const [marketId, setMarketId] = useState(storedMarketId);
-
-  const myMarketsQ = useQuery({
-    queryKey: ["my-markets-lite"],
-    queryFn: async () => (await api.get("/api/my/markets")).data as MarketLite[],
-    enabled: !!meQ.data,
-  });
-
-  // if no activeMarketId but user has exactly 1 market => auto set it
-  useEffect(() => {
-    if (!marketId && (myMarketsQ.data?.length ?? 0) === 1) {
-      const id = String(myMarketsQ.data![0].id);
-      localStorage.setItem("activeMarketId", id);
-      setMarketId(id);
-    }
-  }, [marketId, myMarketsQ.data]);
-
+  const [marketId] = useState(() => getActiveMarketId());
   const [cart, setCart] = useState<CartItem[]>(() => (marketId ? loadCart(marketId) : []));
-
-  // reload cart if market changes
-  useEffect(() => {
-    if (marketId) setCart(loadCart(marketId));
-    else setCart([]);
-  }, [marketId]);
-
-  // form
-  const [promoCode, setPromoCode] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
+  const [dropoffLat, setDropoffLat] = useState("41.7151");
+  const [dropoffLng, setDropoffLng] = useState("44.8271");
+  const [priority, setPriority] = useState("2");
+  const [promoCode, setPromoCode] = useState("");
   const [notes, setNotes] = useState("");
 
-  // pref-fill from profile
-  useEffect(() => {
-    if (meQ.data?.name) setCustomerName(meQ.data.name);
-  }, [meQ.data?.name]);
-
-  const market = useMemo(() => {
-    const idNum = Number(marketId);
-    return (myMarketsQ.data ?? []).find((m) => m.id === idNum) || null;
-  }, [myMarketsQ.data, marketId]);
+  const marketQ = useQuery({
+    queryKey: ["checkout-market", marketId],
+    queryFn: async () => (await api.get(`/api/public/markets/${marketId}`)).data as Market,
+    enabled: !!marketId,
+    retry: false,
+  });
 
   const totals = useMemo(() => {
-    const qty = cart.reduce((a, c) => a + c.qty, 0);
-    const subtotal = cart.reduce((a, c) => a + c.price * c.qty, 0);
-    return { qty, subtotal };
+    const items = cart.reduce((sum, item) => sum + item.qty, 0);
+    const subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+    return { items, subtotal };
   }, [cart]);
 
-  function inc(itemId: number) {
-    if (!marketId) return;
-    setCart((prev) => {
-      const next = prev.map((c) => (c.item_id === itemId ? { ...c, qty: c.qty + 1 } : c));
-      saveCart(marketId, next);
-      return next;
-    });
-  }
-
-  function dec(itemId: number) {
-    if (!marketId) return;
-    setCart((prev) => {
-      const next = prev
-        .map((c) => (c.item_id === itemId ? { ...c, qty: c.qty - 1 } : c))
-        .filter((c) => c.qty > 0);
-      saveCart(marketId, next);
-      return next;
-    });
-  }
-
-  function clearCart() {
-    if (!marketId) return;
-    setCart([]);
-    saveCart(marketId, []);
-  }
+  const effectiveCustomerName = customerName || meQ.data?.name || "";
 
   const createOrderM = useMutation({
     mutationFn: async () => {
-      if (!marketId) throw new Error("Select a market");
-      if (cart.length === 0) throw new Error("Cart is empty");
+      if (!cart.length) throw new Error("Your cart is empty.");
+      if (!marketId) throw new Error("No market selected.");
 
-      const payload: CreateOrderPayload = {
+      const payload = {
         market_id: Number(marketId),
-        items: cart.map((c) => ({ item_id: c.item_id, qty: c.qty })),
+        customer_name: effectiveCustomerName.trim(),
+        customer_phone: customerPhone.trim(),
+        dropoff_address: customerAddress.trim(),
+        dropoff_lat: toNumber(dropoffLat),
+        dropoff_lng: toNumber(dropoffLng),
+        priority: toNumber(priority, 2),
+        size: Math.max(totals.items, 1),
         promo_code: promoCode.trim() || null,
-        customer_name: customerName.trim() || null,
-        customer_phone: customerPhone.trim() || null,
-        customer_address: customerAddress.trim() || null,
         notes: notes.trim() || null,
+        items: cart.map((item) => ({
+          item_id: item.item_id,
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+        })),
       };
 
-      // ✅ adjust endpoint to your backend
-      // Suggested: POST /api/orders
       return (await api.post("/api/orders", payload)).data;
     },
     onSuccess: async () => {
-      // clear cart after order
       if (marketId) {
-        saveCart(marketId, []);
+        clearCart(marketId);
         setCart([]);
       }
-      nav("/orders", { replace: true });
+      navigate("/orders", { replace: true });
     },
   });
 
-  const errorMsg =
-    (createOrderM.error as any)?.response?.data?.message ??
-    (createOrderM.error as any)?.message ??
-    null;
+  function persistCart(next: CartItem[]) {
+    setCart(next);
+    if (marketId) {
+      saveCart(marketId, next);
+    }
+  }
+
+  function increment(itemId: number) {
+    persistCart(cart.map((item) => (item.item_id === itemId ? { ...item, qty: item.qty + 1 } : item)));
+  }
+
+  function decrement(itemId: number) {
+    persistCart(
+      cart
+        .map((item) => (item.item_id === itemId ? { ...item, qty: item.qty - 1 } : item))
+        .filter((item) => item.qty > 0),
+    );
+  }
+
+  const errorMessage = getErrorMessage(createOrderM.error);
 
   const canSubmit =
-    !!marketId &&
     cart.length > 0 &&
-    customerName.trim().length >= 2 &&
+    !!marketId &&
+    effectiveCustomerName.trim().length >= 2 &&
     customerPhone.trim().length >= 6 &&
-    customerAddress.trim().length >= 5;
+    customerAddress.trim().length >= 5 &&
+    Number.isFinite(Number(dropoffLat)) &&
+    Number.isFinite(Number(dropoffLng));
 
   return (
     <div className="grid gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Checkout</h1>
-          <div className="text-sm text-muted-foreground">
-            Review cart and submit your order.
+      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(251,191,36,0.18),_rgba(255,255,255,0.92)),linear-gradient(180deg,_#fffefc_0%,_#fff7ec_100%)] p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Checkout</div>
+            <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
+              Place a real market order
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              This checkout now sends structured market orders with customer details, line items,
+              promo code, and delivery coordinates so the market accepts first, then marks the order ready for a driver.
+            </p>
           </div>
+          <Button variant="secondary" className="rounded-2xl" onClick={() => navigate(-1)}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
         </div>
-        <Button variant="secondary" onClick={() => nav(-1)}>
-          Back
-        </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-        {/* Left: Details */}
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="grid gap-6">
-          <Card>
+          <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle>Customer details</CardTitle>
+              <CardTitle className="font-display text-2xl">Customer and delivery details</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-2">
                 <Label>Name</Label>
-                <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Your name" />
+                <Input value={effectiveCustomerName} onChange={(event) => setCustomerName(event.target.value)} className="h-11 rounded-2xl" />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Phone</Label>
+                  <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="h-11 rounded-2xl" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Priority</Label>
+                  <Input value={priority} onChange={(event) => setPriority(event.target.value)} className="h-11 rounded-2xl" />
+                </div>
               </div>
 
               <div className="grid gap-2">
-                <Label>Phone</Label>
-                <Input
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+995..."
-                />
+                <Label>Delivery address</Label>
+                <Input value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} className="h-11 rounded-2xl" />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Dropoff latitude</Label>
+                  <Input value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} className="h-11 rounded-2xl" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Dropoff longitude</Label>
+                  <Input value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} className="h-11 rounded-2xl" />
+                </div>
               </div>
 
               <div className="grid gap-2">
-                <Label>Address</Label>
-                <Input
-                  value={customerAddress}
-                  onChange={(e) => setCustomerAddress(e.target.value)}
-                  placeholder="Street, building, apartment..."
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Notes (optional)</Label>
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Door code, call me, etc." />
+                <Label>Notes for delivery</Label>
+                <Input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 rounded-2xl" />
               </div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Cart</CardTitle>
-              <Button variant="secondary" onClick={clearCart} disabled={cart.length === 0}>
+          <Card className="rounded-[30px]">
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <CardTitle className="font-display text-2xl">Cart review</CardTitle>
+              <Button
+                variant="secondary"
+                className="rounded-2xl"
+                onClick={() => {
+                  if (!marketId) return;
+                  clearCart(marketId);
+                  setCart([]);
+                }}
+                disabled={!cart.length}
+              >
                 Clear
               </Button>
             </CardHeader>
             <CardContent className="grid gap-3">
-              {!marketId ? (
-                <div className="text-sm text-muted-foreground">
-                  No active market selected. Go to markets and open one.
+              {cart.length === 0 ? (
+                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
+                  Your cart is empty. Add items from a market first.
                 </div>
-              ) : cart.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Your cart is empty.</div>
               ) : (
-                <div className="grid gap-3">
-                  {cart.map((c) => (
-                    <div key={c.item_id} className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{c.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {money(c.price)} × {c.qty} = <span className="font-medium">{money(c.price * c.qty)}</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="secondary" className="h-9 px-3" onClick={() => dec(c.item_id)}>
-                          −
-                        </Button>
-                        <Button variant="secondary" className="h-9 px-3" onClick={() => inc(c.item_id)}>
-                          +
-                        </Button>
-                      </div>
+                cart.map((item) => (
+                  <div
+                    key={item.item_id}
+                    className="flex items-center justify-between gap-4 rounded-[24px] border border-slate-200/70 bg-white p-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-slate-950">{item.name}</div>
+                      <div className="text-sm text-slate-500">{formatMoney(item.price)} each</div>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" className="rounded-xl" onClick={() => decrement(item.item_id)}>
+                        -
+                      </Button>
+                      <div className="w-10 text-center text-sm font-semibold">{item.qty}</div>
+                      <Button variant="secondary" className="rounded-xl" onClick={() => increment(item.item_id)}>
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                ))
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Right: Summary */}
         <div className="grid gap-6">
-          <Card>
+          <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle>Summary</CardTitle>
+              <CardTitle className="font-display text-2xl">Summary</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Market</span>
-                <span className="font-medium">
-                  {market ? market.name : marketId ? `Market #${marketId}` : "—"}
-                </span>
+              <div className="rounded-[24px] bg-slate-950 p-5 text-white">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
+                    <ShoppingBag className="h-5 w-5 text-amber-300" />
+                  </div>
+                  <div>
+                    <div className="text-sm text-slate-300">Active market</div>
+                    <div className="font-semibold text-white">
+                      {marketQ.data?.name || (marketId ? `Market #${marketId}` : "No market selected")}
+                    </div>
+                  </div>
+                </div>
+                {marketQ.data?.address && (
+                  <div className="mt-4 flex items-start gap-2 text-sm text-slate-300">
+                    <MapPinned className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{marketQ.data.address}</span>
+                  </div>
+                )}
               </div>
 
-              {market?.address && (
-                <div className="text-xs text-muted-foreground">
-                  {market.address}
-                </div>
-              )}
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Items</span>
+                <span className="font-semibold">{totals.items}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Subtotal</span>
+                <span className="font-semibold">{formatMoney(totals.subtotal)}</span>
+              </div>
 
               <Separator />
 
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Items</span>
-                <span className="font-medium">{totals.qty}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-medium">{money(totals.subtotal)}</span>
-              </div>
-
-              <div className="grid gap-2 pt-2">
-                <Label>Promo code (optional)</Label>
+              <div className="grid gap-2">
+                <Label>Promo code</Label>
                 <Input
                   value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  placeholder="e.g. SAVE10"
+                  onChange={(event) => setPromoCode(event.target.value)}
+                  placeholder="Optional"
+                  className="h-11 rounded-2xl"
                 />
-                <div className="text-xs text-muted-foreground">
-                  Promo is validated on backend.
-                </div>
               </div>
 
-              {errorMsg && (
-                <div className="text-sm text-red-600">{errorMsg}</div>
+              {errorMessage && (
+                <div className="rounded-[20px] bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {errorMessage}
+                </div>
               )}
 
               <Button
+                className="h-12 rounded-2xl"
                 onClick={() => createOrderM.mutate()}
                 disabled={!canSubmit || createOrderM.isPending}
               >
                 {createOrderM.isPending ? "Placing order..." : "Place order"}
               </Button>
 
-              <div className="text-xs text-muted-foreground">
-                <Badge variant="secondary" className="mr-2">Tip</Badge>
-                If order fails, check backend endpoint: <span className="font-mono">POST /api/orders</span>
+              <div className="rounded-[24px] border border-teal-200 bg-teal-50/70 p-4 text-sm text-teal-900">
+                <Badge variant="secondary" className="mr-2 rounded-full">Live dispatch</Badge>
+                Orders go to the market first. Live driver tracking starts only after pickup.
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>What happens next?</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground grid gap-2">
-              <div>1) Your order is created and appears in Orders.</div>
-              <div>2) Market staff accepts and prepares it.</div>
-              <div>3) Dispatcher assigns a driver (later).</div>
             </CardContent>
           </Card>
         </div>

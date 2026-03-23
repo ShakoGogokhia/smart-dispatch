@@ -21,4 +21,19 @@ class Driver extends Model
     {
         return $this->hasMany(\App\Models\Shift::class);
     }
+
+    public function activeShift()
+    {
+        return $this->hasOne(\App\Models\Shift::class)->where('status', 'ACTIVE')->latestOfMany();
+    }
+
+    public function latestPing()
+    {
+        return $this->hasOne(\App\Models\LocationPing::class)->latestOfMany();
+    }
+
+    public function assignedOrders()
+    {
+        return $this->hasMany(\App\Models\Order::class, 'assigned_driver_id');
+    }
 }

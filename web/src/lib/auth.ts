@@ -8,4 +8,7 @@ export const auth = {
   clearToken() {
     localStorage.removeItem("token");
   },
+  clear() {
+    localStorage.removeItem("token");
+  },
 };
