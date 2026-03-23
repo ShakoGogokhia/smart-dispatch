@@ -137,7 +137,7 @@ export default function CheckoutPage() {
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
               This checkout now sends structured market orders with customer details, line items,
-              promo code, and delivery coordinates so the admin and driver side can work from the same order.
+              promo code, and delivery coordinates so the market accepts first, then marks the order ready for a driver.
             </p>
           </div>
           <Button variant="secondary" className="rounded-2xl" onClick={() => navigate(-1)}>
@@ -303,7 +303,7 @@ export default function CheckoutPage() {
 
               <div className="rounded-[24px] border border-teal-200 bg-teal-50/70 p-4 text-sm text-teal-900">
                 <Badge variant="secondary" className="mr-2 rounded-full">Live dispatch</Badge>
-                Orders created here can now be offered to available drivers and tracked through delivery.
+                Orders go to the market first. Live driver tracking starts only after pickup.
               </div>
             </CardContent>
           </Card>

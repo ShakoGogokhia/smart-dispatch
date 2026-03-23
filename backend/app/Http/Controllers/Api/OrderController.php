@@ -12,6 +12,7 @@ use App\Services\OrderDispatchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
 
 class OrderController extends Controller
 {
@@ -27,6 +28,7 @@ class OrderController extends Controller
                 'market:id,name,code,address',
                 'customer:id,name,email',
                 'assignedDriver.user:id,name,email',
+                'assignedDriver.latestPing',
                 'offeredDriver.user:id,name,email',
                 'items',
             ])
@@ -154,7 +156,7 @@ class OrderController extends Controller
                 'subtotal' => $subtotal,
                 'discount_total' => $discountTotal,
                 'total' => $total,
-                'status' => 'NEW',
+                'status' => $market ? 'MARKET_PENDING' : 'READY_FOR_PICKUP',
             ]);
 
             $itemsPayload->each(function (array $item) use ($order) {
@@ -176,13 +178,16 @@ class OrderController extends Controller
                     'market_id' => $market?->id,
                     'customer_name' => $order->customer_name,
                     'items_count' => $itemsPayload->count(),
+                    'status' => $order->status,
                 ],
             ]);
 
             return $order;
         });
 
-        $this->dispatchService->offerOrder($order);
+        if (!$market) {
+            $this->dispatchService->offerOrder($order);
+        }
 
         return response()->json(
             $order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items']),
@@ -190,20 +195,25 @@ class OrderController extends Controller
         );
     }
 
-    public function show(Order $order)
+    public function show(Request $request, Order $order)
     {
+        abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
+
         return response()->json($order->load([
             'events',
             'items',
             'market',
             'customer',
             'assignedDriver.user',
+            'assignedDriver.latestPing',
             'offeredDriver.user',
         ]));
     }
 
     public function update(Request $request, Order $order)
     {
+        abort_unless($this->canUpdateOrder($request, $order), Response::HTTP_FORBIDDEN);
+
         $data = $request->validate([
             'pickup_lat' => ['nullable', 'numeric'],
             'pickup_lng' => ['nullable', 'numeric'],
@@ -224,8 +234,10 @@ class OrderController extends Controller
 
         if (array_key_exists('status', $data)) {
             $allowed = [
-                'NEW' => ['OFFERED', 'CANCELLED', 'ASSIGNED'],
-                'OFFERED' => ['ASSIGNED', 'CANCELLED', 'NEW'],
+                'MARKET_PENDING' => ['MARKET_ACCEPTED', 'CANCELLED'],
+                'MARKET_ACCEPTED' => ['READY_FOR_PICKUP', 'CANCELLED'],
+                'READY_FOR_PICKUP' => ['OFFERED', 'CANCELLED'],
+                'OFFERED' => ['ASSIGNED', 'CANCELLED', 'READY_FOR_PICKUP'],
                 'ASSIGNED' => ['PICKED_UP', 'CANCELLED'],
                 'PICKED_UP' => ['DELIVERED', 'FAILED'],
                 'FAILED' => [],
@@ -252,5 +264,123 @@ class OrderController extends Controller
         $order->update($data);
 
         return response()->json($order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items']));
+    }
+
+    public function marketAccept(Request $request, Order $order)
+    {
+        abort_unless($this->canManageMarketOrder($request, $order), Response::HTTP_FORBIDDEN);
+
+        if ($order->status !== 'MARKET_PENDING') {
+            return response()->json(['message' => 'Only market-pending orders can be accepted by the market'], 422);
+        }
+
+        $order->update([
+            'status' => 'MARKET_ACCEPTED',
+            'market_accepted_at' => now(),
+        ]);
+
+        OrderEvent::create([
+            'order_id' => $order->id,
+            'type' => 'MARKET_ACCEPTED',
+            'payload' => [
+                'user_id' => $request->user()->id,
+                'user_name' => $request->user()->name,
+            ],
+        ]);
+
+        return response()->json($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items']));
+    }
+
+    public function markReady(Request $request, Order $order)
+    {
+        abort_unless($this->canManageMarketOrder($request, $order), Response::HTTP_FORBIDDEN);
+
+        if (!in_array($order->status, ['MARKET_ACCEPTED', 'READY_FOR_PICKUP'], true)) {
+            return response()->json(['message' => 'Only accepted market orders can be marked ready'], 422);
+        }
+
+        $order->update([
+            'status' => 'READY_FOR_PICKUP',
+            'ready_for_pickup_at' => now(),
+        ]);
+
+        OrderEvent::create([
+            'order_id' => $order->id,
+            'type' => 'MARKET_READY',
+            'payload' => [
+                'user_id' => $request->user()->id,
+                'user_name' => $request->user()->name,
+            ],
+        ]);
+
+        $this->dispatchService->offerOrder($order->fresh());
+
+        return response()->json($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items']));
+    }
+
+    private function canAccessOrder(Request $request, Order $order): bool
+    {
+        $user = $request->user();
+
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+
+        if ($user->hasRole('driver') && $user->driver) {
+            return (int) $order->assigned_driver_id === (int) $user->driver->id
+                || (int) $order->offered_driver_id === (int) $user->driver->id;
+        }
+
+        if ($user->hasAnyRole(['owner', 'staff'])) {
+            return $this->userCanAccessMarket($user->id, $order->market_id);
+        }
+
+        return (int) $order->customer_user_id === (int) $user->id;
+    }
+
+    private function canManageMarketOrder(Request $request, Order $order): bool
+    {
+        $user = $request->user();
+
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+
+        if (!$user->hasAnyRole(['owner', 'staff'])) {
+            return false;
+        }
+
+        return $this->userCanAccessMarket($user->id, $order->market_id);
+    }
+
+    private function canUpdateOrder(Request $request, Order $order): bool
+    {
+        $user = $request->user();
+
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+
+        if ($user->hasAnyRole(['owner', 'staff'])) {
+            return $this->userCanAccessMarket($user->id, $order->market_id);
+        }
+
+        return false;
+    }
+
+    private function userCanAccessMarket(int $userId, ?int $marketId): bool
+    {
+        if (!$marketId) {
+            return false;
+        }
+
+        return Market::query()
+            ->whereKey($marketId)
+            ->where(function (Builder $builder) use ($userId) {
+                $builder
+                    ->where('owner_user_id', $userId)
+                    ->orWhereHas('users', fn (Builder $users) => $users->where('users.id', $userId));
+            })
+            ->exists();
     }
 }

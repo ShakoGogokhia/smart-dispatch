@@ -30,6 +30,8 @@ class Order extends Model
         'discount_total',
         'total',
         'status',
+        'market_accepted_at',
+        'ready_for_pickup_at',
         'offer_sent_at',
         'accepted_at',
         'picked_up_at',
@@ -39,6 +41,8 @@ class Order extends Model
     protected $casts = [
         'time_window_start' => 'datetime',
         'time_window_end' => 'datetime',
+        'market_accepted_at' => 'datetime',
+        'ready_for_pickup_at' => 'datetime',
         'offer_sent_at' => 'datetime',
         'accepted_at' => 'datetime',
         'picked_up_at' => 'datetime',

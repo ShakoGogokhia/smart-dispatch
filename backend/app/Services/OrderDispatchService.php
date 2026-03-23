@@ -13,7 +13,7 @@ class OrderDispatchService
 {
     public function offerOrder(Order $order, ?int $excludeDriverId = null): ?Order
     {
-        if ($order->assigned_driver_id) {
+        if ($order->assigned_driver_id || $order->status !== 'READY_FOR_PICKUP') {
             return $order->fresh(['assignedDriver.user', 'offeredDriver.user']);
         }
 
@@ -23,7 +23,7 @@ class OrderDispatchService
             $order->update([
                 'offered_driver_id' => null,
                 'offer_sent_at' => null,
-                'status' => 'NEW',
+                'status' => 'READY_FOR_PICKUP',
             ]);
 
             return $order->fresh(['assignedDriver.user', 'offeredDriver.user']);
@@ -51,7 +51,7 @@ class OrderDispatchService
     {
         Order::query()
             ->whereNull('assigned_driver_id')
-            ->whereIn('status', ['NEW', 'OFFERED'])
+            ->whereIn('status', ['READY_FOR_PICKUP', 'OFFERED'])
             ->get()
             ->each(function (Order $order) {
                 $shouldReplaceOffer = !$order->offered_driver_id

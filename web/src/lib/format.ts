@@ -45,3 +45,28 @@ export function getOrderStatusTone(status?: string | null) {
       return "neutral";
   }
 }
+
+export function formatOrderStatus(status?: string | null) {
+  switch ((status ?? "").toUpperCase()) {
+    case "MARKET_PENDING":
+      return "Waiting for market";
+    case "MARKET_ACCEPTED":
+      return "Market accepted";
+    case "READY_FOR_PICKUP":
+      return "Ready for pickup";
+    case "OFFERED":
+      return "Driver offer sent";
+    case "ASSIGNED":
+      return "Driver assigned";
+    case "PICKED_UP":
+      return "Picked up";
+    case "DELIVERED":
+      return "Delivered";
+    case "FAILED":
+      return "Failed";
+    case "CANCELLED":
+      return "Cancelled";
+    default:
+      return status?.trim() || "Unknown";
+  }
+}

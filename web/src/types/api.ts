@@ -33,16 +33,29 @@ export type DriverLite = {
   id: number;
   status: string;
   user?: UserLite;
+  latest_ping?: {
+    id: number;
+    lat: string;
+    lng: string;
+    created_at?: string;
+    updated_at?: string;
+  } | null;
 };
 
 export type Order = {
   id: number;
   code: string;
   status: string;
+  pickup_address?: string | null;
   dropoff_address: string | null;
   dropoff_lat: string;
   dropoff_lng: string;
   created_at: string;
+  market_accepted_at?: string | null;
+  ready_for_pickup_at?: string | null;
+  accepted_at?: string | null;
+  picked_up_at?: string | null;
+  delivered_at?: string | null;
   customer_name?: string | null;
   customer_phone?: string | null;
   promo_code?: string | null;

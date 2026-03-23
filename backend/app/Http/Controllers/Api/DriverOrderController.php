@@ -26,14 +26,14 @@ class DriverOrderController extends Controller
         }
 
         $offered = Order::query()
-            ->with(['market', 'items', 'customer'])
+            ->with(['market', 'items', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing'])
             ->where('offered_driver_id', $driver->id)
-            ->whereIn('status', ['NEW', 'OFFERED'])
+            ->where('status', 'OFFERED')
             ->latest()
             ->get();
 
         $assigned = Order::query()
-            ->with(['market', 'items', 'customer'])
+            ->with(['market', 'items', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing'])
             ->where('assigned_driver_id', $driver->id)
             ->whereIn('status', ['ASSIGNED', 'PICKED_UP'])
             ->latest()
@@ -130,7 +130,7 @@ class DriverOrderController extends Controller
         $order->update([
             'offered_driver_id' => null,
             'offer_sent_at' => null,
-            'status' => 'NEW',
+            'status' => 'READY_FOR_PICKUP',
         ]);
 
         $this->dispatchService->offerOrder($order, $driver->id);

@@ -2,9 +2,11 @@ import { useMemo, useState } from "react";
 import { PackagePlus, Search } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
+import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
 
 import { api } from "@/lib/api";
-import { formatDateTime, formatMoney, getOrderStatusTone } from "@/lib/format";
+import { formatDateTime, formatMoney, formatOrderStatus, getOrderStatusTone } from "@/lib/format";
 import { useMe } from "@/lib/useMe";
 import type { Order, Paginated } from "@/types/api";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +39,15 @@ function getErrorMessage(error: unknown) {
 }
 
 function getStatusLabel(status?: string | null) {
-  return status?.trim() || "UNKNOWN";
+  return formatOrderStatus(status);
+}
+
+function canShowCustomerTracking(order: Order) {
+  return order.status === "PICKED_UP" && !!order.assigned_driver?.latest_ping;
+}
+
+function canManageMarketOrder(order: Order, isOpsUser: boolean) {
+  return isOpsUser && !!order.market;
 }
 
 export default function OrdersPage() {
@@ -55,6 +65,7 @@ export default function OrdersPage() {
   const ordersQ = useQuery({
     queryKey: ["orders"],
     queryFn: async () => (await api.get("/api/orders")).data as Paginated<Order>,
+    refetchInterval: isCustomerOnly ? 8000 : false,
   });
 
   const createOrderM = useMutation({
@@ -70,6 +81,14 @@ export default function OrdersPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
       setDropoffAddress("");
+    },
+  });
+
+  const marketActionM = useMutation({
+    mutationFn: async ({ orderId, action }: { orderId: number; action: "market-accept" | "mark-ready" }) =>
+      (await api.post(`/api/orders/${orderId}/${action}`)).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
     },
   });
 
@@ -102,7 +121,7 @@ export default function OrdersPage() {
             Track everything you ordered
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Review your market orders, current delivery status, item list, and assigned driver information.
+            Review your market orders, current delivery status, item list, and live driver tracking after pickup.
           </p>
         </div>
 
@@ -140,11 +159,69 @@ export default function OrdersPage() {
                   <div className="grid gap-2 text-sm text-slate-600">
                     <div>Placed: {formatDateTime(order.created_at)}</div>
                     <div>Market: {order.market?.name || "Unknown market"}</div>
+                    <div>Pickup: {order.pickup_address || order.market?.address || "Market pickup point"}</div>
                     <div>Driver: {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Waiting for assignment"}</div>
                     {order.items?.length ? (
                       <div>Items: {order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}</div>
                     ) : null}
                   </div>
+
+                  {canShowCustomerTracking(order) ? (
+                    <div className="grid gap-3 rounded-[24px] border border-emerald-200 bg-emerald-50/60 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-semibold text-emerald-950">Live driver tracking</div>
+                          <div className="text-xs text-emerald-800">
+                            Showing live location because the driver already picked up your order.
+                          </div>
+                        </div>
+                        <Badge className="rounded-full bg-emerald-600 text-white hover:bg-emerald-600">
+                          Live
+                        </Badge>
+                      </div>
+
+                      <div className="h-[280px] overflow-hidden rounded-[20px]">
+                        <MapContainer
+                          center={[Number(order.assigned_driver?.latest_ping?.lat), Number(order.assigned_driver?.latest_ping?.lng)]}
+                          zoom={13}
+                          style={{ height: "100%", width: "100%" }}
+                        >
+                          <TileLayer
+                            attribution="&copy; OpenStreetMap"
+                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          />
+                          <Marker
+                            position={[Number(order.assigned_driver?.latest_ping?.lat), Number(order.assigned_driver?.latest_ping?.lng)]}
+                          >
+                            <Popup>
+                              <div className="text-sm">
+                                <div className="font-semibold">{order.assigned_driver?.user?.name || "Driver"}</div>
+                                <div>
+                                  Updated{" "}
+                                  {formatDateTime(
+                                    order.assigned_driver?.latest_ping?.updated_at ||
+                                      order.assigned_driver?.latest_ping?.created_at,
+                                  )}
+                                </div>
+                              </div>
+                            </Popup>
+                          </Marker>
+                          <Marker position={[Number(order.dropoff_lat), Number(order.dropoff_lng)]}>
+                            <Popup>
+                              <div className="text-sm">
+                                <div className="font-semibold">Delivery address</div>
+                                <div>{order.dropoff_address || "Customer destination"}</div>
+                              </div>
+                            </Popup>
+                          </Marker>
+                        </MapContainer>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                      Live map will appear only after the driver picks up your order from the market.
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -155,6 +232,7 @@ export default function OrdersPage() {
   }
 
   const createError = getErrorMessage(createOrderM.error);
+  const marketActionError = getErrorMessage(marketActionM.error);
 
   return (
     <div className="grid gap-6">
@@ -185,6 +263,7 @@ export default function OrdersPage() {
               </div>
 
               {createError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{createError}</div>}
+              {marketActionError && <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{marketActionError}</div>}
 
               <Button className="h-12 rounded-2xl" onClick={() => createOrderM.mutate()} disabled={createOrderM.isPending}>
                 <PackagePlus className="mr-2 h-4 w-4" />
@@ -231,6 +310,7 @@ export default function OrdersPage() {
                       <TableHead>Driver</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Created</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -249,11 +329,45 @@ export default function OrdersPage() {
                         </TableCell>
                         <TableCell>{order.total != null ? formatMoney(order.total) : "-"}</TableCell>
                         <TableCell>{formatDateTime(order.created_at)}</TableCell>
+                        <TableCell>
+                          {canManageMarketOrder(order, isOpsUser) ? (
+                            <div className="flex flex-wrap gap-2">
+                              {order.status === "MARKET_PENDING" && (
+                                <Button
+                                  size="sm"
+                                  className="rounded-xl"
+                                  onClick={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })}
+                                  disabled={marketActionM.isPending}
+                                >
+                                  Accept
+                                </Button>
+                              )}
+                              {order.status === "MARKET_ACCEPTED" && (
+                                <Button
+                                  size="sm"
+                                  className="rounded-xl"
+                                  onClick={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })}
+                                  disabled={marketActionM.isPending}
+                                >
+                                  Mark ready
+                                </Button>
+                              )}
+                              {order.status === "READY_FOR_PICKUP" && (
+                                <span className="text-xs font-medium text-emerald-700">Waiting for driver</span>
+                              )}
+                              {["OFFERED", "ASSIGNED", "PICKED_UP", "DELIVERED"].includes(order.status) && (
+                                <span className="text-xs font-medium text-slate-500">In delivery flow</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {filteredOrders.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-8 text-center text-sm text-slate-500">
+                        <TableCell colSpan={8} className="py-8 text-center text-sm text-slate-500">
                           No orders matched your search.
                         </TableCell>
                       </TableRow>

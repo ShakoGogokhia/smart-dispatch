@@ -71,6 +71,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::patch('/orders/{order}', [OrderController::class, 'update']);
+    Route::post('/orders/{order}/market-accept', [OrderController::class, 'marketAccept']);
+    Route::post('/orders/{order}/mark-ready', [OrderController::class, 'markReady']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
 
     /*

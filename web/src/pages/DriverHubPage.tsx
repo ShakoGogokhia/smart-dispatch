@@ -144,7 +144,7 @@ export default function DriverHubPage() {
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
           Start a shift to become available, send location pings to stay inside the delivery area,
-          accept or decline offers, and finish deliveries from one screen.
+          accept or decline ready-for-pickup offers from markets, and finish deliveries from one screen.
         </p>
       </div>
 
