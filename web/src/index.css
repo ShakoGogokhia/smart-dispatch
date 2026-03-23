@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -6,14 +6,14 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Manrope", sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "IBM Plex Sans", sans-serif;
+  --font-display: "Outfit", sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 10px);
-  --radius-3xl: calc(var(--radius) + 18px);
+  --radius-2xl: calc(var(--radius) + 12px);
+  --radius-3xl: calc(var(--radius) + 20px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -35,66 +35,35 @@
 }
 
 :root {
-  --radius: 1.2rem;
-  --background: oklch(0.98 0.008 85);
-  --foreground: oklch(0.18 0.03 255);
-  --card: oklch(1 0 0 / 82%);
-  --card-foreground: oklch(0.18 0.03 255);
-  --popover: oklch(1 0 0 / 94%);
-  --popover-foreground: oklch(0.18 0.03 255);
-  --primary: oklch(0.62 0.2 31);
-  --primary-foreground: oklch(0.99 0.01 85);
-  --secondary: oklch(0.94 0.02 80);
-  --secondary-foreground: oklch(0.26 0.03 255);
-  --muted: oklch(0.95 0.012 85);
-  --muted-foreground: oklch(0.47 0.03 255);
-  --accent: oklch(0.89 0.09 180);
-  --accent-foreground: oklch(0.22 0.05 225);
-  --destructive: oklch(0.62 0.24 24);
-  --border: oklch(0.86 0.015 85 / 72%);
-  --input: oklch(1 0 0 / 72%);
-  --ring: oklch(0.67 0.16 35 / 45%);
+  --radius: 1rem;
+  --background: oklch(0.96 0.018 85);
+  --foreground: oklch(0.22 0.03 240);
+  --card: oklch(0.99 0.008 85);
+  --card-foreground: oklch(0.22 0.03 240);
+  --popover: oklch(0.99 0.008 85);
+  --popover-foreground: oklch(0.22 0.03 240);
+  --primary: oklch(0.39 0.1 200);
+  --primary-foreground: oklch(0.98 0.01 85);
+  --secondary: oklch(0.92 0.02 85);
+  --secondary-foreground: oklch(0.28 0.03 240);
+  --muted: oklch(0.93 0.018 85);
+  --muted-foreground: oklch(0.5 0.03 240);
+  --accent: oklch(0.78 0.08 150);
+  --accent-foreground: oklch(0.24 0.05 180);
+  --destructive: oklch(0.6 0.21 28);
+  --border: oklch(0.83 0.02 85);
+  --input: oklch(1 0 0 / 88%);
+  --ring: oklch(0.43 0.09 200 / 48%);
 }
 
-@keyframes float-y {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  50% {
-    transform: translate3d(0, -18px, 0);
-  }
-}
-
-@keyframes pulse-glow {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.08);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-120%);
-  }
-  100% {
-    transform: translateX(120%);
-  }
-}
-
-@keyframes rise-in {
+@keyframes drift-in {
   from {
     opacity: 0;
-    transform: translate3d(0, 28px, 0) scale(0.98);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: translateY(0);
   }
 }
 
@@ -110,28 +79,24 @@
   body {
     @apply min-h-screen bg-background font-sans text-foreground antialiased;
     font-family: var(--font-sans);
-    background-image:
-      radial-gradient(circle at 16% 18%, rgba(255, 132, 66, 0.16), transparent 24%),
-      radial-gradient(circle at 80% 0%, rgba(15, 118, 110, 0.14), transparent 24%),
-      linear-gradient(180deg, #08111f 0%, #0d1930 30%, #fbf7ef 30%, #fbf7ef 100%);
-    background-attachment: fixed;
+    background:
+      linear-gradient(rgba(18, 41, 53, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(18, 41, 53, 0.05) 1px, transparent 1px),
+      radial-gradient(circle at top left, rgba(20, 89, 80, 0.08), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(194, 119, 45, 0.08), transparent 20%),
+      #f4efe5;
+    background-size: 28px 28px, 28px 28px, auto, auto, auto;
   }
 
   button,
   a,
   input {
     transition:
-      transform 180ms ease,
-      box-shadow 180ms ease,
       background-color 180ms ease,
       border-color 180ms ease,
       color 180ms ease,
-      opacity 180ms ease;
-  }
-
-  button:active,
-  a:active {
-    transform: translateY(1px);
+      box-shadow 180ms ease,
+      transform 180ms ease;
   }
 
   #root {
@@ -144,84 +109,88 @@
     font-family: var(--font-display);
   }
 
-  .glass-panel {
-    @apply rounded-[32px] border border-white/35 bg-white/68 shadow-[0_24px_80px_rgba(8,15,30,0.14)] backdrop-blur-xl;
+  .app-shell {
+    @apply relative min-h-screen p-4 md:p-6;
   }
 
-  .hero-surface {
-    @apply relative overflow-hidden rounded-[36px] border border-white/12 bg-slate-950/78 text-white shadow-[0_30px_90px_rgba(2,6,23,0.5)] backdrop-blur-2xl;
+  .editorial-shell {
+    @apply mx-auto grid max-w-[1700px] gap-5 lg:grid-cols-[300px_minmax(0,1fr)];
   }
 
-  .section-heading {
-    @apply font-display text-3xl font-bold tracking-[-0.03em] text-slate-950 md:text-5xl;
+  .rail-panel {
+    @apply rounded-[30px] border-2 border-slate-950 bg-[#10313a] p-5 text-white shadow-[8px_8px_0_0_rgba(15,23,42,0.18)];
   }
 
-  .metric-card {
-    @apply rounded-[30px] border border-white/12 bg-white/7 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)];
+  .paper-panel {
+    @apply rounded-[30px] border-2 border-slate-950 bg-[#fffaf0] shadow-[8px_8px_0_0_rgba(15,23,42,0.08)];
   }
 
-  .mesh-card {
-    @apply relative overflow-hidden rounded-[30px] border border-white/30 bg-white/82 shadow-[0_24px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl;
+  .paper-panel-muted {
+    @apply rounded-[26px] border-2 border-slate-950/80 bg-[#efe6d6];
   }
 
-  .mesh-card::before {
-    content: "";
-    position: absolute;
-    inset: -30% auto auto -20%;
-    width: 180px;
-    height: 180px;
-    border-radius: 999px;
-    background: radial-gradient(circle, rgba(255, 166, 77, 0.22), transparent 68%);
-    pointer-events: none;
+  .ink-panel {
+    @apply rounded-[28px] border-2 border-slate-950 bg-slate-950 text-white;
   }
 
-  .aurora-orb {
-    position: absolute;
-    border-radius: 999px;
-    filter: blur(10px);
-    animation: float-y 8s ease-in-out infinite;
-    pointer-events: none;
+  .section-kicker {
+    @apply text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500;
   }
 
-  .animated-enter {
-    animation: rise-in 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  .section-title {
+    @apply font-display text-3xl font-semibold tracking-[-0.04em] text-slate-950 md:text-5xl;
   }
 
-  .animated-enter-delay-1 {
-    animation-delay: 80ms;
+  .section-copy {
+    @apply text-sm leading-7 text-slate-600 md:text-base;
   }
 
-  .animated-enter-delay-2 {
-    animation-delay: 160ms;
+  .command-chip {
+    @apply inline-flex items-center gap-2 rounded-full border-2 border-slate-950 bg-[#fff4d7] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-900;
   }
 
-  .animated-enter-delay-3 {
-    animation-delay: 240ms;
+  .status-chip {
+    @apply inline-flex items-center gap-2 rounded-full border-2 border-slate-950 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-900;
   }
 
-  .shimmer-line {
-    position: relative;
-    overflow: hidden;
+  .dashboard-card {
+    @apply paper-panel p-5 md:p-6;
   }
 
-  .shimmer-line::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
-    animation: shimmer 2.6s linear infinite;
-    pointer-events: none;
+  .metric-block {
+    @apply rounded-[24px] border-2 border-slate-950 bg-white p-5;
   }
 
-  .spotlight-ring {
-    box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.08),
-      0 14px 40px rgba(15, 23, 42, 0.16),
-      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  .metric-dark {
+    @apply rounded-[24px] border-2 border-slate-950 bg-[#10313a] p-5 text-white;
   }
 
-  .glow-dot {
-    animation: pulse-glow 2.8s ease-in-out infinite;
+  .rail-link {
+    @apply flex items-center gap-3 rounded-[22px] border-2 border-transparent px-4 py-3 text-sm font-medium text-slate-200;
+  }
+
+  .rail-link-active {
+    @apply border-slate-950 bg-[#fff4d7] text-slate-950 shadow-[4px_4px_0_0_rgba(15,23,42,0.25)];
+  }
+
+  .page-enter {
+    animation: drift-in 420ms ease both;
+  }
+
+  .page-enter-delay-1 {
+    animation-delay: 60ms;
+  }
+
+  .page-enter-delay-2 {
+    animation-delay: 120ms;
+  }
+
+  .page-enter-delay-3 {
+    animation-delay: 180ms;
+  }
+
+  .map-frame {
+    @apply overflow-hidden rounded-[28px] border-2 border-slate-950;
   }
 }
 

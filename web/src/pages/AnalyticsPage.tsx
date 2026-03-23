@@ -1,9 +1,9 @@
-import { BarChart3, CheckCircle2, Package2, Route, XCircle } from "lucide-react";
+import { BarChart3, CheckCircle2, Package2, Route, TrendingUp, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { api } from "@/lib/api";
 
 type AnalyticsSummary = {
   range: { from: string; to: string };
@@ -30,75 +30,88 @@ export default function AnalyticsPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="rounded-[30px] bg-[linear-gradient(135deg,_rgba(20,184,166,0.18),_rgba(255,255,255,0.96)),linear-gradient(180deg,_#fbfffe_0%,_#f0fbf7_100%)] p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-xs uppercase tracking-[0.24em] text-slate-500">Analytics</div>
-            <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight text-slate-950">
-              Operational performance snapshot
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Summary cards are mapped to the current backend response from
-              `/api/analytics/summary`.
-            </p>
+      <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="dashboard-card page-enter">
+          <div className="command-chip">Analytics board</div>
+          <h1 className="section-title mt-5">Operational performance, stripped down to the signals that matter.</h1>
+          <p className="section-copy mt-4 max-w-3xl">
+            This layout behaves more like a reporting board than a dashboard demo. It prioritizes strong labels,
+            compact metrics, and a clear read of delivery health.
+          </p>
+          <div className="mt-6">
+            <Button variant="secondary" className="h-12" onClick={() => summaryQ.refetch()}>
+              Refresh analytics
+            </Button>
           </div>
-          <Button variant="secondary" className="w-fit rounded-2xl" onClick={() => summaryQ.refetch()}>
-            Refresh analytics
-          </Button>
         </div>
-      </div>
+
+        <div className="metric-dark page-enter page-enter-delay-1">
+          <div className="section-kicker text-slate-300">Delivery rate</div>
+          <div className="mt-3 font-display text-7xl font-semibold tracking-[-0.06em]">{deliveredRate}%</div>
+          <div className="mt-4 h-4 rounded-full border border-white/20 bg-white/10 p-1">
+            <div className="h-full rounded-full bg-[#ffd67d]" style={{ width: `${Math.min(deliveredRate, 100)}%` }} />
+          </div>
+          <div className="mt-4 text-sm leading-7 text-slate-300">
+            Delivered orders divided by total orders in the currently reported backend range.
+          </div>
+        </div>
+      </section>
 
       {summaryQ.isLoading ? (
-        <Card className="rounded-[30px]">
+        <Card>
           <CardContent className="p-8 text-sm text-slate-600">Loading analytics...</CardContent>
         </Card>
       ) : summaryQ.isError || !summary ? (
-        <Card className="rounded-[30px]">
+        <Card>
           <CardContent className="p-8 text-sm text-red-700">
             Failed to load analytics from `/api/analytics/summary`.
           </CardContent>
         </Card>
       ) : (
         <>
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-            <StatCard title="Total orders" value={summary.orders.total} icon={Package2} tone="amber" />
-            <StatCard title="Delivered" value={summary.orders.delivered} icon={CheckCircle2} tone="emerald" />
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <StatCard title="Total orders" value={summary.orders.total} icon={Package2} tone="light" />
+            <StatCard title="Delivered" value={summary.orders.delivered} icon={CheckCircle2} tone="green" />
             <StatCard title="Failed" value={summary.orders.failed} icon={XCircle} tone="red" />
-            <StatCard title="Cancelled" value={summary.orders.cancelled} icon={BarChart3} tone="slate" />
-            <StatCard title="Routes planned" value={summary.routes_planned} icon={Route} tone="teal" />
+            <StatCard title="Cancelled" value={summary.orders.cancelled} icon={BarChart3} tone="sand" />
+            <StatCard title="Routes planned" value={summary.routes_planned} icon={Route} tone="dark" />
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-            <Card className="rounded-[30px]">
+          <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+            <Card className="bg-[#efe6d6]">
               <CardHeader>
-                <CardTitle className="font-display text-2xl">Delivery rate</CardTitle>
+                <CardTitle className="font-display text-3xl font-semibold tracking-[-0.04em]">Reporting range</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="text-6xl font-semibold tracking-tight text-slate-950">{deliveredRate}%</div>
-                <div className="text-sm text-slate-600">
-                  Percentage of delivered orders in the selected summary range.
+              <CardContent className="grid gap-4 text-sm leading-7 text-slate-700">
+                <div className="metric-block">
+                  <div className="section-kicker">From</div>
+                  <div className="mt-2 font-semibold text-slate-950">{summary.range.from}</div>
                 </div>
-                <div className="h-3 overflow-hidden rounded-full bg-slate-100">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-500"
-                    style={{ width: `${Math.min(deliveredRate, 100)}%` }}
-                  />
+                <div className="metric-block">
+                  <div className="section-kicker">To</div>
+                  <div className="mt-2 font-semibold text-slate-950">{summary.range.to}</div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="rounded-[30px]">
+            <Card>
               <CardHeader>
-                <CardTitle className="font-display text-2xl">Summary range</CardTitle>
+                <CardTitle className="font-display text-3xl font-semibold tracking-[-0.04em]">Reading guide</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-3 text-sm text-slate-600">
-                <div className="rounded-[24px] bg-slate-50 p-4">
-                  From <span className="font-semibold text-slate-950">{summary.range.from}</span> to{" "}
-                  <span className="font-semibold text-slate-950">{summary.range.to}</span>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="metric-block">
+                  <TrendingUp className="h-5 w-5" />
+                  <div className="mt-4 font-semibold text-slate-950">Fast summary first</div>
+                  <div className="mt-2 text-sm leading-7 text-slate-600">
+                    The board starts with rate and volume so the team can spot whether today is a fulfillment problem or a demand problem.
+                  </div>
                 </div>
-                <div className="rounded-[24px] bg-slate-50 p-4">
-                  The backend currently reports totals, delivered, failed, cancelled, and planned
-                  routes. This page mirrors that exact contract.
+                <div className="metric-block">
+                  <BarChart3 className="h-5 w-5" />
+                  <div className="mt-4 font-semibold text-slate-950">Backend contract preserved</div>
+                  <div className="mt-2 text-sm leading-7 text-slate-600">
+                    This page still mirrors the current `/api/analytics/summary` payload without inventing extra data.
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -118,29 +131,29 @@ function StatCard({
   title: string;
   value: number;
   icon: typeof Package2;
-  tone: "amber" | "emerald" | "red" | "slate" | "teal";
+  tone: "light" | "green" | "red" | "sand" | "dark";
 }) {
   const toneMap: Record<typeof tone, string> = {
-    amber: "from-amber-100 to-orange-50 text-amber-900",
-    emerald: "from-emerald-100 to-emerald-50 text-emerald-900",
-    red: "from-red-100 to-rose-50 text-red-900",
-    slate: "from-slate-100 to-slate-50 text-slate-900",
-    teal: "from-teal-100 to-cyan-50 text-teal-900",
+    light: "bg-white",
+    green: "bg-[#dff3e8]",
+    red: "bg-[#f9ddd8]",
+    sand: "bg-[#efe6d6]",
+    dark: "bg-[#10313a] text-white",
   };
 
   return (
-    <Card className={`rounded-[30px] bg-gradient-to-br ${toneMap[tone]}`}>
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm text-slate-500">{title}</div>
-            <div className="mt-3 text-4xl font-semibold tracking-tight">{value}</div>
-          </div>
-          <div className="rounded-2xl bg-white/70 p-3">
-            <Icon className="h-5 w-5" />
-          </div>
+    <div className={`metric-block ${toneMap[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className={`section-kicker ${tone === "dark" ? "text-slate-300" : ""}`}>{title}</div>
+          <div className="mt-3 font-display text-5xl font-semibold tracking-[-0.05em]">{value}</div>
         </div>
-      </CardContent>
-    </Card>
+        <div
+          className={`flex h-12 w-12 items-center justify-center rounded-[16px] border-2 border-slate-950 ${tone === "dark" ? "bg-[#fff4d7] text-slate-950" : "bg-white"}`}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
   );
 }
