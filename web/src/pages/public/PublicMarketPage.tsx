@@ -1,5 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, BadgePercent, MapPin, Search, ShoppingCart, Sparkles, Store, Zap } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  BadgePercent,
+  MapPin,
+  Search,
+  ShoppingCart,
+  Sparkles,
+  Store,
+  TicketPercent,
+  Zap,
+} from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
@@ -14,14 +24,7 @@ import { clearCart, loadCart, saveCart, setActiveMarketId } from "@/lib/cart";
 import type { CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-
-type Market = {
-  id: number;
-  name: string;
-  code: string;
-  address?: string | null;
-  is_active: boolean;
-};
+import { calcStorefrontPrice, formatPromoLabel, getMarketCopy, type MarketPromo, type StorefrontMarket } from "@/lib/storefront";
 
 type Item = {
   id: number;
@@ -34,28 +37,11 @@ type Item = {
   stock_qty: number;
 };
 
-type Promo = {
-  id: number;
-  code: string;
-  type: "percent" | "fixed";
-  value: number | string;
-  is_active: boolean;
-};
-
-function calcItemFinalPrice(item: Item) {
-  const base = toNumber(item.price);
-  const discountType = item.discount_type ?? "none";
-  const discountValue = toNumber(item.discount_value);
-
-  if (discountType === "percent") return Math.max(0, base - base * (discountValue / 100));
-  if (discountType === "fixed") return Math.max(0, base - discountValue);
-  return base;
-}
-
 function PublicMarketScreen({ marketId }: { marketId: string }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [cart, setCart] = useState<CartItem[]>(() => loadCart(marketId));
 
   useEffect(() => {
@@ -64,7 +50,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
   const marketQ = useQuery({
     queryKey: ["public-market", marketId],
-    queryFn: async () => (await api.get(`/api/public/markets/${marketId}`)).data as Market,
+    queryFn: async () => (await api.get(`/api/public/markets/${marketId}`)).data as StorefrontMarket,
     enabled: !!marketId,
   });
 
@@ -76,20 +62,24 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
   const promoQ = useQuery({
     queryKey: ["public-market-promo", marketId],
-    queryFn: async () => (await api.get(`/api/public/markets/${marketId}/active-promo`)).data as Promo | null,
+    queryFn: async () => (await api.get(`/api/public/markets/${marketId}/active-promo`)).data as MarketPromo | null,
     enabled: !!marketId,
     retry: false,
   });
 
   const market = marketQ.data;
   const promo = promoQ.data;
+  const normalizedQuery = deferredQuery.trim().toLowerCase();
 
   const filteredItems = useMemo(() => {
     const items = itemsQ.data ?? [];
-    const text = query.trim().toLowerCase();
-    if (!text) return items;
-    return items.filter((item) => item.name.toLowerCase().includes(text) || item.sku.toLowerCase().includes(text));
-  }, [itemsQ.data, query]);
+    if (!normalizedQuery) return items;
+
+    return items.filter((item) => {
+      const haystack = `${item.name} ${item.sku}`.toLowerCase();
+      return haystack.includes(normalizedQuery);
+    });
+  }, [itemsQ.data, normalizedQuery]);
 
   const totals = useMemo(() => {
     const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
@@ -103,7 +93,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   }
 
   function addToCart(item: Item) {
-    const nextPrice = calcItemFinalPrice(item);
+    const nextPrice = calcStorefrontPrice(item);
     const current = [...cart];
     const existing = current.find((entry) => entry.item_id === item.id);
     if (existing) {
@@ -134,13 +124,13 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   }
 
   return (
-    <div className="app-shell">
-      <div className="glow-orb left-[12%] top-36 h-44 w-44 bg-cyan-300/18" />
-      <div className="glow-orb right-[6%] top-[28rem] h-52 w-52 bg-orange-300/18" />
+    <div className="app-shell storefront-shell">
+      <div className="glow-orb left-[8%] top-32 h-52 w-52 bg-cyan-300/18" />
+      <div className="glow-orb right-[5%] top-[30rem] h-60 w-60 bg-amber-300/18" />
 
       <div className="relative z-10 mx-auto max-w-7xl space-y-6">
-        <header className="hero-grid">
-          <section className="hero-panel">
+        <header className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_360px]">
+          <section className="hero-panel page-enter">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Link to="/" className="status-chip w-fit">
                 <ArrowLeft className="h-4 w-4" />
@@ -150,17 +140,19 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-                <div className="command-chip">
-                  <Store className="h-4 w-4" />
-                  {market?.code || `#${marketId}`}
-                </div>
+              <div className="command-chip">
+                <Store className="h-4 w-4" />
+                {market?.code || `#${marketId}`}
+              </div>
               <Badge className={`status-chip ${market?.is_active === false ? "status-warn" : "status-good"}`}>
                 {market?.is_active === false ? t("market.unavailable") : t("market.openForOrders")}
               </Badge>
+              {market?.is_featured && <Badge className="status-chip status-good">{market.featured_badge || "Promoted storefront"}</Badge>}
             </div>
 
-            <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
               <div>
+                <div className="section-kicker text-cyan-100/80">Curated market experience</div>
                 <h1 className="font-display text-5xl font-semibold tracking-[-0.07em] text-white md:text-7xl">
                   {marketQ.isLoading ? t("public.loadingMarket") : market?.name || `#${marketId}`}
                 </h1>
@@ -170,8 +162,12 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                   <span className="leading-7">{market?.address || t("market.noAddress")}</span>
                 </div>
 
+                <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300">
+                  {market ? getMarketCopy(market) : "Loading storefront details..."}
+                </p>
+
                 {promo?.is_active && (
-                  <div className="mt-6 inline-flex items-center gap-2 rounded-[18px] border border-cyan-300/18 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">
+                  <div className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-[18px] border border-cyan-300/18 bg-cyan-300/10 px-4 py-3 text-sm text-cyan-50">
                     <BadgePercent className="h-4 w-4 text-cyan-100" />
                     {t("market.activePromo")} `{promo.code}`{" "}
                     {promo.type === "percent"
@@ -182,21 +178,23 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
                 <div className="mt-8 flex flex-wrap gap-2">
                   <span className="data-pill">{t("market.pillPersistentCart")}</span>
-                  <span className="data-pill">{t("market.pillLiveSavings")}</span>
-                  <span className="data-pill">{t("market.pillDispatchReady")}</span>
+                  <span className="data-pill">Promoted layout</span>
+                  <span className="data-pill">{formatPromoLabel(promo)}</span>
                 </div>
               </div>
 
               <div className="hero-mesh">
-                <div className="section-kicker">{t("market.storefrontMode")}</div>
-                <div className="mt-3 font-display text-4xl font-semibold tracking-[-0.05em] text-white">{t("market.fastLane")}</div>
+                <div className="section-kicker text-cyan-100/80">Storefront status</div>
+                <div className="mt-3 font-display text-4xl font-semibold tracking-[-0.05em] text-white">
+                  {market?.active_items_count ?? filteredItems.length}
+                </div>
                 <div className="mt-3 text-sm leading-7 text-slate-300">
-                  {t("market.fastLaneCopy")}
+                  products visible with a cart that stays attached to this market while the shopper browses.
                 </div>
                 <div className="mt-5 grid gap-3">
                   <div className="metric-block py-4">
-                    <div className="section-kicker">{t("market.itemsVisible")}</div>
-                    <div className="theme-ink mt-2 text-lg font-semibold">{filteredItems.length}</div>
+                    <div className="section-kicker">Promo mode</div>
+                    <div className="theme-ink mt-2 text-lg font-semibold">{promo ? "Live offer active" : "Standard storefront"}</div>
                   </div>
                   <div className="metric-block py-4">
                     <div className="section-kicker">{t("market.marketState")}</div>
@@ -209,7 +207,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
             </div>
           </section>
 
-          <Card>
+          <Card className="page-enter page-enter-delay-1">
             <CardContent className="grid gap-5 p-6">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -232,6 +230,16 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 <div className="theme-copy mt-2 text-sm">{t("market.cartSaved")}</div>
               </div>
 
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={t("market.searchItems")}
+                  className="input-shell pl-11"
+                />
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <Button className="h-12" onClick={startCheckout} disabled={!totals.quantity}>
                   {t("market.continueCheckout")}
@@ -249,7 +257,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 </Button>
               </div>
 
-              {cart.length > 0 && (
+              {cart.length > 0 ? (
                 <div className="grid gap-3">
                   {cart.map((item) => (
                     <div key={item.item_id} className="subpanel px-4 py-3">
@@ -272,29 +280,30 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                     </div>
                   ))}
                 </div>
+              ) : (
+                <div className="subpanel p-4 text-sm text-slate-500 dark:text-slate-300">
+                  Add a few items and the cart panel becomes your quick checkout lane.
+                </div>
               )}
             </CardContent>
           </Card>
         </header>
 
-        <section className="dashboard-card">
+        <section className="dashboard-card page-enter page-enter-delay-2">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="command-chip">
                 <Sparkles className="h-3.5 w-3.5" />
                 {t("market.catalog")}
               </div>
-              <h2 className="section-title mt-4">{t("market.catalogTitle")}</h2>
-              <p className="section-copy mt-3 max-w-2xl">{t("market.catalogText")}</p>
+              <h2 className="section-title mt-4">A cleaner, faster catalog grid</h2>
+              <p className="section-copy mt-3 max-w-2xl">
+                Pricing, savings, stock, and add-to-cart actions stay readable on desktop and mobile.
+              </p>
             </div>
-            <div className="relative w-full md:max-w-sm">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t("market.searchItems")}
-                className="input-shell pl-11"
-              />
+            <div className="flex flex-wrap gap-2">
+              <span className="status-chip">{filteredItems.length} visible</span>
+              <span className="status-chip">{promo ? "Offer applied" : "Regular pricing"}</span>
             </div>
           </div>
         </section>
@@ -307,26 +316,36 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {filteredItems.map((item) => {
               const basePrice = toNumber(item.price);
-              const finalPrice = calcItemFinalPrice(item);
+              const finalPrice = calcStorefrontPrice(item);
               const discounted = Math.abs(basePrice - finalPrice) > 0.0001;
               const outOfStock = item.stock_qty <= 0;
 
               return (
-                <Card key={item.id}>
+                <Card key={item.id} className={discounted ? "market-card-featured" : ""}>
                   <CardContent className="grid gap-5 p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <div className="section-kicker">{item.sku}</div>
-                        <h3 className="font-display theme-ink mt-2 text-4xl font-semibold tracking-[-0.05em]">{item.name}</h3>
+                        <h3 className="font-display theme-ink mt-2 text-3xl font-semibold tracking-[-0.05em]">{item.name}</h3>
                       </div>
                       <Badge className={`status-chip ${outOfStock ? "status-bad" : "status-good"}`}>
-                        {outOfStock ? t("market.outOfStock") : `${item.stock_qty}`}
+                        {outOfStock ? t("market.outOfStock") : `${item.stock_qty} left`}
                       </Badge>
                     </div>
 
                     <div className="metric-block">
-                      <div className="font-display theme-ink text-4xl font-semibold tracking-[-0.05em]">{formatMoney(finalPrice)}</div>
-                      {discounted && <div className="theme-muted mt-1 text-sm line-through">{formatMoney(basePrice)}</div>}
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-display theme-ink text-4xl font-semibold tracking-[-0.05em]">{formatMoney(finalPrice)}</div>
+                          {discounted && <div className="theme-muted mt-1 text-sm line-through">{formatMoney(basePrice)}</div>}
+                        </div>
+                        {discounted && (
+                          <div className="status-chip status-good">
+                            <TicketPercent className="h-3.5 w-3.5" />
+                            Saving now
+                          </div>
+                        )}
+                      </div>
                       <div className="theme-copy mt-3 text-sm leading-7">
                         {item.discount_type && item.discount_type !== "none"
                           ? item.discount_type === "percent"

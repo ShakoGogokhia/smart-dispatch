@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { ArrowRight, Megaphone, Search, Sparkles, TicketPercent, UserRound } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
+import { formatMoney, toNumber } from "@/lib/format";
+import type { StorefrontMarket } from "@/lib/storefront";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,37 +20,59 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 type UserLite = { id: number; name: string; email: string };
-type Market = {
-  id: number;
-  name: string;
-  code: string;
-  address?: string | null;
-  is_active: boolean;
+type Market = StorefrontMarket & {
   owner_user_id: number;
   owner?: UserLite;
 };
+
+type MarketDraft = {
+  name: string;
+  code: string;
+  address: string;
+  ownerId: string;
+  isActive: boolean;
+  isFeatured: boolean;
+  featuredBadge: string;
+  featuredHeadline: string;
+  featuredCopy: string;
+};
+
+const emptyDraft: MarketDraft = {
+  name: "",
+  code: "",
+  address: "",
+  ownerId: "",
+  isActive: true,
+  isFeatured: false,
+  featuredBadge: "",
+  featuredHeadline: "",
+  featuredCopy: "",
+};
+
+function toDraft(market: Market): MarketDraft {
+  return {
+    name: market.name,
+    code: market.code,
+    address: market.address ?? "",
+    ownerId: String(market.owner_user_id),
+    isActive: market.is_active,
+    isFeatured: !!market.is_featured,
+    featuredBadge: market.featured_badge ?? "",
+    featuredHeadline: market.featured_headline ?? "",
+    featuredCopy: market.featured_copy ?? "",
+  };
+}
 
 export default function MarketsPage() {
   const qc = useQueryClient();
   const meQ = useMe();
   const isAdmin = (meQ.data?.roles ?? []).includes("admin");
+  const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
 
   const marketsQ = useQuery({
     queryKey: ["markets"],
@@ -60,35 +87,56 @@ export default function MarketsPage() {
   });
 
   const owners = ownersQ.data ?? [];
+  const markets = marketsQ.data ?? [];
 
-  // ---- create market modal state
+  const filteredMarkets = useMemo(() => {
+    const normalized = deferredSearch.trim().toLowerCase();
+    if (!normalized) return markets;
+
+    return markets.filter((market) => {
+      const haystack = [
+        market.name,
+        market.code,
+        market.address,
+        market.owner?.name,
+        market.owner?.email,
+        market.featured_badge,
+        market.featured_headline,
+        market.active_promo?.code,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalized);
+    });
+  }, [deferredSearch, markets]);
+
   const [createOpen, setCreateOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [address, setAddress] = useState("");
-  const [ownerId, setOwnerId] = useState<string>("");
+  const [createDraft, setCreateDraft] = useState<MarketDraft>(emptyDraft);
 
   const createMarketM = useMutation({
     mutationFn: async () => {
       const payload = {
-        name,
-        code,
-        address: address || null,
-        owner_user_id: Number(ownerId),
+        name: createDraft.name.trim(),
+        code: createDraft.code.trim(),
+        address: createDraft.address.trim() || null,
+        owner_user_id: Number(createDraft.ownerId),
+        is_active: createDraft.isActive,
+        is_featured: createDraft.isFeatured,
+        featured_badge: createDraft.featuredBadge.trim() || null,
+        featured_headline: createDraft.featuredHeadline.trim() || null,
+        featured_copy: createDraft.featuredCopy.trim() || null,
       };
       return (await api.post("/api/markets", payload)).data as Market;
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["markets"] });
       setCreateOpen(false);
-      setName("");
-      setCode("");
-      setAddress("");
-      setOwnerId("");
+      setCreateDraft(emptyDraft);
     },
   });
 
-  // ---- assign owner modal state
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignMarket, setAssignMarket] = useState<Market | null>(null);
   const [assignOwnerId, setAssignOwnerId] = useState<string>("");
@@ -110,23 +158,58 @@ export default function MarketsPage() {
     },
   });
 
-  const markets = marketsQ.data ?? [];
+  const [editOpen, setEditOpen] = useState(false);
+  const [editMarket, setEditMarket] = useState<Market | null>(null);
+  const [editDraft, setEditDraft] = useState<MarketDraft>(emptyDraft);
+
+  const updateMarketM = useMutation({
+    mutationFn: async () => {
+      if (!editMarket) throw new Error("No market selected");
+      return (
+        await api.patch(`/api/markets/${editMarket.id}`, {
+          name: editDraft.name.trim(),
+          code: editDraft.code.trim(),
+          address: editDraft.address.trim() || null,
+          is_active: editDraft.isActive,
+          is_featured: editDraft.isFeatured,
+          featured_badge: editDraft.featuredBadge.trim() || null,
+          featured_headline: editDraft.featuredHeadline.trim() || null,
+          featured_copy: editDraft.featuredCopy.trim() || null,
+        })
+      ).data as Market;
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["markets"] });
+      setEditOpen(false);
+      setEditMarket(null);
+      setEditDraft(emptyDraft);
+    },
+  });
 
   const createError =
-    (createMarketM.error as any)?.response?.data?.message ??
-    (createMarketM.error as any)?.message ??
+    (createMarketM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
+    (createMarketM.error as { message?: string })?.message ??
     null;
 
   const assignError =
-    (assignOwnerM.error as any)?.response?.data?.message ??
-    (assignOwnerM.error as any)?.message ??
+    (assignOwnerM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
+    (assignOwnerM.error as { message?: string })?.message ??
+    null;
+
+  const updateError =
+    (updateMarketM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
+    (updateMarketM.error as { message?: string })?.message ??
     null;
 
   const canCreate =
-    name.trim().length >= 2 &&
-    code.trim().length >= 2 &&
-    ownerId &&
-    Number.isFinite(Number(ownerId));
+    createDraft.name.trim().length >= 2 &&
+    createDraft.code.trim().length >= 2 &&
+    createDraft.ownerId &&
+    Number.isFinite(Number(createDraft.ownerId));
+
+  const featuredCount = markets.filter((market) => market.is_featured).length;
+  const activeCount = markets.filter((market) => market.is_active).length;
+  const promoCount = markets.filter((market) => market.active_promo).length;
 
   if (!isAdmin) {
     return (
@@ -134,166 +217,387 @@ export default function MarketsPage() {
         <CardHeader>
           <CardTitle>Markets</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          You are not an admin.
-        </CardContent>
+        <CardContent className="text-sm text-muted-foreground">You are not an admin.</CardContent>
       </Card>
     );
   }
 
   return (
     <div className="grid gap-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle>Markets (Admin)</CardTitle>
+      <section className="intro-panel">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="command-chip">
+              <Megaphone className="h-3.5 w-3.5" />
+              Market promotion control
+            </div>
+            <h1 className="intro-title">Spotlight, assign, and tune every storefront from one board.</h1>
+            <p className="intro-copy max-w-3xl">
+              Promoted markets surface first on the public landing page. Admins can switch spotlight status, adjust the
+              featured message, and keep owner assignment close to the same workflow.
+            </p>
+          </div>
 
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button>Create Market</Button>
+              <Button size="lg">Create market</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Create Market</DialogTitle>
+                <DialogTitle>Create market</DialogTitle>
               </DialogHeader>
 
-              <div className="grid gap-4">
-                <div className="grid gap-2">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="field-group">
                   <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Market #1" />
+                  <Input value={createDraft.name} onChange={(e) => setCreateDraft((current) => ({ ...current, name: e.target.value }))} />
                 </div>
-
-                <div className="grid gap-2">
-                  <Label>Code (unique)</Label>
-                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="e.g. MKT001" />
+                <div className="field-group">
+                  <Label>Code</Label>
+                  <Input value={createDraft.code} onChange={(e) => setCreateDraft((current) => ({ ...current, code: e.target.value }))} />
                 </div>
-
-                <div className="grid gap-2">
-                  <Label>Address (optional)</Label>
-                  <Input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Tbilisi..." />
+                <div className="field-group md:col-span-2">
+                  <Label>Address</Label>
+                  <Input
+                    value={createDraft.address}
+                    onChange={(e) => setCreateDraft((current) => ({ ...current, address: e.target.value }))}
+                    placeholder="Service address or pickup zone"
+                  />
                 </div>
-
-                <div className="grid gap-2">
+                <div className="field-group md:col-span-2">
                   <Label>Owner</Label>
-                  <Select value={ownerId} onValueChange={setOwnerId}>
+                  <Select value={createDraft.ownerId} onValueChange={(value) => setCreateDraft((current) => ({ ...current, ownerId: value }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select owner user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {owners.map((u) => (
-                        <SelectItem key={u.id} value={String(u.id)}>
-                          {u.name} ({u.email})
+                      {owners.map((owner) => (
+                        <SelectItem key={owner.id} value={String(owner.id)}>
+                          {owner.name} ({owner.email})
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                {createError && <div className="text-sm text-red-600">{createError}</div>}
               </div>
 
+              <div className="section-divider" />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="field-group">
+                  <Label>Featured badge</Label>
+                  <Input
+                    value={createDraft.featuredBadge}
+                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
+                    placeholder="Promoted market"
+                  />
+                </div>
+                <div className="field-group">
+                  <Label>Featured headline</Label>
+                  <Input
+                    value={createDraft.featuredHeadline}
+                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
+                    placeholder="Fastest weekly essentials"
+                  />
+                </div>
+                <div className="field-group md:col-span-2">
+                  <Label>Featured copy</Label>
+                  <Input
+                    value={createDraft.featuredCopy}
+                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
+                    placeholder="This message appears in the public spotlight experience."
+                  />
+                </div>
+                <div className="subpanel flex items-center justify-between p-4">
+                  <div>
+                    <div className="theme-ink font-medium">Market active</div>
+                    <div className="theme-muted text-sm">Inactive markets stay hidden from the public marketplace.</div>
+                  </div>
+                  <Switch
+                    checked={createDraft.isActive}
+                    onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isActive: checked }))}
+                  />
+                </div>
+                <div className="subpanel flex items-center justify-between p-4">
+                  <div>
+                    <div className="theme-ink font-medium">Promote on landing page</div>
+                    <div className="theme-muted text-sm">Featured markets receive the premium public treatment.</div>
+                  </div>
+                  <Switch
+                    checked={createDraft.isFeatured}
+                    onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isFeatured: checked }))}
+                  />
+                </div>
+              </div>
+
+              {createError && <div className="text-sm text-red-600">{createError}</div>}
+
               <DialogFooter>
-                <Button
-                  onClick={() => createMarketM.mutate()}
-                  disabled={!canCreate || createMarketM.isPending}
-                >
-                  {createMarketM.isPending ? "Creating..." : "Create"}
+                <Button onClick={() => createMarketM.mutate()} disabled={!canCreate || createMarketM.isPending}>
+                  {createMarketM.isPending ? "Creating..." : "Create market"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </CardHeader>
+        </div>
+      </section>
 
-        <CardContent className="grid gap-4">
-          {marketsQ.isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading...</div>
-          ) : marketsQ.error ? (
-            <div className="text-sm text-red-600">Failed to load markets</div>
-          ) : (
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
+      <section className="data-grid">
+        <Card>
+          <CardContent className="p-6">
+            <div className="section-kicker">Total markets</div>
+            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{markets.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="section-kicker">Active storefronts</div>
+            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{activeCount}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="section-kicker">Promoted markets</div>
+            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{featuredCount}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-6">
+            <div className="section-kicker">Live promo codes</div>
+            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{promoCount}</div>
+          </CardContent>
+        </Card>
+      </section>
 
-                <TableBody>
-                  {markets.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell>{m.id}</TableCell>
-                      <TableCell className="font-medium">{m.name}</TableCell>
-                      <TableCell>{m.code}</TableCell>
-                      <TableCell>
-                        {m.owner?.name ?? `User #${m.owner_user_id}`}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setAssignMarket(m);
-                            setAssignOwnerId(String(m.owner_user_id));
-                            setAssignOpen(true);
-                          }}
-                        >
-                          Assign Owner
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+      <section className="dashboard-card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="section-kicker">Storefront finder</div>
+            <h2 className="panel-title mt-2">Search by market, owner, or active promo</h2>
+          </div>
+          <div className="relative w-full lg:max-w-md">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search markets, owners, promo code"
+              className="input-shell pl-11"
+            />
+          </div>
+        </div>
+      </section>
 
-                  {markets.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-sm text-muted-foreground">
-                        No markets yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+      {marketsQ.isLoading ? (
+        <Card>
+          <CardContent className="p-8 text-sm text-muted-foreground">Loading markets...</CardContent>
+        </Card>
+      ) : marketsQ.error ? (
+        <Card>
+          <CardContent className="p-8 text-sm text-red-600">Failed to load markets.</CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-5 xl:grid-cols-2">
+          {filteredMarkets.map((market) => (
+            <Card key={market.id} className={market.is_featured ? "market-card-featured" : ""}>
+              <CardContent className="grid gap-5 p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="section-kicker">{market.code}</span>
+                      {market.is_featured && <span className="status-chip status-good">{market.featured_badge || "Promoted"}</span>}
+                      {market.active_promo && <span className="status-chip status-warn">{market.active_promo.code}</span>}
+                    </div>
+                    <h3 className="font-display theme-ink mt-2 text-3xl font-semibold tracking-[-0.05em]">{market.name}</h3>
+                    <p className="theme-copy mt-2 text-sm leading-6">{market.featured_headline || market.address || "No public marketing copy yet."}</p>
+                  </div>
+                  <span className={`status-chip ${market.is_active ? "status-good" : "status-neutral"}`}>
+                    {market.is_active ? "Live" : "Hidden"}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="subpanel p-4">
+                    <div className="section-kicker">Owner</div>
+                    <div className="theme-ink mt-2 font-semibold">{market.owner?.name ?? `User #${market.owner_user_id}`}</div>
+                    <div className="theme-muted mt-1 text-sm">{market.owner?.email ?? "No email loaded"}</div>
+                  </div>
+                  <div className="subpanel p-4">
+                    <div className="section-kicker">Visible items</div>
+                    <div className="theme-ink mt-2 text-2xl font-semibold">{market.active_items_count ?? 0}</div>
+                  </div>
+                  <div className="subpanel p-4">
+                    <div className="section-kicker">Offer state</div>
+                    <div className="theme-ink mt-2 font-semibold">
+                      {market.active_promo ? `${market.active_promo.code} live` : "No live code"}
+                    </div>
+                    {market.active_promo && (
+                      <div className="theme-muted mt-1 text-sm">
+                        {market.active_promo.type === "percent"
+                          ? `${toNumber(market.active_promo.value)}% off`
+                          : `${formatMoney(market.active_promo.value)} off`}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setEditMarket(market);
+                      setEditDraft(toDraft(market));
+                      setEditOpen(true);
+                    }}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Edit storefront
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setAssignMarket(market);
+                      setAssignOwnerId(String(market.owner_user_id));
+                      setAssignOpen(true);
+                    }}
+                  >
+                    <UserRound className="h-4 w-4" />
+                    Assign owner
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <Link to={`/markets/${market.id}/promo-codes`}>
+                      <TicketPercent className="h-4 w-4" />
+                      Promo codes
+                    </Link>
+                  </Button>
+                  <Button asChild>
+                    <Link to={`/markets/${market.id}`}>
+                      Open settings
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+
+          {filteredMarkets.length === 0 && (
+            <Card>
+              <CardContent className="p-8 text-sm text-muted-foreground">No markets matched your search.</CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
-      {/* Assign owner modal */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Owner</DialogTitle>
+            <DialogTitle>Assign owner</DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-2">
-            <div className="text-sm text-muted-foreground">
-              Market: <span className="font-medium text-foreground">{assignMarket?.name}</span>
+          <div className="grid gap-4">
+            <div className="subpanel p-4 text-sm">
+              Market: <span className="font-semibold">{assignMarket?.name}</span>
             </div>
 
-            <Label>Owner</Label>
-            <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select owner user" />
-              </SelectTrigger>
-              <SelectContent>
-                {owners.map((u) => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.name} ({u.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="field-group">
+              <Label>Owner</Label>
+              <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select owner user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {owners.map((owner) => (
+                    <SelectItem key={owner.id} value={String(owner.id)}>
+                      {owner.name} ({owner.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {assignError && <div className="text-sm text-red-600">{assignError}</div>}
           </div>
 
           <DialogFooter>
-            <Button
-              onClick={() => assignOwnerM.mutate()}
-              disabled={!assignMarket || !assignOwnerId || assignOwnerM.isPending}
-            >
-              {assignOwnerM.isPending ? "Saving..." : "Save"}
+            <Button onClick={() => assignOwnerM.mutate()} disabled={!assignMarket || !assignOwnerId || assignOwnerM.isPending}>
+              {assignOwnerM.isPending ? "Saving..." : "Save owner"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit storefront</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="field-group">
+              <Label>Name</Label>
+              <Input value={editDraft.name} onChange={(e) => setEditDraft((current) => ({ ...current, name: e.target.value }))} />
+            </div>
+            <div className="field-group">
+              <Label>Code</Label>
+              <Input value={editDraft.code} onChange={(e) => setEditDraft((current) => ({ ...current, code: e.target.value }))} />
+            </div>
+            <div className="field-group md:col-span-2">
+              <Label>Address</Label>
+              <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="section-divider" />
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="field-group">
+              <Label>Featured badge</Label>
+              <Input
+                value={editDraft.featuredBadge}
+                onChange={(e) => setEditDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
+                placeholder="Promoted market"
+              />
+            </div>
+            <div className="field-group">
+              <Label>Featured headline</Label>
+              <Input
+                value={editDraft.featuredHeadline}
+                onChange={(e) => setEditDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
+                placeholder="City's fastest essentials drop"
+              />
+            </div>
+            <div className="field-group md:col-span-2">
+              <Label>Featured copy</Label>
+              <Input
+                value={editDraft.featuredCopy}
+                onChange={(e) => setEditDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
+                placeholder="Shown on the public landing spotlight."
+              />
+            </div>
+            <div className="subpanel flex items-center justify-between p-4">
+              <div>
+                <div className="theme-ink font-medium">Storefront active</div>
+                <div className="theme-muted text-sm">Controls whether the market is visible publicly.</div>
+              </div>
+              <Switch checked={editDraft.isActive} onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isActive: checked }))} />
+            </div>
+            <div className="subpanel flex items-center justify-between p-4">
+              <div>
+                <div className="theme-ink font-medium">Featured promotion placement</div>
+                <div className="theme-muted text-sm">Moves this market into the premium public spotlight.</div>
+              </div>
+              <Switch
+                checked={editDraft.isFeatured}
+                onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isFeatured: checked }))}
+              />
+            </div>
+          </div>
+
+          {updateError && <div className="text-sm text-red-600">{updateError}</div>}
+
+          <DialogFooter>
+            <Button onClick={() => updateMarketM.mutate()} disabled={!editMarket || updateMarketM.isPending || !editDraft.name.trim()}>
+              {updateMarketM.isPending ? "Saving..." : "Save storefront"}
             </Button>
           </DialogFooter>
         </DialogContent>

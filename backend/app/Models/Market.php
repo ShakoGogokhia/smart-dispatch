@@ -3,6 +3,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Storage;
 
 class Market extends Model
 {
@@ -10,11 +11,25 @@ class Market extends Model
     
 
     protected $fillable = [
-        'name','code','owner_user_id','address','is_active','logo_path'
+        'name',
+        'code',
+        'owner_user_id',
+        'address',
+        'is_active',
+        'is_featured',
+        'featured_badge',
+        'featured_headline',
+        'featured_copy',
+        'logo_path',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_featured' => 'boolean',
+    ];
+
+    protected $appends = [
+        'logo_url',
     ];
 
     public function owner()
@@ -38,5 +53,13 @@ class Market extends Model
     {
         return $this->hasMany(PromoCode::class);
     }
-    
+
+    public function getLogoUrlAttribute(): ?string
+    {
+        if (!$this->logo_path) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->logo_path);
+    }
 }

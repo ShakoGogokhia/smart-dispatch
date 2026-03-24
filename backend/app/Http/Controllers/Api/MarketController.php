@@ -6,13 +6,27 @@ use Illuminate\Http\Request;
 use App\Models\Market;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\Collection;
 
 class MarketController extends Controller
 {
     public function index(Request $request)
     {
-        // admin list all
-        return Market::with('owner:id,name,email')->latest()->get();
+        return $this->serializeMarkets(
+            Market::with('owner:id,name,email')
+                ->withCount(['items as active_items_count' => function ($query) {
+                    $query->where('is_active', true);
+                }])
+                ->with(['promoCodes' => function ($query) {
+                    $query
+                        ->where('is_active', true)
+                        ->latest()
+                        ->limit(1);
+                }])
+                ->orderByDesc('is_featured')
+                ->latest()
+                ->get()
+        );
     }
 
     public function myMarkets(Request $request)
@@ -20,7 +34,7 @@ class MarketController extends Controller
         $user = $request->user();
 
         if ($user->hasRole('admin')) {
-            return Market::with('owner:id,name,email')->latest()->get();
+            return $this->index($request);
         }
 
         $owned = Market::where('owner_user_id', $user->id);
@@ -29,7 +43,23 @@ class MarketController extends Controller
             $q->where('users.id', $user->id);
         });
 
-        return $owned->union($staff)->get();
+        $markets = Market::query()
+            ->whereIn('id', $owned->pluck('id')->merge($staff->pluck('id'))->unique())
+            ->with('owner:id,name,email')
+            ->withCount(['items as active_items_count' => function ($query) {
+                $query->where('is_active', true);
+            }])
+            ->with(['promoCodes' => function ($query) {
+                $query
+                    ->where('is_active', true)
+                    ->latest()
+                    ->limit(1);
+            }])
+            ->orderByDesc('is_featured')
+            ->orderBy('name')
+            ->get();
+
+        return $this->serializeMarkets($markets);
     }
 
     public function store(Request $request)
@@ -40,6 +70,10 @@ class MarketController extends Controller
             'owner_user_id' => ['required', 'exists:users,id'],
             'address' => ['nullable', 'string', 'max:255'],
             'is_active' => ['nullable', 'boolean'],
+            'is_featured' => ['nullable', 'boolean'],
+            'featured_badge' => ['nullable', 'string', 'max:40'],
+            'featured_headline' => ['nullable', 'string', 'max:120'],
+            'featured_copy' => ['nullable', 'string', 'max:255'],
         ]);
 
         $market = Market::create([
@@ -48,6 +82,10 @@ class MarketController extends Controller
             'owner_user_id' => $data['owner_user_id'],
             'address' => $data['address'] ?? null,
             'is_active' => $data['is_active'] ?? true,
+            'is_featured' => $data['is_featured'] ?? false,
+            'featured_badge' => $data['featured_badge'] ?? null,
+            'featured_headline' => $data['featured_headline'] ?? null,
+            'featured_copy' => $data['featured_copy'] ?? null,
         ]);
 
         // owner role
@@ -56,7 +94,7 @@ class MarketController extends Controller
             $owner->assignRole('owner');
         }
 
-        return response()->json($market->load('owner:id,name,email'), 201);
+        return response()->json($this->serializeMarket($market->load('owner:id,name,email')), 201);
     }
 
     public function update(Request $request, Market $market)
@@ -66,10 +104,28 @@ class MarketController extends Controller
             'code' => ['sometimes', 'string', 'max:50', 'unique:markets,code,' . $market->id],
             'address' => ['nullable', 'string', 'max:255'],
             'is_active' => ['sometimes', 'boolean'],
+            'is_featured' => ['sometimes', 'boolean'],
+            'featured_badge' => ['nullable', 'string', 'max:40'],
+            'featured_headline' => ['nullable', 'string', 'max:120'],
+            'featured_copy' => ['nullable', 'string', 'max:255'],
         ]);
 
         $market->update($data);
-        return $market->load('owner:id,name,email');
+        return $this->serializeMarket(
+            $market
+                ->load([
+                    'owner:id,name,email',
+                    'promoCodes' => function ($query) {
+                        $query
+                            ->where('is_active', true)
+                            ->latest()
+                            ->limit(1);
+                    },
+                ])
+                ->loadCount(['items as active_items_count' => function ($query) {
+                    $query->where('is_active', true);
+                }])
+        );
     }
 
     public function assignOwner(Request $request, Market $market)
@@ -85,7 +141,7 @@ class MarketController extends Controller
             $owner->assignRole('owner');
         }
 
-        return $market->load('owner:id,name,email');
+        return $this->serializeMarket($market->load('owner:id,name,email'));
     }
     public function uploadLogo(Request $request, Market $market)
     {
@@ -129,8 +185,8 @@ public function addStaff(Request $request, Market $market)
     return response()->json(['message' => 'Staff added']);
 }
 
-public function removeStaff(Request $request, Market $market, $userId)
-{
+    public function removeStaff(Request $request, Market $market, $userId)
+    {
     // prevent removing current owner
     if ((int)$market->owner_user_id === (int)$userId) {
         return response()->json(['message' => 'Cannot remove market owner'], 422);
@@ -140,5 +196,41 @@ public function removeStaff(Request $request, Market $market, $userId)
 
     return response()->json(['message' => 'Staff removed']);
         // prevent removing current owner
-}
+    }
+
+    protected function serializeMarkets(Collection $markets)
+    {
+        return $markets->map(fn (Market $market) => $this->serializeMarket($market));
+    }
+
+    protected function serializeMarket(Market $market): array
+    {
+        $activePromo = $market->promoCodes
+            ? $market->promoCodes->first()
+            : $market->promoCodes()->where('is_active', true)->latest()->first();
+
+        return [
+            'id' => $market->id,
+            'name' => $market->name,
+            'code' => $market->code,
+            'address' => $market->address,
+            'is_active' => (bool) $market->is_active,
+            'is_featured' => (bool) $market->is_featured,
+            'featured_badge' => $market->featured_badge,
+            'featured_headline' => $market->featured_headline,
+            'featured_copy' => $market->featured_copy,
+            'owner_user_id' => $market->owner_user_id,
+            'owner' => $market->owner,
+            'logo_path' => $market->logo_path,
+            'logo_url' => $market->logo_url,
+            'active_items_count' => (int) ($market->active_items_count ?? 0),
+            'active_promo' => $activePromo ? [
+                'id' => $activePromo->id,
+                'code' => $activePromo->code,
+                'type' => $activePromo->type,
+                'value' => $activePromo->value,
+                'is_active' => (bool) $activePromo->is_active,
+            ] : null,
+        ];
+    }
 }
