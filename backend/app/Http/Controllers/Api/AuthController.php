@@ -74,6 +74,7 @@ class AuthController extends Controller
             'driver.vehicle',
             'driver.activeShift',
             'driver.latestPing',
+            'driver.transactions' => fn ($query) => $query->latest()->limit(10),
         ]);
 
         return response()->json([
@@ -85,9 +86,12 @@ class AuthController extends Controller
             'driver' => $u->driver ? [
                 'id' => $u->driver->id,
                 'status' => $u->driver->status,
+                'balance' => $u->driver->balance,
+                'total_earned' => $u->driver->total_earned,
                 'vehicle' => $u->driver->vehicle,
                 'active_shift' => $u->driver->activeShift,
                 'latest_ping' => $u->driver->latestPing,
+                'transactions' => $u->driver->transactions,
             ] : null,
         ]);
     }

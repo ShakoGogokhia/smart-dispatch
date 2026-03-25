@@ -18,8 +18,18 @@ type DriverFeed = {
   driver: {
     id: number;
     status: string;
+    balance?: number | string;
+    total_earned?: number | string;
     active_shift?: { id: number; started_at: string } | null;
     latest_ping?: { lat: number | string; lng: number | string; updated_at?: string } | null;
+    transactions?: Array<{
+      id: number;
+      amount: number | string;
+      distance_km?: number | string | null;
+      weather_condition?: string | null;
+      created_at?: string;
+      description?: string | null;
+    }>;
   };
   offered_orders: Order[];
   assigned_orders: Order[];
@@ -161,6 +171,21 @@ export default function DriverHubPage() {
               </div>
             </div>
 
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-[24px] bg-emerald-50 p-5 dark:bg-emerald-300/10">
+                <div className="text-sm text-emerald-700 dark:text-emerald-100">Current balance</div>
+                <div className="mt-2 text-3xl font-semibold text-emerald-900 dark:text-white">
+                  {formatMoney(feedQ.data?.driver?.balance ?? 0)}
+                </div>
+              </div>
+              <div className="rounded-[24px] bg-cyan-50 p-5 dark:bg-cyan-300/10">
+                <div className="text-sm text-cyan-700 dark:text-cyan-100">Total earned</div>
+                <div className="mt-2 text-3xl font-semibold text-cyan-900 dark:text-white">
+                  {formatMoney(feedQ.data?.driver?.total_earned ?? 0)}
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-3">
               <Button onClick={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
                 <Clock3 className="mr-2 h-4 w-4" />
@@ -198,6 +223,31 @@ export default function DriverHubPage() {
         </Card>
 
         <div className="grid gap-6">
+          <Card className="rounded-[30px]">
+            <CardHeader>
+              <CardTitle className="font-display text-2xl">Recent earnings</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              {(feedQ.data?.driver?.transactions ?? []).length === 0 ? (
+                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">No earnings yet.</div>
+              ) : (
+                (feedQ.data?.driver?.transactions ?? []).map((transaction) => (
+                  <div key={transaction.id} className="rounded-[24px] border border-slate-200/80 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-slate-950">{transaction.description || "Delivery earning"}</div>
+                        <div className="mt-1 text-sm text-slate-500">
+                          {transaction.distance_km ?? 0} km • {transaction.weather_condition || "clear"} • {formatDateTime(transaction.created_at)}
+                        </div>
+                      </div>
+                      <Badge className="rounded-full">{formatMoney(transaction.amount)}</Badge>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="rounded-[30px]">
             <CardHeader>
               <CardTitle className="font-display text-2xl">{t("driverHub.incomingOffers")}</CardTitle>

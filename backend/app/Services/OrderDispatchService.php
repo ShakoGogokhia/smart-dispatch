@@ -86,25 +86,35 @@ class OrderDispatchService
 
         $withDistance = $drivers->map(function (Driver $driver) use ($order) {
             $distance = null;
+            $pickupLat = (float) ($order->pickup_lat ?? $order->dropoff_lat);
+            $pickupLng = (float) ($order->pickup_lng ?? $order->dropoff_lng);
             if ($driver->latestPing) {
                 $distance = $this->distanceKm(
                     (float) $driver->latestPing->lat,
                     (float) $driver->latestPing->lng,
-                    (float) $order->dropoff_lat,
-                    (float) $order->dropoff_lng,
+                    $pickupLat,
+                    $pickupLng,
                 );
             }
+
+            $capacity = (float) ($driver->vehicle?->capacity ?? 100);
+            $activeLoad = (float) $driver->assignedOrders()->whereIn('status', ['ASSIGNED', 'PICKED_UP'])->sum('size');
+            $remainingCapacity = max(0, $capacity - $activeLoad);
 
             return [
                 'driver' => $driver,
                 'distance' => $distance,
                 'assigned_count' => $driver->assignedOrders()->whereIn('status', ['ASSIGNED', 'PICKED_UP'])->count(),
+                'remaining_capacity' => $remainingCapacity,
+                'time_window_penalty' => $order->time_window_end ? max(0, 60 - now()->diffInMinutes($order->time_window_end, false)) : 0,
             ];
         });
 
         $nearby = $withDistance
+            ->filter(fn (array $candidate) => $candidate['remaining_capacity'] >= (float) ($order->size ?? 1))
             ->filter(fn (array $candidate) => $candidate['distance'] !== null && $candidate['distance'] <= 8)
             ->sortBy([
+                ['time_window_penalty', 'desc'],
                 ['assigned_count', 'asc'],
                 ['distance', 'asc'],
             ]);
@@ -113,7 +123,10 @@ class OrderDispatchService
             return $nearby->first()['driver'];
         }
 
-        $fallback = $withDistance->sortBy([
+        $fallback = $withDistance
+            ->filter(fn (array $candidate) => $candidate['remaining_capacity'] >= (float) ($order->size ?? 1))
+            ->sortBy([
+            ['time_window_penalty', 'desc'],
             ['assigned_count', 'asc'],
             ['distance', 'asc'],
         ]);

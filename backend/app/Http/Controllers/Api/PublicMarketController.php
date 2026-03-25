@@ -7,10 +7,19 @@ use App\Models\Market;
 
 class PublicMarketController extends Controller
 {
+    protected function applyFeaturedOrdering($query)
+    {
+        if (Market::hasFeaturedColumns()) {
+            $query->orderByDesc('is_featured');
+        }
+
+        return $query;
+    }
+
     // GET /api/public/markets
     public function markets()
     {
-        $markets = Market::query()
+        $markets = $this->applyFeaturedOrdering(Market::query())
             ->where('is_active', true)
             ->withCount(['items as active_items_count' => function ($query) {
                 $query->where('is_active', true);
@@ -39,7 +48,6 @@ class PublicMarketController extends Controller
                         ->limit(1);
                 },
             ])
-            ->orderByDesc('is_featured')
             ->orderBy('name')
             ->get();
 
@@ -51,11 +59,13 @@ class PublicMarketController extends Controller
                 'name' => $market->name,
                 'code' => $market->code,
                 'address' => $market->address,
+                'lat' => $market->lat !== null ? (float) $market->lat : null,
+                'lng' => $market->lng !== null ? (float) $market->lng : null,
                 'is_active' => (bool) $market->is_active,
-                'is_featured' => (bool) $market->is_featured,
-                'featured_badge' => $market->featured_badge,
-                'featured_headline' => $market->featured_headline,
-                'featured_copy' => $market->featured_copy,
+                'is_featured' => Market::hasFeaturedColumns() ? (bool) $market->is_featured : false,
+                'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
+                'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
+                'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
                 'logo_url' => $market->logo_url,
                 'active_items_count' => (int) ($market->active_items_count ?? 0),
                 'active_promo' => $activePromo ? [
@@ -94,11 +104,13 @@ class PublicMarketController extends Controller
             'name' => $market->name,
             'code' => $market->code,
             'address' => $market->address,
+            'lat' => $market->lat !== null ? (float) $market->lat : null,
+            'lng' => $market->lng !== null ? (float) $market->lng : null,
             'is_active' => (bool) $market->is_active,
-            'is_featured' => (bool) $market->is_featured,
-            'featured_badge' => $market->featured_badge,
-            'featured_headline' => $market->featured_headline,
-            'featured_copy' => $market->featured_copy,
+            'is_featured' => Market::hasFeaturedColumns() ? (bool) $market->is_featured : false,
+            'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
+            'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
+            'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
             'logo_url' => $market->logo_url,
             'active_items_count' => (int) ($market->active_items_count ?? 0),
         ];

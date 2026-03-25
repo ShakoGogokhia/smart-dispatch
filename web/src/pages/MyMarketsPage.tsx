@@ -1,4 +1,4 @@
-import { ArrowRight, Package, Settings, Sparkles, TicketPercent } from "lucide-react";
+import { ArrowRight, Megaphone, Package, Settings, Sparkles, TicketPercent } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -39,6 +39,12 @@ export default function MyMarketsPage() {
             <span className="status-chip">{markets.length} markets</span>
             <span className="status-chip">{featuredCount} promoted</span>
             <span className="status-chip">{promoCount} live offers</span>
+            <Button asChild variant="secondary" className="rounded-2xl">
+              <Link to="/badge-pricing">
+                <Megaphone className="mr-2 h-4 w-4" />
+                Badge pricing
+              </Link>
+            </Button>
           </div>
         </div>
       </section>

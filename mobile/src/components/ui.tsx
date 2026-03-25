@@ -603,10 +603,12 @@ const styles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 38,
     fontWeight: "900",
+    flexShrink: 1,
   },
   heroSubtitle: {
     fontSize: 15,
     lineHeight: 23,
+    flexShrink: 1,
   },
   cardHeader: {
     flexDirection: "row",
@@ -621,10 +623,12 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 20,
     fontWeight: "800",
+    flexShrink: 1,
   },
   cardSubtitle: {
     fontSize: 14,
     lineHeight: 20,
+    flexShrink: 1,
   },
   button: {
     minHeight: 50,
@@ -646,6 +650,8 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 15,
     fontWeight: "800",
+    textAlign: "center",
+    flexShrink: 1,
   },
   field: {
     gap: 8,
@@ -655,6 +661,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.8,
+    flexShrink: 1,
   },
   input: {
     minHeight: 52,
@@ -684,6 +691,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.6,
+    flexShrink: 1,
+    textAlign: "center",
   },
   statGrid: {
     gap: 12,
@@ -699,10 +708,12 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1,
     fontWeight: "800",
+    flexShrink: 1,
   },
   statValue: {
     fontSize: 30,
     fontWeight: "900",
+    flexShrink: 1,
   },
   statNote: {
     fontSize: 13,
@@ -760,6 +771,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: "700",
+    flexShrink: 1,
   },
   settingValue: {
     fontSize: 12,

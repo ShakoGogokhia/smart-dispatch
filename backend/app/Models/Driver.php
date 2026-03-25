@@ -6,7 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Driver extends Model
 {
-    protected $fillable = ['user_id', 'vehicle_id', 'status'];
+    protected $fillable = ['user_id', 'vehicle_id', 'status', 'balance', 'total_earned'];
+
+    protected $casts = [
+        'balance' => 'decimal:2',
+        'total_earned' => 'decimal:2',
+    ];
 
     public function user()
     {
@@ -35,5 +40,10 @@ class Driver extends Model
     public function assignedOrders()
     {
         return $this->hasMany(\App\Models\Order::class, 'assigned_driver_id');
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(\App\Models\DriverTransaction::class);
     }
 }

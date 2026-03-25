@@ -1,451 +1,296 @@
-import { useDeferredValue, useMemo, useState } from "react";
-import {
-  ArrowRight,
-  MapPin,
-  Search,
-  Settings2,
-  ShieldCheck,
-  ShoppingBasket,
-  Sparkles,
-  Store,
-  TicketPercent,
-  Truck,
-  Users,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Megaphone, Search, Sparkles, Star, Store, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { auth } from "@/lib/auth";
 import { formatMoney } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-import {
-  calcStorefrontPrice,
-  formatPromoLabel,
-  getMarketCopy,
-  getMarketHeadline,
-  type StorefrontItemPreview,
-  type StorefrontMarket,
-} from "@/lib/storefront";
+import { getDefaultAuthedPath } from "@/lib/session";
+import { calcStorefrontPrice, formatPromoLabel, type StorefrontMarket } from "@/lib/storefront";
+import { useMe } from "@/lib/useMe";
 
-type DiscoverItem = StorefrontItemPreview & {
-  market_id: number;
-  market_name: string;
-};
-
-type StaffLane = {
+type RailProps = {
   title: string;
-  text: string;
-  icon: typeof Users;
+  subtitle: string;
+  markets: StorefrontMarket[];
+  autoScrollMs?: number;
 };
+
+function getBadgeTheme(badge?: string | null) {
+  const value = (badge ?? "").trim().toLowerCase();
+
+  if (value.includes("vip")) {
+    return "status-chip status-good";
+  }
+
+  if (value.includes("new")) {
+    return "status-chip status-warn";
+  }
+
+  if (value.includes("staff")) {
+    return "status-chip";
+  }
+
+  return "status-chip status-good";
+}
+
+function MarketRail({ title, subtitle, markets, autoScrollMs = 8000 }: RailProps) {
+  const railRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!railRef.current || markets.length <= 1) {
+      return;
+    }
+
+    const element = railRef.current;
+    const timer = window.setInterval(() => {
+      const nextLeft = element.scrollLeft + 320;
+      const maxLeft = element.scrollWidth - element.clientWidth;
+
+      element.scrollTo({
+        left: nextLeft >= maxLeft ? 0 : nextLeft,
+        behavior: "smooth",
+      });
+    }, autoScrollMs);
+
+    return () => window.clearInterval(timer);
+  }, [autoScrollMs, markets.length]);
+
+  function scrollByCard(direction: "left" | "right") {
+    railRef.current?.scrollBy({
+      left: direction === "left" ? -320 : 320,
+      behavior: "smooth",
+    });
+  }
+
+  return (
+    <section className="dashboard-card">
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <div className="section-kicker">{title}</div>
+          <h2 className="section-title mt-2">{subtitle}</h2>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" className="h-11 w-11 rounded-2xl p-0" onClick={() => scrollByCard("left")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="secondary" className="h-11 w-11 rounded-2xl p-0" onClick={() => scrollByCard("right")}>
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div ref={railRef} className="market-rail">
+        {markets.map((market) => (
+          <article key={market.id} className={`market-rail-card ${market.is_featured ? "market-card-featured" : ""}`}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="section-kicker">{market.code}</span>
+                  {market.featured_badge && <span className={getBadgeTheme(market.featured_badge)}>{market.featured_badge}</span>}
+                </div>
+                <h3 className="font-display theme-ink mt-3 text-2xl font-semibold">{market.name}</h3>
+              </div>
+              <span className={`status-chip ${market.is_active ? "status-good" : "status-neutral"}`}>
+                {market.is_active ? "Live" : "Hidden"}
+              </span>
+            </div>
+
+            <p className="theme-copy mt-4 text-sm leading-6">{market.featured_headline || market.featured_copy || market.address || "Ready for orders."}</p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {market.active_promo && <span className="data-pill">{formatPromoLabel(market.active_promo)}</span>}
+              <span className="data-pill">{market.active_items_count ?? 0} items</span>
+            </div>
+
+            <div className="mt-5 grid gap-2">
+              {(market.item_preview ?? []).slice(0, 2).map((item) => (
+                <div key={item.id} className="subpanel flex items-center justify-between px-4 py-3 text-sm">
+                  <span className="theme-ink font-medium">{item.name}</span>
+                  <span className="theme-copy">{formatMoney(calcStorefrontPrice(item))}</span>
+                </div>
+              ))}
+            </div>
+
+            <Button asChild className="mt-5 h-11">
+              <Link to={`/m/${market.id}`}>
+                Open market
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function PublicMarketsPage() {
   const { language, setLanguage, t } = useI18n();
-  const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query);
+  const [search, setSearch] = useState("");
+  const token = auth.getToken();
+  const meQ = useMe({ enabled: !!token });
 
   const marketsQ = useQuery({
     queryKey: ["public-markets"],
     queryFn: async () => (await api.get("/api/public/markets")).data as StorefrontMarket[],
   });
 
-  const markets = marketsQ.data ?? [];
-  const normalizedQuery = deferredQuery.trim().toLowerCase();
+  const allMarkets = marketsQ.data ?? [];
+  const query = search.trim().toLowerCase();
+  const markets = useMemo(() => {
+    if (!query) return allMarkets;
 
-  const filteredMarkets = useMemo(() => {
-    if (!normalizedQuery) return markets;
-
-    return markets.filter((market) => {
-      const haystack = [
-        market.name,
-        market.code,
-        market.address,
-        market.featured_headline,
-        market.featured_copy,
-        ...(market.item_preview ?? []).flatMap((item) => [item.name, item.sku]),
-      ]
+    return allMarkets.filter((market) =>
+      [market.name, market.code, market.address, market.featured_badge, market.featured_headline]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase();
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [allMarkets, query]);
 
-      return haystack.includes(normalizedQuery);
-    });
-  }, [markets, normalizedQuery]);
-
-  const featuredMarkets = filteredMarkets.filter((market) => market.is_featured);
-  const heroMarket = featuredMarkets[0] ?? filteredMarkets[0] ?? null;
-  const activeMarkets = filteredMarkets.filter((market) => market.is_active).length;
-  const discoverItems = useMemo<DiscoverItem[]>(() => {
-    return filteredMarkets
-      .flatMap((market) =>
-        (market.item_preview ?? []).map((item) => ({
-          ...item,
-          market_id: market.id,
-          market_name: market.name,
-        })),
-      )
-      .slice(0, 6);
-  }, [filteredMarkets]);
-
-  const staffLanes: StaffLane[] = [
-    {
-      title: "Admin control",
-      text: "Give promotion to any market, tune spotlight copy, and manage who owns what.",
-      icon: ShieldCheck,
-    },
-    {
-      title: "Market staff",
-      text: "Open market tools, update items, and keep promo codes ready for public traffic.",
-      icon: Settings2,
-    },
-    {
-      title: "Dispatch team",
-      text: "Orders, routes, and storefront operations stay connected from the same workspace.",
-      icon: Truck,
-    },
-  ];
+  const promotedMarkets = markets.filter((market) => market.is_featured);
+  const regularMarkets = markets.filter((market) => !market.is_featured);
+  const authedPath = getDefaultAuthedPath(meQ.data?.roles);
 
   return (
     <div className="app-shell storefront-shell">
-      <div className="glow-orb left-[4%] top-20 h-56 w-56 bg-cyan-300/20" />
-      <div className="glow-orb right-[6%] top-[18rem] h-72 w-72 bg-amber-300/18" />
-
       <div className="relative z-10 mx-auto max-w-7xl space-y-6">
         <section className="landing-stage page-enter">
-          <div className="landing-stage__grid">
+          <div className="landing-stage__grid !grid-cols-1">
             <div className="landing-stage__copy">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="command-chip">
                   <Sparkles className="h-3.5 w-3.5" />
                   {t("public.marketplace")}
                 </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {meQ.data && (
+                    <Link to={authedPath} className="status-chip">
+                      {t("public.signedInAsUser", { name: meQ.data.name })}
+                    </Link>
+                  )}
                   <ThemeToggle />
-                  <Button
-                    variant={language === "ka" ? "default" : "secondary"}
-                    className="h-10 rounded-[16px]"
-                    onClick={() => setLanguage("ka")}
-                  >
+                  <Button variant={language === "ka" ? "default" : "secondary"} className="h-10 rounded-[16px]" onClick={() => setLanguage("ka")}>
                     {t("lang.ka")}
                   </Button>
-                  <Button
-                    variant={language === "en" ? "default" : "secondary"}
-                    className="h-10 rounded-[16px]"
-                    onClick={() => setLanguage("en")}
-                  >
+                  <Button variant={language === "en" ? "default" : "secondary"} className="h-10 rounded-[16px]" onClick={() => setLanguage("en")}>
                     {t("lang.en")}
                   </Button>
                 </div>
               </div>
 
-              <div className="mt-8">
-                <div className="section-kicker text-cyan-100/80">Markets, promoted offers, staff access</div>
-                <h1 className="font-display mt-4 max-w-4xl text-5xl font-semibold tracking-[-0.075em] text-white md:text-7xl">
-                  A cleaner storefront with real discovery from the first screen.
-                </h1>
-                <p className="mt-5 max-w-3xl text-base leading-8 text-slate-300 md:text-lg">
-                  Customers can discover markets and items immediately. Staff can jump into operations from the same
-                  landing page. Promoted markets get a stronger visual spotlight automatically.
-                </p>
+              <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                <div>
+                  <div className="section-kicker text-cyan-100/80">Simpler marketplace</div>
+                  <h1 className="font-display mt-4 max-w-4xl text-5xl font-semibold tracking-[-0.06em] text-white md:text-7xl">
+                    Markets first, less noise, faster browsing.
+                  </h1>
+                  <p className="mt-4 max-w-2xl text-base leading-8 text-slate-300">
+                    Promoted markets stay on their own line, regular markets stay below, and both rails scroll with arrows or automatically.
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <Button asChild size="lg">
+                      <Link to={promotedMarkets[0] ? `/m/${promotedMarkets[0].id}` : "/"}>
+                        Open promoted markets
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button asChild variant="secondary" size="lg">
+                      <Link to={meQ.data ? authedPath : "/login"}>{meQ.data ? "Continue workspace" : t("public.openWorkspace")}</Link>
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="subpanel p-5">
+                  <div className="section-kicker">Market badges</div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="status-chip status-good">VIP Market</span>
+                    <span className="status-chip status-warn">New Market</span>
+                    <span className="status-chip">Staff Pick</span>
+                  </div>
+                  <p className="theme-copy mt-4 text-sm leading-6">
+                    Admins can assign any badge. Owners can request those badges from the pricing page.
+                  </p>
+                </div>
               </div>
 
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Button asChild size="lg">
-                  <Link to={heroMarket ? `/m/${heroMarket.id}` : "/"}>
-                    Discover market
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild variant="secondary" size="lg">
-                  <Link to="/login">Open staff workspace</Link>
-                </Button>
+              <div className="mt-6 relative w-full lg:max-w-xl">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search markets"
+                  className="input-shell pl-11"
+                />
               </div>
-
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                <div className="landing-stat">
-                  <div className="section-kicker text-cyan-100/75">Open markets</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">{activeMarkets}</div>
-                </div>
-                <div className="landing-stat">
-                  <div className="section-kicker text-cyan-100/75">Promoted</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">{featuredMarkets.length}</div>
-                </div>
-                <div className="landing-stat">
-                  <div className="section-kicker text-cyan-100/75">Items on load</div>
-                  <div className="mt-2 text-3xl font-semibold text-white">{discoverItems.length}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="landing-stage__feature page-enter page-enter-delay-1">
-              {heroMarket ? (
-                <div className="feature-market-card float-card">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="section-kicker text-cyan-100/75">{heroMarket.featured_badge || "Promoted market"}</div>
-                      <h2 className="mt-3 font-display text-3xl font-semibold tracking-[-0.05em] text-white">
-                        {heroMarket.name}
-                      </h2>
-                    </div>
-                    <span className="status-chip status-good">{heroMarket.is_active ? "Live" : "Offline"}</span>
-                  </div>
-
-                  <p className="mt-4 text-sm leading-7 text-slate-300">{getMarketHeadline(heroMarket)}</p>
-                  <p className="mt-2 text-sm leading-7 text-slate-400">{getMarketCopy(heroMarket)}</p>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <span className="data-pill">{heroMarket.code}</span>
-                    <span className="data-pill">{heroMarket.active_items_count ?? 0} items</span>
-                    {heroMarket.active_promo && <span className="data-pill">{formatPromoLabel(heroMarket.active_promo)}</span>}
-                  </div>
-
-                  <div className="mt-6 grid gap-3">
-                    {(heroMarket.item_preview ?? []).slice(0, 3).map((item) => (
-                      <div key={item.id} className="feature-market-row">
-                        <div>
-                          <div className="text-sm font-semibold text-white">{item.name}</div>
-                          <div className="text-xs text-slate-400">{item.sku}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm font-semibold text-white">{formatMoney(calcStorefrontPrice(item))}</div>
-                          <div className="text-xs text-slate-400">{item.stock_qty} stock</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Button asChild className="mt-6 h-12 w-full">
-                    <Link to={`/m/${heroMarket.id}`}>
-                      Shop promoted market
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="feature-market-card">
-                  <div className="text-sm text-slate-300">No markets available yet.</div>
-                </div>
-              )}
             </div>
           </div>
         </section>
 
-        <section className="dashboard-card page-enter page-enter-delay-1">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="section-kicker">Discover items</div>
-              <h2 className="section-title mt-2">See products before opening any store</h2>
-              <p className="section-copy mt-3 max-w-2xl">
-                This section loads item previews directly onto the main page so the marketplace feels active right away.
-              </p>
-            </div>
-            <div className="relative w-full lg:max-w-md">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search markets, items, sku, address"
-                className="input-shell pl-11"
-              />
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {discoverItems.map((item, index) => (
-              <div
-                key={`${item.market_id}-${item.id}`}
-                className={`discover-item-card page-enter ${index > 1 ? "page-enter-delay-1" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="section-kicker">{item.market_name}</div>
-                    <div className="theme-ink mt-2 text-lg font-semibold">{item.name}</div>
-                    <div className="theme-muted mt-1 text-sm">{item.sku}</div>
-                  </div>
-                  <div className="status-chip status-good">{item.stock_qty}</div>
-                </div>
-                <div className="mt-5 flex items-end justify-between gap-3">
-                  <div>
-                    <div className="font-display theme-ink text-2xl font-semibold">{formatMoney(calcStorefrontPrice(item))}</div>
-                    <div className="theme-muted text-xs">ready to order</div>
-                  </div>
-                  <Button asChild variant="secondary" size="sm">
-                    <Link to={`/m/${item.market_id}`}>Open</Link>
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            {!discoverItems.length && (
-              <div className="discover-item-card theme-copy text-sm md:col-span-2 xl:col-span-3">
-                No item previews matched your search.
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="staff-strip page-enter page-enter-delay-2">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <section className="dashboard-card banner-test page-enter page-enter-delay-1">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="command-chip">
-                <Users className="h-3.5 w-3.5" />
-                Staff on this page
+                <Megaphone className="h-3.5 w-3.5" />
+                Test banner ad
               </div>
-              <h2 className="section-title mt-3 text-white">Staff and admin access belongs on the landing page too.</h2>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                Team members should not hunt for tools. From here they can enter the workspace, promote a market, and
-                manage operations with one click.
-              </p>
+              <h2 className="section-title mt-3">Banner slot: Smart Dispatch Boost Week</h2>
+              <p className="section-copy mt-2">This is a sample banner area for paid placement or seasonal campaigns.</p>
             </div>
-            <Button asChild size="lg" variant="secondary">
-              <Link to="/login">
-                Enter staff workspace
+            <Button asChild variant="secondary">
+              <Link to={promotedMarkets[0] ? `/m/${promotedMarkets[0].id}` : "/"}>
+                View sponsored market
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
           </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            {staffLanes.map((lane, index) => {
-              const Icon = lane.icon;
-              return (
-                <div key={lane.title} className={`staff-card page-enter ${index > 0 ? "page-enter-delay-1" : ""}`}>
-                  <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/12 bg-white/8">
-                    <Icon className="h-5 w-5 text-cyan-100" />
-                  </div>
-                  <div className="mt-5 text-xl font-semibold text-white">{lane.title}</div>
-                  <div className="mt-2 text-sm leading-7 text-slate-300">{lane.text}</div>
-                </div>
-              );
-            })}
-          </div>
         </section>
 
-        <section>
-          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <div className="section-kicker">{t("public.availableMarkets")}</div>
-              <h2 className="section-title mt-2">Browse markets with promoted ones first</h2>
-              <p className="section-copy mt-3 max-w-2xl">
-                Promoted markets use a different card treatment, and every card keeps the location, live offer, and
-                quick entry path readable.
-              </p>
+        {marketsQ.isLoading ? (
+          <div className="dashboard-card text-sm text-slate-600 dark:text-slate-300">{t("public.loadingMarkets")}</div>
+        ) : marketsQ.isError ? (
+          <div className="dashboard-card text-sm text-rose-700 dark:text-rose-100">{t("public.failedMarkets")}</div>
+        ) : (
+          <>
+            <MarketRail
+              title="Promoted markets"
+              subtitle="VIP, New, and Staff Pick placements"
+              markets={promotedMarkets}
+              autoScrollMs={5000}
+            />
+
+            <MarketRail
+              title="Regular markets"
+              subtitle="All other live storefronts"
+              markets={regularMarkets}
+              autoScrollMs={10000}
+            />
+          </>
+        )}
+
+        <section className="dashboard-card">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="subpanel p-5">
+              <Star className="h-5 w-5 text-cyan-700 dark:text-cyan-200" />
+              <div className="theme-ink mt-3 font-semibold">VIP Market</div>
+              <div className="theme-copy mt-2 text-sm">Premium placement with stronger visual treatment.</div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="status-chip">{filteredMarkets.length} visible</span>
-              <span className="status-chip">{featuredMarkets.length} promoted</span>
+            <div className="subpanel p-5">
+              <Store className="h-5 w-5 text-cyan-700 dark:text-cyan-200" />
+              <div className="theme-ink mt-3 font-semibold">New Market</div>
+              <div className="theme-copy mt-2 text-sm">Helps recently launched storefronts get early visibility.</div>
             </div>
-          </div>
-
-          {marketsQ.isLoading ? (
-            <div className="dashboard-card theme-copy p-8 text-sm">{t("public.loadingMarkets")}</div>
-          ) : marketsQ.isError ? (
-            <div className="dashboard-card p-8 text-sm text-rose-700 dark:text-rose-100">{t("public.failedMarkets")}</div>
-          ) : (
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {filteredMarkets.map((market, index) => (
-                <Card
-                  key={market.id}
-                  className={`${market.is_featured ? "market-card-featured" : ""} page-enter ${index > 1 ? "page-enter-delay-1" : ""}`}
-                >
-                  <CardContent className="grid gap-5 p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="section-kicker">{market.code}</span>
-                          {market.is_featured && <span className="status-chip status-good">{market.featured_badge || "Promoted"}</span>}
-                        </div>
-                        <h3 className="font-display theme-ink mt-2 text-3xl font-semibold tracking-[-0.05em]">{market.name}</h3>
-                      </div>
-                      <div className={`status-chip ${market.is_active ? "status-good" : "status-neutral"}`}>
-                        {market.is_active ? t("public.open") : t("public.closed")}
-                      </div>
-                    </div>
-
-                    <div className="subpanel p-4 text-sm leading-7">
-                      <div className="theme-muted mb-2 flex items-center gap-2 text-xs uppercase tracking-[0.2em]">
-                        <MapPin className="theme-icon h-3.5 w-3.5" />
-                        {t("public.location")}
-                      </div>
-                      <div className="theme-copy">{market.address || t("public.addressComingSoon")}</div>
-                    </div>
-
-                    <div className="subpanel p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="theme-ink font-medium">{market.active_promo ? "Live promotion" : "Storefront status"}</div>
-                        {market.active_promo ? (
-                          <TicketPercent className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                        ) : (
-                          <Store className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                        )}
-                      </div>
-                      <div className="theme-copy mt-2 text-sm">{formatPromoLabel(market.active_promo)}</div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {(market.item_preview ?? []).slice(0, 2).map((item) => (
-                        <span key={item.id} className="data-pill">
-                          {item.name}
-                        </span>
-                      ))}
-                      {!market.item_preview?.length && <span className="data-pill">Catalog preview soon</span>}
-                    </div>
-
-                    <Button asChild className="h-12">
-                      <Link to={`/m/${market.id}`}>
-                        {t("public.openMarket")}
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-
-              {!filteredMarkets.length && (
-                <div className="dashboard-card theme-copy p-8 text-sm">No storefronts matched your search.</div>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="dashboard-card page-enter">
-            <div className="section-kicker">How it works</div>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-cyan-50 text-cyan-700 dark:bg-cyan-300/10 dark:text-cyan-100">
-                <Store className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="theme-ink font-semibold">Pick market</div>
-                <div className="theme-copy text-sm">Start from promoted or standard storefronts.</div>
-              </div>
-            </div>
-          </div>
-          <div className="dashboard-card page-enter page-enter-delay-1">
-            <div className="section-kicker">Discovery</div>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-cyan-50 text-cyan-700 dark:bg-cyan-300/10 dark:text-cyan-100">
-                <ShoppingBasket className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="theme-ink font-semibold">See items early</div>
-                <div className="theme-copy text-sm">Main page previews make shopping faster.</div>
-              </div>
-            </div>
-          </div>
-          <div className="dashboard-card page-enter page-enter-delay-2">
-            <div className="section-kicker">Handoff</div>
-            <div className="mt-3 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-cyan-50 text-cyan-700 dark:bg-cyan-300/10 dark:text-cyan-100">
-                <Truck className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="theme-ink font-semibold">Checkout to dispatch</div>
-                <div className="theme-copy text-sm">The flow stays clean for both customers and staff.</div>
-              </div>
+            <div className="subpanel p-5">
+              <Users className="h-5 w-5 text-cyan-700 dark:text-cyan-200" />
+              <div className="theme-ink mt-3 font-semibold">Staff Pick</div>
+              <div className="theme-copy mt-2 text-sm">Editorial-style badge chosen by the operations team.</div>
             </div>
           </div>
         </section>

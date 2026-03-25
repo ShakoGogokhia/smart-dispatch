@@ -9,25 +9,66 @@ import { useProtectedAccess } from "@/src/hooks/use-protected-access";
 import { api } from "@/src/lib/api";
 import { getErrorMessage } from "@/src/lib/errors";
 import { formatDateTime, formatMoney, formatOrderStatus } from "@/src/lib/format";
+import { usePreferences } from "@/src/providers/app-providers";
 import type { DriverFeed, Order } from "@/src/types/api";
 import type { RootStackParamList } from "@/src/types/navigation";
 
 type DriverHubProps = NativeStackScreenProps<RootStackParamList, "DriverHub">;
 
+const copy = {
+  en: {
+    title: "Driver Hub",
+    subtitle: "Shift, offers, route-ready ETAs, and proof of delivery from one screen.",
+    onlyDrivers: "This workspace is only available for driver accounts.",
+    status: "Status",
+    offers: "Offers",
+    assigned: "Assigned",
+    driverStatus: "Driver status",
+    startShift: "Start shift",
+    endShift: "End shift",
+    sendLocation: "Send location ping",
+    incomingOffers: "Incoming offers",
+    assignedDeliveries: "Assigned deliveries",
+    proofNote: "Proof note",
+    proofPhoto: "Proof photo URL",
+    markDelivered: "Mark delivered",
+    markPickedUp: "Mark picked up",
+  },
+  ka: {
+    title: "მძღოლის ჰაბი",
+    subtitle: "ცვლა, შეთავაზებები, ETA და მიწოდების დადასტურება ერთ ეკრანზე.",
+    onlyDrivers: "ეს სივრცე მხოლოდ მძღოლის ანგარიშებისთვისაა.",
+    status: "სტატუსი",
+    offers: "შეთავაზებები",
+    assigned: "მინიჭებული",
+    driverStatus: "მძღოლის სტატუსი",
+    startShift: "ცვლის დაწყება",
+    endShift: "ცვლის დასრულება",
+    sendLocation: "ლოკაციის პინგი",
+    incomingOffers: "შემომავალი შეთავაზებები",
+    assignedDeliveries: "მინიჭებული მიწოდებები",
+    proofNote: "დადასტურების ჩანაწერი",
+    proofPhoto: "ფოტოს URL",
+    markDelivered: "მიტანა",
+    markPickedUp: "აყვანილია",
+  },
+} as const;
+
 function DriverOrderCard({
   order,
+  language,
   actions,
 }: {
   order: Order;
+  language: "en" | "ka";
   actions?: React.ReactNode;
 }) {
   return (
-    <SectionCard title={order.code} subtitle={order.dropoff_address || "No address set"} right={<Pill>{formatOrderStatus(order.status)}</Pill>}>
+    <SectionCard title={order.code} subtitle={order.dropoff_address || "No address set"} right={<Pill>{formatOrderStatus(order.status, language)}</Pill>}>
       <HelperText>Customer: {order.customer_name || order.customer?.name || "Unknown"}</HelperText>
       <HelperText>Phone: {order.customer_phone || "Not provided"}</HelperText>
-      {order.total != null ? <HelperText>Total: {formatMoney(order.total, "en")}</HelperText> : null}
-      {order.notes ? <HelperText>Notes: {order.notes}</HelperText> : null}
-      {order.items?.length ? <HelperText>Items: {order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}</HelperText> : null}
+      {order.total != null ? <HelperText>Total: {formatMoney(order.total, language)}</HelperText> : null}
+      <HelperText>ETA: {formatDateTime(order.eta_summary?.estimated_delivery_at, language)}</HelperText>
       {actions}
     </SectionCard>
   );
@@ -35,9 +76,13 @@ function DriverOrderCard({
 
 export function DriverHubScreen({ navigation }: DriverHubProps) {
   const access = useProtectedAccess("DriverHub");
+  const { language } = usePreferences();
+  const text = copy[language];
   const queryClient = useQueryClient();
   const [lat, setLat] = useState("41.7151");
   const [lng, setLng] = useState("44.8271");
+  const [proofNote, setProofNote] = useState("");
+  const [proofPhoto, setProofPhoto] = useState("");
   const roles = access.me?.roles ?? [];
   const isDriver = roles.includes("driver");
 
@@ -75,8 +120,14 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
 
   const actionM = useMutation({
     mutationFn: async ({ orderId, action }: { orderId: number; action: string }) =>
-      (await api.post(`/api/driver/orders/${orderId}/${action}`)).data,
-    onSuccess: refreshQueries,
+      action === "delivered"
+        ? (await api.post(`/api/driver/orders/${orderId}/delivered`, { proof_note: proofNote || null, proof_photo_url: proofPhoto || null })).data
+        : (await api.post(`/api/driver/orders/${orderId}/${action}`)).data,
+    onSuccess: async () => {
+      setProofNote("");
+      setProofPhoto("");
+      await refreshQueries();
+    },
   });
 
   const mutationError = useMemo(
@@ -94,8 +145,8 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
 
   if (!isDriver) {
     return (
-      <AppShell navigation={navigation} screenName="DriverHub" title="Driver Hub" subtitle="Driver tools are only available to driver accounts.">
-        <EmptyBlock message="This workspace is only available for driver accounts." />
+      <AppShell navigation={navigation} screenName="DriverHub" title={text.title} subtitle={text.subtitle}>
+        <EmptyBlock message={text.onlyDrivers} />
       </AppShell>
     );
   }
@@ -104,49 +155,44 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
   const driverStatus = feedQ.data?.driver?.status ?? "OFFLINE";
 
   return (
-    <AppShell navigation={navigation} screenName="DriverHub" title="Driver Hub" subtitle="Shift, offers, and assigned deliveries from one mobile screen.">
+    <AppShell navigation={navigation} screenName="DriverHub" title={text.title} subtitle={text.subtitle}>
       <StatGrid>
-        <StatCard label="Status" value={driverStatus} />
-        <StatCard label="Offers" value={(feedQ.data?.offered_orders ?? []).length} />
-        <StatCard label="Assigned" value={(feedQ.data?.assigned_orders ?? []).length} />
+        <StatCard label={text.status} value={driverStatus} />
+        <StatCard label={text.offers} value={(feedQ.data?.offered_orders ?? []).length} />
+        <StatCard label={text.assigned} value={(feedQ.data?.assigned_orders ?? []).length} />
       </StatGrid>
 
-      <SectionCard title="Driver status" subtitle={activeShift ? `Shift started ${formatDateTime(activeShift.started_at, "en")}` : "No active shift"}>
+      <SectionCard title={text.driverStatus} subtitle={activeShift ? `Shift started ${formatDateTime(activeShift.started_at, language)}` : "No active shift"}>
         <View style={styles.row}>
           <AppButton onPress={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
-            {startShiftM.isPending ? "Starting..." : "Start shift"}
+            {text.startShift}
           </AppButton>
           <AppButton variant="secondary" onPress={() => endShiftM.mutate()} disabled={!activeShift || endShiftM.isPending}>
-            {endShiftM.isPending ? "Ending..." : "End shift"}
+            {text.endShift}
           </AppButton>
         </View>
         <InputField label="Latitude" value={lat} onChangeText={setLat} keyboardType="numeric" />
         <InputField label="Longitude" value={lng} onChangeText={setLng} keyboardType="numeric" />
         <AppButton variant="secondary" onPress={() => pingM.mutate()} disabled={pingM.isPending}>
-          {pingM.isPending ? "Sending..." : "Send location ping"}
+          {text.sendLocation}
         </AppButton>
         {mutationError ? <HelperText tone="danger">{mutationError}</HelperText> : null}
       </SectionCard>
 
-      <SectionCard title="Incoming offers">
+      <SectionCard title={text.incomingOffers}>
         {feedQ.isLoading ? (
           <LoadingBlock message="Loading driver feed..." />
-        ) : (feedQ.data?.offered_orders ?? []).length === 0 ? (
-          <HelperText>No active offers right now.</HelperText>
         ) : (
           <View style={uiStyles.listGap}>
             {(feedQ.data?.offered_orders ?? []).map((order) => (
               <DriverOrderCard
                 key={order.id}
                 order={order}
+                language={language}
                 actions={
                   <View style={styles.row}>
-                    <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "accept" })}>
-                      Accept
-                    </AppButton>
-                    <AppButton variant="secondary" compact onPress={() => actionM.mutate({ orderId: order.id, action: "decline" })}>
-                      Decline
-                    </AppButton>
+                    <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "accept" })}>Accept</AppButton>
+                    <AppButton variant="secondary" compact onPress={() => actionM.mutate({ orderId: order.id, action: "decline" })}>Decline</AppButton>
                   </View>
                 }
               />
@@ -155,33 +201,32 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
         )}
       </SectionCard>
 
-      <SectionCard title="Assigned deliveries">
-        {(feedQ.data?.assigned_orders ?? []).length === 0 ? (
-          <HelperText>No deliveries assigned yet.</HelperText>
-        ) : (
-          <View style={uiStyles.listGap}>
-            {(feedQ.data?.assigned_orders ?? []).map((order) => (
-              <DriverOrderCard
-                key={order.id}
-                order={order}
-                actions={
-                  <View style={styles.row}>
-                    {order.status === "ASSIGNED" ? (
-                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "picked-up" })}>
-                        Mark picked up
-                      </AppButton>
-                    ) : null}
-                    {order.status === "PICKED_UP" ? (
-                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "delivered" })}>
-                        Mark delivered
-                      </AppButton>
-                    ) : null}
-                  </View>
-                }
-              />
-            ))}
-          </View>
-        )}
+      <SectionCard title={text.assignedDeliveries}>
+        <InputField label={text.proofNote} value={proofNote} onChangeText={setProofNote} />
+        <InputField label={text.proofPhoto} value={proofPhoto} onChangeText={setProofPhoto} />
+        <View style={uiStyles.listGap}>
+          {(feedQ.data?.assigned_orders ?? []).map((order) => (
+            <DriverOrderCard
+              key={order.id}
+              order={order}
+              language={language}
+              actions={
+                <View style={styles.row}>
+                  {order.status === "ASSIGNED" ? (
+                    <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "picked-up" })}>
+                      {text.markPickedUp}
+                    </AppButton>
+                  ) : null}
+                  {order.status === "PICKED_UP" ? (
+                    <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "delivered" })}>
+                      {text.markDelivered}
+                    </AppButton>
+                  ) : null}
+                </View>
+              }
+            />
+          ))}
+        </View>
       </SectionCard>
     </AppShell>
   );

@@ -7,7 +7,6 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\RoutePlan;
 use App\Models\RouteStop;
-use App\Models\Shift;
 use App\Services\RouteOptimizerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,7 +33,8 @@ class PlanningController extends Controller
 
         // unassigned orders
         $orders = Order::query()
-            ->whereIn('status', ['NEW','PLANNED'])
+            ->whereNull('assigned_driver_id')
+            ->whereIn('status', ['NEW', 'PLANNED', 'READY_FOR_PICKUP', 'MARKET_ACCEPTED'])
             ->orderByDesc('priority')
             ->orderBy('id')
             ->get();
@@ -65,7 +65,8 @@ class PlanningController extends Controller
             ->get();
 
         $orders = Order::query()
-            ->whereIn('status', ['NEW','PLANNED'])
+            ->whereNull('assigned_driver_id')
+            ->whereIn('status', ['NEW', 'PLANNED', 'READY_FOR_PICKUP', 'MARKET_ACCEPTED'])
             ->orderByDesc('priority')
             ->orderBy('id')
             ->get();
@@ -83,6 +84,8 @@ class PlanningController extends Controller
                     'driver_id' => $plan['driver_id'],
                     'route_date' => $date,
                     'status' => 'PLANNED',
+                    'planned_distance_km' => $plan['planned_distance_km'] ?? null,
+                    'planned_duration_min' => $plan['planned_duration_min'] ?? null,
                 ]);
 
                 foreach ($plan['stops'] as $stop) {
@@ -90,13 +93,17 @@ class PlanningController extends Controller
                         'route_plan_id' => $route->id,
                         'order_id' => $stop['order_id'],
                         'sequence' => $stop['sequence'],
+                        'eta' => $stop['eta'] ?? null,
                         'status' => 'PENDING',
                     ]);
                 }
 
                 // mark orders assigned
                 Order::whereIn('id', collect($plan['stops'])->pluck('order_id')->all())
-                    ->update(['status' => 'ASSIGNED']);
+                    ->update([
+                        'status' => 'ASSIGNED',
+                        'estimated_delivery_at' => now()->addMinutes((int) ($plan['planned_duration_min'] ?? 0)),
+                    ]);
 
                 $created[] = $route->load(['stops.order']);
             }

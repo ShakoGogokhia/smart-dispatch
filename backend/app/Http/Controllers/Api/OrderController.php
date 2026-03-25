@@ -11,6 +11,7 @@ use App\Models\OrderItem;
 use App\Services\OrderDispatchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -25,7 +26,7 @@ class OrderController extends Controller
         $user = $request->user();
         $query = Order::query()
             ->with([
-                'market:id,name,code,address',
+                'market:id,name,code,address,lat,lng',
                 'customer:id,name,email',
                 'assignedDriver.user:id,name,email',
                 'assignedDriver.latestPing',
@@ -43,7 +44,7 @@ class OrderController extends Controller
         }
 
         if ($user->hasRole('admin')) {
-            return response()->json($query->paginate(20));
+            return response()->json($this->decoratePaginator($query->paginate(20)));
         }
 
         if ($user->hasRole('driver') && $user->driver) {
@@ -53,7 +54,7 @@ class OrderController extends Controller
                     ->orWhere('offered_driver_id', $user->driver->id);
             });
 
-            return response()->json($query->paginate(20));
+            return response()->json($this->decoratePaginator($query->paginate(20)));
         }
 
         if ($user->hasAnyRole(['owner', 'staff'])) {
@@ -64,12 +65,12 @@ class OrderController extends Controller
 
             $query->whereIn('market_id', $marketIds);
 
-            return response()->json($query->paginate(20));
+            return response()->json($this->decoratePaginator($query->paginate(20)));
         }
 
         $query->where('customer_user_id', $user->id);
 
-        return response()->json($query->paginate(20));
+        return response()->json($this->decoratePaginator($query->paginate(20)));
     }
 
     public function store(Request $request)
@@ -86,6 +87,7 @@ class OrderController extends Controller
             'customer_phone' => ['nullable', 'string', 'max:50'],
             'promo_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
+            'weather_condition' => ['nullable', 'string', 'in:clear,rain,snow,storm,fog'],
             'time_window_start' => ['nullable', 'date'],
             'time_window_end' => ['nullable', 'date'],
             'priority' => ['nullable', 'integer', 'min:1', 'max:5'],
@@ -98,10 +100,7 @@ class OrderController extends Controller
             'items.*.price' => ['required_with:items', 'numeric', 'min:0'],
         ]);
 
-        $market = null;
-        if (!empty($data['market_id'])) {
-            $market = Market::findOrFail($data['market_id']);
-        }
+        $market = !empty($data['market_id']) ? Market::findOrFail($data['market_id']) : null;
 
         $itemsPayload = collect($data['items'] ?? [])->map(function (array $item) {
             if (!empty($item['item_id'])) {
@@ -131,7 +130,6 @@ class OrderController extends Controller
         $subtotal = (float) $itemsPayload->sum('line_total');
         $discountTotal = 0.0;
         $total = max(0, $subtotal - $discountTotal);
-
         $nextId = (int) (Order::max('id') ?? 0) + 1;
 
         $order = DB::transaction(function () use ($request, $data, $market, $itemsPayload, $subtotal, $discountTotal, $total, $nextId) {
@@ -139,8 +137,8 @@ class OrderController extends Controller
                 'market_id' => $market?->id,
                 'customer_user_id' => $request->user()?->id,
                 'code' => 'ORD-' . str_pad((string) $nextId, 6, '0', STR_PAD_LEFT),
-                'pickup_lat' => $data['pickup_lat'] ?? null,
-                'pickup_lng' => $data['pickup_lng'] ?? null,
+                'pickup_lat' => $data['pickup_lat'] ?? $market?->lat,
+                'pickup_lng' => $data['pickup_lng'] ?? $market?->lng,
                 'dropoff_lat' => $data['dropoff_lat'],
                 'dropoff_lng' => $data['dropoff_lng'],
                 'pickup_address' => $data['pickup_address'] ?? $market?->address ?? $market?->name,
@@ -149,6 +147,7 @@ class OrderController extends Controller
                 'customer_phone' => $data['customer_phone'] ?? null,
                 'promo_code' => $data['promo_code'] ?? null,
                 'notes' => $data['notes'] ?? null,
+                'weather_condition' => $data['weather_condition'] ?? 'clear',
                 'time_window_start' => $data['time_window_start'] ?? null,
                 'time_window_end' => $data['time_window_end'] ?? null,
                 'priority' => $data['priority'] ?? 2,
@@ -157,6 +156,8 @@ class OrderController extends Controller
                 'discount_total' => $discountTotal,
                 'total' => $total,
                 'status' => $market ? 'MARKET_PENDING' : 'READY_FOR_PICKUP',
+                'promised_at' => now()->addMinutes($market ? 75 : 45),
+                'estimated_delivery_at' => now()->addMinutes($market ? 60 : 35),
             ]);
 
             $itemsPayload->each(function (array $item) use ($order) {
@@ -190,7 +191,7 @@ class OrderController extends Controller
         }
 
         return response()->json(
-            $order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items']),
+            $this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items'])),
             201,
         );
     }
@@ -199,7 +200,7 @@ class OrderController extends Controller
     {
         abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
 
-        return response()->json($order->load([
+        return response()->json($this->decorateOrder($order->load([
             'events',
             'items',
             'market',
@@ -207,7 +208,7 @@ class OrderController extends Controller
             'assignedDriver.user',
             'assignedDriver.latestPing',
             'offeredDriver.user',
-        ]));
+        ])));
     }
 
     public function update(Request $request, Order $order)
@@ -225,6 +226,7 @@ class OrderController extends Controller
             'customer_phone' => ['nullable', 'string', 'max:50'],
             'promo_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
+            'weather_condition' => ['nullable', 'string', 'in:clear,rain,snow,storm,fog'],
             'time_window_start' => ['nullable', 'date'],
             'time_window_end' => ['nullable', 'date'],
             'priority' => ['nullable', 'integer', 'min:1', 'max:5'],
@@ -263,7 +265,7 @@ class OrderController extends Controller
 
         $order->update($data);
 
-        return response()->json($order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items']));
+        return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items'])));
     }
 
     public function marketAccept(Request $request, Order $order)
@@ -277,6 +279,7 @@ class OrderController extends Controller
         $order->update([
             'status' => 'MARKET_ACCEPTED',
             'market_accepted_at' => now(),
+            'estimated_delivery_at' => now()->addMinutes(50),
         ]);
 
         OrderEvent::create([
@@ -288,7 +291,7 @@ class OrderController extends Controller
             ],
         ]);
 
-        return response()->json($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items']));
+        return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
     }
 
     public function markReady(Request $request, Order $order)
@@ -302,6 +305,7 @@ class OrderController extends Controller
         $order->update([
             'status' => 'READY_FOR_PICKUP',
             'ready_for_pickup_at' => now(),
+            'estimated_delivery_at' => now()->addMinutes(35),
         ]);
 
         OrderEvent::create([
@@ -315,7 +319,129 @@ class OrderController extends Controller
 
         $this->dispatchService->offerOrder($order->fresh());
 
-        return response()->json($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items']));
+        return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
+    }
+
+    public function requestCancel(Request $request, Order $order)
+    {
+        abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
+
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if (!in_array($order->status, ['MARKET_PENDING', 'MARKET_ACCEPTED', 'READY_FOR_PICKUP'], true)) {
+            return response()->json(['message' => 'This order can no longer be cancelled automatically'], 422);
+        }
+
+        $order->update([
+            'status' => 'CANCELLED',
+            'cancellation_requested_at' => now(),
+            'cancellation_reason' => $data['reason'] ?? 'Customer request',
+        ]);
+
+        OrderEvent::create([
+            'order_id' => $order->id,
+            'type' => 'CANCELLATION_REQUESTED',
+            'payload' => [
+                'reason' => $data['reason'] ?? 'Customer request',
+                'requested_by' => $request->user()?->id,
+            ],
+        ]);
+
+        return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
+    }
+
+    public function rate(Request $request, Order $order)
+    {
+        abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
+
+        if ($order->status !== 'DELIVERED') {
+            return response()->json(['message' => 'You can only rate delivered orders'], 422);
+        }
+
+        $data = $request->validate([
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'feedback' => ['nullable', 'string'],
+        ]);
+
+        $order->update([
+            'customer_rating' => $data['rating'],
+            'customer_feedback' => $data['feedback'] ?? null,
+        ]);
+
+        OrderEvent::create([
+            'order_id' => $order->id,
+            'type' => 'CUSTOMER_RATED',
+            'payload' => [
+                'rating' => $data['rating'],
+                'feedback' => $data['feedback'] ?? null,
+            ],
+        ]);
+
+        return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
+    }
+
+    public function reorder(Request $request, Order $order)
+    {
+        abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
+        $order->loadMissing('items');
+
+        $clone = DB::transaction(function () use ($request, $order) {
+            $nextId = (int) (Order::max('id') ?? 0) + 1;
+            $newOrder = Order::create([
+                'market_id' => $order->market_id,
+                'customer_user_id' => $request->user()?->id,
+                'code' => 'ORD-' . str_pad((string) $nextId, 6, '0', STR_PAD_LEFT),
+                'pickup_lat' => $order->pickup_lat,
+                'pickup_lng' => $order->pickup_lng,
+                'dropoff_lat' => $order->dropoff_lat,
+                'dropoff_lng' => $order->dropoff_lng,
+                'pickup_address' => $order->pickup_address,
+                'dropoff_address' => $order->dropoff_address,
+                'customer_name' => $order->customer_name,
+                'customer_phone' => $order->customer_phone,
+                'promo_code' => $order->promo_code,
+                'notes' => $order->notes,
+                'priority' => $order->priority,
+                'size' => $order->size,
+                'subtotal' => $order->subtotal,
+                'discount_total' => $order->discount_total,
+                'total' => $order->total,
+                'status' => $order->market_id ? 'MARKET_PENDING' : 'READY_FOR_PICKUP',
+                'promised_at' => now()->addMinutes($order->market_id ? 75 : 45),
+                'estimated_delivery_at' => now()->addMinutes($order->market_id ? 60 : 35),
+            ]);
+
+            foreach ($order->items as $item) {
+                OrderItem::create([
+                    'order_id' => $newOrder->id,
+                    'item_id' => $item->item_id,
+                    'name' => $item->name,
+                    'sku' => $item->sku,
+                    'qty' => $item->qty,
+                    'unit_price' => $item->unit_price,
+                    'line_total' => $item->line_total,
+                ]);
+            }
+
+            OrderEvent::create([
+                'order_id' => $newOrder->id,
+                'type' => 'REORDER_CREATED',
+                'payload' => ['source_order_id' => $order->id],
+            ]);
+
+            return $newOrder;
+        });
+
+        if (!$clone->market_id) {
+            $this->dispatchService->offerOrder($clone);
+        }
+
+        return response()->json(
+            $this->decorateOrder($clone->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])),
+            201,
+        );
     }
 
     private function canAccessOrder(Request $request, Order $order): bool
@@ -382,5 +508,92 @@ class OrderController extends Controller
                     ->orWhereHas('users', fn (Builder $users) => $users->where('users.id', $userId));
             })
             ->exists();
+    }
+
+    private function decoratePaginator(LengthAwarePaginator $paginator): LengthAwarePaginator
+    {
+        $paginator->setCollection(
+            $paginator->getCollection()->map(fn (Order $order) => $this->decorateOrder($order))
+        );
+
+        return $paginator;
+    }
+
+    private function decorateOrder(Order $order): Order
+    {
+        $order->setAttribute('timeline', $this->buildTimeline($order));
+        $order->setAttribute('eta_summary', $this->buildEtaSummary($order));
+        $order->setAttribute('delivery_proof', [
+            'note' => $order->proof_of_delivery_note,
+            'photo_url' => $order->proof_of_delivery_photo_url,
+        ]);
+        $order->setAttribute('driver_compensation', [
+            'distance_km' => $order->driver_distance_km,
+            'weather_multiplier' => $order->driver_weather_multiplier,
+            'earning_amount' => $order->driver_earning_amount,
+            'weather_condition' => $order->weather_condition,
+        ]);
+        $order->setAttribute('rating_summary', [
+            'rating' => $order->customer_rating,
+            'feedback' => $order->customer_feedback,
+        ]);
+        $order->setAttribute('actions', [
+            'can_cancel' => in_array($order->status, ['MARKET_PENDING', 'MARKET_ACCEPTED', 'READY_FOR_PICKUP'], true),
+            'can_rate' => $order->status === 'DELIVERED',
+            'can_reorder' => $order->relationLoaded('items') ? $order->items->isNotEmpty() : $order->items()->exists(),
+        ]);
+
+        return $order;
+    }
+
+    private function buildTimeline(Order $order): array
+    {
+        return array_values(array_filter([
+            [
+                'key' => 'created',
+                'label' => 'Order created',
+                'at' => $order->created_at?->toDateTimeString(),
+                'done' => true,
+            ],
+            [
+                'key' => 'market_accepted',
+                'label' => 'Market accepted',
+                'at' => $order->market_accepted_at?->toDateTimeString(),
+                'done' => (bool) $order->market_accepted_at,
+            ],
+            [
+                'key' => 'ready',
+                'label' => 'Ready for pickup',
+                'at' => $order->ready_for_pickup_at?->toDateTimeString(),
+                'done' => (bool) $order->ready_for_pickup_at,
+            ],
+            [
+                'key' => 'accepted',
+                'label' => 'Driver accepted',
+                'at' => $order->accepted_at?->toDateTimeString(),
+                'done' => (bool) $order->accepted_at,
+            ],
+            [
+                'key' => 'picked_up',
+                'label' => 'Picked up',
+                'at' => $order->picked_up_at?->toDateTimeString(),
+                'done' => (bool) $order->picked_up_at,
+            ],
+            [
+                'key' => 'delivered',
+                'label' => 'Delivered',
+                'at' => $order->delivered_at?->toDateTimeString(),
+                'done' => (bool) $order->delivered_at,
+            ],
+        ], fn (array $step) => $step['done'] || in_array($step['key'], ['created', 'delivered'], true)));
+    }
+
+    private function buildEtaSummary(Order $order): array
+    {
+        return [
+            'estimated_delivery_at' => $order->estimated_delivery_at?->toDateTimeString(),
+            'promised_at' => $order->promised_at?->toDateTimeString(),
+            'is_late' => (bool) ($order->promised_at && !$order->delivered_at && now()->gt($order->promised_at)),
+        ];
     }
 }

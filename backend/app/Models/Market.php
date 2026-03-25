@@ -3,11 +3,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
 class Market extends Model
 {
     use HasFactory;
+
+    protected static ?bool $hasFeaturedColumns = null;
     
 
     protected $fillable = [
@@ -15,6 +18,8 @@ class Market extends Model
         'code',
         'owner_user_id',
         'address',
+        'lat',
+        'lng',
         'is_active',
         'is_featured',
         'featured_badge',
@@ -26,6 +31,8 @@ class Market extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
+        'lat' => 'decimal:7',
+        'lng' => 'decimal:7',
     ];
 
     protected $appends = [
@@ -61,5 +68,20 @@ class Market extends Model
         }
 
         return Storage::disk('public')->url($this->logo_path);
+    }
+
+    public static function hasFeaturedColumns(): bool
+    {
+        if (static::$hasFeaturedColumns !== null) {
+            return static::$hasFeaturedColumns;
+        }
+
+        static::$hasFeaturedColumns =
+            Schema::hasColumn('markets', 'is_featured') &&
+            Schema::hasColumn('markets', 'featured_badge') &&
+            Schema::hasColumn('markets', 'featured_headline') &&
+            Schema::hasColumn('markets', 'featured_copy');
+
+        return static::$hasFeaturedColumns;
     }
 }

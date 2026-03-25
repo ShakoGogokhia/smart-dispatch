@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { normalizeRoles } from "@/lib/session";
 
-export function useMe() {
+export function useMe(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["me"],
     queryFn: async () => {
@@ -13,6 +13,7 @@ export function useMe() {
         language: data?.language === "ka" ? "ka" : "en",
       };
     },
+    enabled: options?.enabled ?? true,
     retry: false,
   });
 }

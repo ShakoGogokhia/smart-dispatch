@@ -10,10 +10,34 @@ use Illuminate\Database\Eloquent\Collection;
 
 class MarketController extends Controller
 {
+    protected function applyFeaturedOrdering($query)
+    {
+        if (Market::hasFeaturedColumns()) {
+            $query->orderByDesc('is_featured');
+        }
+
+        return $query;
+    }
+
+    protected function featuredAttributes(array $data): array
+    {
+        if (!Market::hasFeaturedColumns()) {
+            return [];
+        }
+
+        return [
+            'is_featured' => $data['is_featured'] ?? false,
+            'featured_badge' => $data['featured_badge'] ?? null,
+            'featured_headline' => $data['featured_headline'] ?? null,
+            'featured_copy' => $data['featured_copy'] ?? null,
+        ];
+    }
+
     public function index(Request $request)
     {
         return $this->serializeMarkets(
-            Market::with('owner:id,name,email')
+            $this->applyFeaturedOrdering(
+                Market::with('owner:id,name,email')
                 ->withCount(['items as active_items_count' => function ($query) {
                     $query->where('is_active', true);
                 }])
@@ -23,7 +47,7 @@ class MarketController extends Controller
                         ->latest()
                         ->limit(1);
                 }])
-                ->orderByDesc('is_featured')
+            )
                 ->latest()
                 ->get()
         );
@@ -43,7 +67,7 @@ class MarketController extends Controller
             $q->where('users.id', $user->id);
         });
 
-        $markets = Market::query()
+        $markets = $this->applyFeaturedOrdering(Market::query())
             ->whereIn('id', $owned->pluck('id')->merge($staff->pluck('id'))->unique())
             ->with('owner:id,name,email')
             ->withCount(['items as active_items_count' => function ($query) {
@@ -55,7 +79,6 @@ class MarketController extends Controller
                     ->latest()
                     ->limit(1);
             }])
-            ->orderByDesc('is_featured')
             ->orderBy('name')
             ->get();
 
@@ -69,6 +92,8 @@ class MarketController extends Controller
             'code' => ['required', 'string', 'max:50', 'unique:markets,code'],
             'owner_user_id' => ['required', 'exists:users,id'],
             'address' => ['nullable', 'string', 'max:255'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180'],
             'is_active' => ['nullable', 'boolean'],
             'is_featured' => ['nullable', 'boolean'],
             'featured_badge' => ['nullable', 'string', 'max:40'],
@@ -81,11 +106,10 @@ class MarketController extends Controller
             'code' => $data['code'],
             'owner_user_id' => $data['owner_user_id'],
             'address' => $data['address'] ?? null,
+            'lat' => $data['lat'] ?? null,
+            'lng' => $data['lng'] ?? null,
             'is_active' => $data['is_active'] ?? true,
-            'is_featured' => $data['is_featured'] ?? false,
-            'featured_badge' => $data['featured_badge'] ?? null,
-            'featured_headline' => $data['featured_headline'] ?? null,
-            'featured_copy' => $data['featured_copy'] ?? null,
+            ...$this->featuredAttributes($data),
         ]);
 
         // owner role
@@ -103,6 +127,8 @@ class MarketController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'code' => ['sometimes', 'string', 'max:50', 'unique:markets,code,' . $market->id],
             'address' => ['nullable', 'string', 'max:255'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180'],
             'is_active' => ['sometimes', 'boolean'],
             'is_featured' => ['sometimes', 'boolean'],
             'featured_badge' => ['nullable', 'string', 'max:40'],
@@ -110,7 +136,10 @@ class MarketController extends Controller
             'featured_copy' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $market->update($data);
+        $market->update([
+            ...collect($data)->except(['is_featured', 'featured_badge', 'featured_headline', 'featured_copy'])->all(),
+            ...$this->featuredAttributes($data),
+        ]);
         return $this->serializeMarket(
             $market
                 ->load([
@@ -214,11 +243,13 @@ public function addStaff(Request $request, Market $market)
             'name' => $market->name,
             'code' => $market->code,
             'address' => $market->address,
+            'lat' => $market->lat !== null ? (float) $market->lat : null,
+            'lng' => $market->lng !== null ? (float) $market->lng : null,
             'is_active' => (bool) $market->is_active,
-            'is_featured' => (bool) $market->is_featured,
-            'featured_badge' => $market->featured_badge,
-            'featured_headline' => $market->featured_headline,
-            'featured_copy' => $market->featured_copy,
+            'is_featured' => Market::hasFeaturedColumns() ? (bool) $market->is_featured : false,
+            'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
+            'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
+            'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
             'owner_user_id' => $market->owner_user_id,
             'owner' => $market->owner,
             'logo_path' => $market->logo_path,

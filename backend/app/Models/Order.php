@@ -22,6 +22,7 @@ class Order extends Model
         'customer_phone',
         'promo_code',
         'notes',
+        'weather_condition',
         'time_window_start',
         'time_window_end',
         'priority',
@@ -36,6 +37,17 @@ class Order extends Model
         'accepted_at',
         'picked_up_at',
         'delivered_at',
+        'promised_at',
+        'estimated_delivery_at',
+        'driver_distance_km',
+        'driver_weather_multiplier',
+        'driver_earning_amount',
+        'cancellation_requested_at',
+        'cancellation_reason',
+        'proof_of_delivery_note',
+        'proof_of_delivery_photo_url',
+        'customer_rating',
+        'customer_feedback',
     ];
 
     protected $casts = [
@@ -47,6 +59,12 @@ class Order extends Model
         'accepted_at' => 'datetime',
         'picked_up_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'promised_at' => 'datetime',
+        'estimated_delivery_at' => 'datetime',
+        'cancellation_requested_at' => 'datetime',
+        'driver_distance_km' => 'decimal:2',
+        'driver_weather_multiplier' => 'decimal:2',
+        'driver_earning_amount' => 'decimal:2',
     ];
 
     public function events()

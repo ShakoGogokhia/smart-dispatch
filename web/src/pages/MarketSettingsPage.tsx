@@ -53,6 +53,8 @@ export default function MarketSettingsPage() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [isFeatured, setIsFeatured] = useState(false);
   const [featuredBadge, setFeaturedBadge] = useState("");
@@ -63,6 +65,8 @@ export default function MarketSettingsPage() {
     if (!market) return;
     setName(market.name ?? "");
     setAddress(market.address ?? "");
+    setLat(market.lat != null ? String(market.lat) : "");
+    setLng(market.lng != null ? String(market.lng) : "");
     setIsActive(typeof market.is_active === "boolean" ? market.is_active : true);
     setIsFeatured(!!market.is_featured);
     setFeaturedBadge(market.featured_badge ?? "");
@@ -77,6 +81,8 @@ export default function MarketSettingsPage() {
       const payload = {
         name: name.trim(),
         address: address.trim() || null,
+        lat: lat.trim() ? Number(lat) : null,
+        lng: lng.trim() ? Number(lng) : null,
         is_active: isActive,
         is_featured: isFeatured,
         featured_badge: featuredBadge.trim() || null,
@@ -270,6 +276,14 @@ export default function MarketSettingsPage() {
                       <div className="field-group">
                         <Label>Address</Label>
                         <Input value={address} onChange={(e) => setAddress(e.target.value)} />
+                      </div>
+                      <div className="field-group">
+                        <Label>Market latitude</Label>
+                        <Input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="41.7151" />
+                      </div>
+                      <div className="field-group">
+                        <Label>Market longitude</Label>
+                        <Input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="44.8271" />
                       </div>
                       <div className="field-group">
                         <Label>Featured badge</Label>

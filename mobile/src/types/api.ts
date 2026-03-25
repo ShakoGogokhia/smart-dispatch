@@ -24,6 +24,8 @@ export type Vehicle = {
 export type DriverLite = {
   id: number;
   status: string;
+  balance?: number | string;
+  total_earned?: number | string;
   user?: UserLite;
   vehicle?: Vehicle | null;
   active_shift?: { id: number; started_at: string } | null;
@@ -41,6 +43,8 @@ export type MarketLite = {
   name: string;
   code: string;
   address?: string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   is_active?: boolean;
   owner_user_id?: number;
   owner?: UserLite;
@@ -86,6 +90,31 @@ export type Order = {
   assigned_driver?: DriverLite | null;
   offered_driver?: DriverLite | null;
   items?: OrderItem[];
+  timeline?: Array<{ key: string; label: string; at?: string | null; done: boolean }>;
+  eta_summary?: {
+    estimated_delivery_at?: string | null;
+    promised_at?: string | null;
+    is_late?: boolean;
+  };
+  delivery_proof?: {
+    note?: string | null;
+    photo_url?: string | null;
+  };
+  driver_compensation?: {
+    distance_km?: number | string | null;
+    weather_multiplier?: number | string | null;
+    earning_amount?: number | string | null;
+    weather_condition?: string | null;
+  };
+  rating_summary?: {
+    rating?: number | null;
+    feedback?: string | null;
+  };
+  actions?: {
+    can_cancel?: boolean;
+    can_rate?: boolean;
+    can_reorder?: boolean;
+  };
 };
 
 export type RouteStop = {
@@ -95,6 +124,7 @@ export type RouteStop = {
   sequence: number;
   status: string;
   eta?: string | null;
+  dispatch_score?: number;
   order?: { code: string; dropoff_address?: string | null };
 };
 
@@ -131,6 +161,29 @@ export type AnalyticsSummary = {
     cancelled: number;
   };
   routes_planned: number;
+  on_time_rate?: number | null;
+  trend?: Array<{ date: string; total: number; delivered: number; cancelled: number }>;
+  by_market?: Array<{ market_id: number; market_name: string; market_code: string; orders: number; delivered: number; revenue: number }>;
+  by_driver?: Array<{ driver_id: number; driver_name: string; delivered: number; failed: number; assigned: number; avg_rating: number }>;
+  funnel?: Record<string, number>;
+};
+
+export type LiveAlertPayload = {
+  late_orders: Order[];
+  idle_drivers: DriverLite[];
+  stale_tracking: DriverLite[];
+};
+
+export type LiveHistoryPayload = {
+  since?: string;
+  history: Array<{
+    driver_id: number;
+    points: Array<{
+      lat: number | string;
+      lng: number | string;
+      created_at?: string;
+    }>;
+  }>;
 };
 
 export type Item = {

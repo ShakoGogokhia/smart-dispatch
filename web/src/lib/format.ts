@@ -1,3 +1,5 @@
+import { repairMojibake } from "@/lib/text";
+
 function getCurrentLanguage() {
   if (typeof document !== "undefined" && document.documentElement.lang === "ka") {
     return "ka";
@@ -28,7 +30,9 @@ export function formatMoney(value: number | string | null | undefined, currency 
 }
 
 export function formatDateTime(value?: string | null) {
-  if (!value) return getCurrentLanguage() === "ka" ? "დრო არ არის მითითებული" : "No timestamp";
+  if (!value) {
+    return getCurrentLanguage() === "ka" ? repairMojibake("áƒ“áƒ áƒ áƒáƒ  áƒáƒ áƒ˜áƒ¡ áƒ›áƒ˜áƒ—áƒ˜áƒ—áƒ”áƒ‘áƒ£áƒšáƒ˜") : "No timestamp";
+  }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -64,27 +68,28 @@ export function getOrderStatusTone(status?: string | null) {
 
 export function formatOrderStatus(status?: string | null) {
   const ka = getCurrentLanguage() === "ka";
+  const kaText = (value: string) => repairMojibake(value);
 
   switch ((status ?? "").toUpperCase()) {
     case "MARKET_PENDING":
-      return ka ? "მარკეტს ელოდება" : "Waiting for market";
+      return ka ? kaText("áƒ›áƒáƒ áƒ™áƒ”áƒ¢áƒ¡ áƒ”áƒšáƒáƒ“áƒ”áƒ‘áƒ") : "Waiting for market";
     case "MARKET_ACCEPTED":
-      return ka ? "მარკეტმა მიიღო" : "Market accepted";
+      return ka ? kaText("áƒ›áƒáƒ áƒ™áƒ”áƒ¢áƒ›áƒ áƒ›áƒ˜áƒ˜áƒ¦áƒ") : "Market accepted";
     case "READY_FOR_PICKUP":
-      return ka ? "აყვანისთვის მზადაა" : "Ready for pickup";
+      return ka ? kaText("áƒáƒ§áƒ•áƒáƒœáƒ˜áƒ¡áƒ—áƒ•áƒ˜áƒ¡ áƒ›áƒ–áƒáƒ“áƒáƒ") : "Ready for pickup";
     case "OFFERED":
-      return ka ? "მძღოლს შეთავაზება გაეგზავნა" : "Driver offer sent";
+      return ka ? kaText("áƒ›áƒ«áƒ¦áƒáƒšáƒ¡ áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ áƒ’áƒáƒ”áƒ’áƒ–áƒáƒ•áƒœáƒ") : "Driver offer sent";
     case "ASSIGNED":
-      return ka ? "მძღოლი მინიჭებულია" : "Driver assigned";
+      return ka ? kaText("áƒ›áƒ«áƒ¦áƒáƒšáƒ˜ áƒ›áƒ˜áƒœáƒ˜áƒ­áƒ”áƒ‘áƒ£áƒšáƒ˜áƒ") : "Driver assigned";
     case "PICKED_UP":
-      return ka ? "აღებულია" : "Picked up";
+      return ka ? kaText("áƒáƒ¦áƒ”áƒ‘áƒ£áƒšáƒ˜áƒ") : "Picked up";
     case "DELIVERED":
-      return ka ? "მიტანილია" : "Delivered";
+      return ka ? kaText("áƒ›áƒ˜áƒ¢áƒáƒœáƒ˜áƒšáƒ˜áƒ") : "Delivered";
     case "FAILED":
-      return ka ? "ვერ შესრულდა" : "Failed";
+      return ka ? kaText("áƒ•áƒ”áƒ  áƒ¨áƒ”áƒ¡áƒ áƒ£áƒšáƒ“áƒ") : "Failed";
     case "CANCELLED":
-      return ka ? "გაუქმებულია" : "Cancelled";
+      return ka ? kaText("áƒ’áƒáƒ£áƒ¥áƒ›áƒ”áƒ‘áƒ£áƒšáƒ˜áƒ") : "Cancelled";
     default:
-      return status?.trim() || (ka ? "უცნობი" : "Unknown");
+      return status?.trim() || (ka ? kaText("áƒ£áƒªáƒœáƒáƒ‘áƒ˜") : "Unknown");
   }
 }

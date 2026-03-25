@@ -14,6 +14,7 @@ type RouteStop = {
   sequence: number;
   status: string;
   eta?: string | null;
+  dispatch_score?: number;
   order?: { code: string; dropoff_address?: string | null };
 };
 
@@ -104,6 +105,7 @@ export default function RoutesPage() {
                       <TableHead>{t("routes.address")}</TableHead>
                       <TableHead>{t("common.status")}</TableHead>
                       <TableHead>{t("routes.eta")}</TableHead>
+                      <TableHead>Score</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -114,11 +116,12 @@ export default function RoutesPage() {
                         <TableCell>{stop.order?.dropoff_address || t("orders.noAddress")}</TableCell>
                         <TableCell>{stop.status}</TableCell>
                         <TableCell>{formatDateTime(stop.eta)}</TableCell>
+                        <TableCell>{stop.dispatch_score ?? "-"}</TableCell>
                       </TableRow>
                     ))}
                     {(route.stops ?? []).length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500">
+                        <TableCell colSpan={6} className="py-8 text-center text-sm text-slate-500">
                           {t("routes.noStops")}
                         </TableCell>
                       </TableRow>

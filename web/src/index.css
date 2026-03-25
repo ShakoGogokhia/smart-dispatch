@@ -145,6 +145,7 @@
 @layer components {
   .font-display {
     font-family: var(--font-display);
+    overflow-wrap: anywhere;
   }
 
   html[lang="ka"] .font-display {
@@ -248,6 +249,44 @@
     @apply p-5 md:p-6;
   }
 
+  .market-rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(280px, 340px);
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .market-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .market-rail-card {
+    @apply rounded-[26px] border p-5;
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(226, 232, 240, 0.86);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .dark .market-rail-card {
+    background: rgba(15, 22, 33, 0.92);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .banner-test {
+    background:
+      linear-gradient(120deg, rgba(8, 145, 178, 0.16), rgba(251, 191, 36, 0.14)),
+      rgba(255, 255, 255, 0.85);
+  }
+
+  .dark .banner-test {
+    background:
+      linear-gradient(120deg, rgba(8, 145, 178, 0.22), rgba(251, 191, 36, 0.12)),
+      rgba(15, 22, 33, 0.9);
+  }
+
   .paper-panel-muted,
   .control-card,
   .frost-panel,
@@ -311,6 +350,8 @@
 
   .section-title {
     @apply font-display text-3xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-white md:text-5xl;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
   }
 
   .section-copy {
@@ -319,6 +360,8 @@
 
   .intro-title {
     @apply font-display mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-white md:text-4xl;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
   }
 
   .intro-copy {
@@ -330,6 +373,7 @@
     color: #0f5d68;
     background: rgba(88, 181, 196, 0.12);
     border-color: rgba(88, 181, 196, 0.18);
+    white-space: normal;
   }
 
   .dark .command-chip {
@@ -343,6 +387,8 @@
     color: #1e293b;
     background: rgba(255, 255, 255, 0.88);
     border-color: rgba(203, 213, 225, 0.86);
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .dark .status-chip {
@@ -396,6 +442,8 @@
 
   .panel-title {
     @apply font-display text-2xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white md:text-3xl;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
   }
 
   .panel-copy {
@@ -411,6 +459,8 @@
     color: #475569;
     background: rgba(255, 255, 255, 0.86);
     border-color: rgba(203, 213, 225, 0.8);
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .dark .data-pill {
@@ -620,6 +670,13 @@
   html[lang="ka"] .command-chip {
     letter-spacing: 0.06em;
     text-transform: none;
+  }
+
+  html[lang="ka"] .section-title,
+  html[lang="ka"] .intro-title,
+  html[lang="ka"] .panel-title {
+    letter-spacing: -0.02em;
+    line-height: 1.14;
   }
 
   html[lang="ka"] .status-chip,

@@ -59,6 +59,9 @@ class RouteDispatchController extends Controller
                 'status' => 'PENDING',
             ]);
 
+            $this->refreshRouteMetrics($routePlan);
+            $this->refreshRouteMetrics($targetRoute);
+
             return response()->json([
                 'from_route' => $routePlan->load('stops.order'),
                 'to_route' => $targetRoute->load('stops.order'),
@@ -96,6 +99,7 @@ class RouteDispatchController extends Controller
             }
 
             $this->normalizeSequences($routePlan->id);
+            $this->refreshRouteMetrics($routePlan);
 
             return response()->json($routePlan->fresh()->load('stops.order'));
         });
@@ -117,6 +121,7 @@ class RouteDispatchController extends Controller
             $stop->delete();
 
             $this->normalizeSequences($routePlan->id);
+            $this->refreshRouteMetrics($routePlan);
 
             // Optional: if order was assigned only because of this stop, return it to PLANNED
             Order::where('id', $orderId)->where('status', 'ASSIGNED')->update(['status' => 'PLANNED']);
@@ -135,5 +140,55 @@ class RouteDispatchController extends Controller
             }
             $seq++;
         }
+    }
+
+    private function refreshRouteMetrics(RoutePlan $routePlan): void
+    {
+        $routePlan->loadMissing(['driver.latestPing', 'stops.order']);
+
+        $distance = 0.0;
+        $duration = 0;
+        $currentLat = (float) ($routePlan->driver?->latestPing->lat ?? $routePlan->stops->first()?->order?->pickup_lat ?? $routePlan->stops->first()?->order?->dropoff_lat ?? 0);
+        $currentLng = (float) ($routePlan->driver?->latestPing->lng ?? $routePlan->stops->first()?->order?->pickup_lng ?? $routePlan->stops->first()?->order?->dropoff_lng ?? 0);
+        $cursor = now();
+
+        foreach ($routePlan->stops as $stop) {
+            $order = $stop->order;
+            if (!$order) {
+                continue;
+            }
+
+            $pickupLat = (float) ($order->pickup_lat ?? $order->dropoff_lat);
+            $pickupLng = (float) ($order->pickup_lng ?? $order->dropoff_lng);
+            $dropoffLat = (float) $order->dropoff_lat;
+            $dropoffLng = (float) $order->dropoff_lng;
+            $leg = $this->distanceKm($currentLat, $currentLng, $pickupLat, $pickupLng)
+                + $this->distanceKm($pickupLat, $pickupLng, $dropoffLat, $dropoffLng);
+
+            $distance += $leg;
+            $duration += (int) round($leg * 3.2 + 6);
+            $cursor = $cursor->copy()->addMinutes((int) round($leg * 3.2 + 6));
+
+            $stop->updateQuietly(['eta' => $cursor]);
+            $currentLat = $dropoffLat;
+            $currentLng = $dropoffLng;
+        }
+
+        $routePlan->updateQuietly([
+            'planned_distance_km' => round($distance, 2),
+            'planned_duration_min' => $duration,
+        ]);
+    }
+
+    private function distanceKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadius = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a = sin($dLat / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
     }
 }

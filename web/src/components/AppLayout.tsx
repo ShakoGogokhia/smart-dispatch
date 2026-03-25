@@ -33,6 +33,7 @@ type NavEntry = {
   label: string;
   to: string;
   icon: typeof Package;
+  end?: boolean;
 };
 
 function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () => void }) {
@@ -41,6 +42,7 @@ function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () =>
   return (
     <NavLink
       to={entry.to}
+      end={entry.end}
       onClick={onNavigate}
       className={({ isActive }) =>
         [
@@ -108,17 +110,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     ? [{ label: t("nav.orders"), to: "/orders", icon: Package }]
     : [
         ...(isDriver ? [{ label: t("nav.driverHub"), to: "/driver-hub", icon: Truck }] : []),
-        { label: t("nav.orders"), to: "/orders", icon: Package },
-        { label: t("nav.routes"), to: "/routes", icon: Truck },
-        { label: t("nav.liveMap"), to: "/live-map", icon: Map },
-        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3 },
+        { label: t("nav.orders"), to: "/orders", icon: Package, end: true },
+        { label: t("nav.routes"), to: "/routes", icon: Truck, end: true },
+        { label: t("nav.liveMap"), to: "/live-map", icon: Map, end: true },
+        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3, end: true },
       ];
 
   const marketNav: NavEntry[] = currentMarketId
     ? [
-        { label: t("nav.settings"), to: `/markets/${currentMarketId}`, icon: Compass },
-        { label: t("nav.items"), to: `/markets/${currentMarketId}/items`, icon: ShoppingBag },
-        { label: t("nav.promos"), to: `/markets/${currentMarketId}/promo-codes`, icon: Activity },
+        { label: t("nav.settings"), to: `/markets/${currentMarketId}`, icon: Compass, end: true },
+        { label: t("nav.items"), to: `/markets/${currentMarketId}/items`, icon: ShoppingBag, end: true },
+        { label: t("nav.promos"), to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
       ]
     : [];
 
@@ -178,6 +180,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 label: isAdmin ? t("nav.allMarkets") : t("nav.myMarkets"),
                 to: isAdmin ? "/markets" : "/my-markets",
                 icon: Store,
+                end: true,
               }}
               onNavigate={() => setMobileOpen(false)}
             />
@@ -193,10 +196,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="section-kicker px-2">{t("nav.admin")}</div>
           <div className="space-y-1">
             <AppNavLink
-              entry={{ label: t("nav.drivers"), to: "/drivers", icon: Warehouse }}
+              entry={{ label: t("nav.drivers"), to: "/drivers", icon: Warehouse, end: true }}
               onNavigate={() => setMobileOpen(false)}
             />
-            <AppNavLink entry={{ label: t("nav.users"), to: "/users", icon: Users }} onNavigate={() => setMobileOpen(false)} />
+            <AppNavLink entry={{ label: t("nav.users"), to: "/users", icon: Users, end: true }} onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
       )}

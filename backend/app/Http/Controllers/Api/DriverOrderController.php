@@ -8,12 +8,16 @@ use App\Models\OrderDriverDecline;
 use App\Models\OrderEvent;
 use App\Models\RoutePlan;
 use App\Models\RouteStop;
+use App\Services\DriverEarningsService;
 use App\Services\OrderDispatchService;
 use Illuminate\Http\Request;
 
 class DriverOrderController extends Controller
 {
-    public function __construct(private OrderDispatchService $dispatchService)
+    public function __construct(
+        private OrderDispatchService $dispatchService,
+        private DriverEarningsService $driverEarningsService,
+    )
     {
     }
 
@@ -40,7 +44,7 @@ class DriverOrderController extends Controller
             ->get();
 
         return response()->json([
-            'driver' => $driver->load(['vehicle', 'activeShift', 'latestPing']),
+            'driver' => $driver->load(['vehicle', 'activeShift', 'latestPing', 'transactions' => fn ($query) => $query->latest()->limit(10)]),
             'offered_orders' => $offered,
             'assigned_orders' => $assigned,
         ]);
@@ -170,15 +174,42 @@ class DriverOrderController extends Controller
             return response()->json(['message' => 'This order is not assigned to you'], 422);
         }
 
+        $data = $request->validate([
+            'proof_note' => ['nullable', 'string'],
+            'proof_photo_url' => ['nullable', 'url'],
+        ]);
+
+        $order->loadMissing('market');
+
         $order->update([
             'delivered_at' => now(),
             'status' => 'DELIVERED',
+            'proof_of_delivery_note' => $data['proof_note'] ?? $order->proof_of_delivery_note,
+            'proof_of_delivery_photo_url' => $data['proof_photo_url'] ?? $order->proof_of_delivery_photo_url,
         ]);
 
         OrderEvent::create([
             'order_id' => $order->id,
             'type' => 'ORDER_DELIVERED',
-            'payload' => ['driver_id' => $driver->id],
+            'payload' => [
+                'driver_id' => $driver->id,
+                'proof_note' => $data['proof_note'] ?? null,
+                'proof_photo_url' => $data['proof_photo_url'] ?? null,
+            ],
+        ]);
+
+        $earningTransaction = $this->driverEarningsService->creditDeliveredOrder($order->fresh('market'), $driver->fresh());
+
+        OrderEvent::create([
+            'order_id' => $order->id,
+            'type' => 'DRIVER_EARNING_CREDITED',
+            'payload' => [
+                'driver_id' => $driver->id,
+                'amount' => $earningTransaction->amount,
+                'distance_km' => $earningTransaction->distance_km,
+                'weather_multiplier' => $earningTransaction->weather_multiplier,
+                'weather_condition' => $earningTransaction->weather_condition,
+            ],
         ]);
 
         RouteStop::query()

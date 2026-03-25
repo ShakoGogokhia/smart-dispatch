@@ -3,8 +3,10 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import AppLayout from "@/components/AppLayout";
 import RequireAuth from "@/components/RequireAuth";
+import { useI18n } from "@/lib/i18n";
 
 const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
+const BadgePricingPage = lazy(() => import("@/pages/BadgePricingPage"));
 const CheckoutPage = lazy(() => import("@/pages/CheckoutPage"));
 const DriverHubPage = lazy(() => import("@/pages/DriverHubPage"));
 const DriversPage = lazy(() => import("@/pages/DriversPage"));
@@ -32,10 +34,12 @@ function ProtectedLayout() {
 }
 
 function PageLoader() {
+  const { t } = useI18n();
+
   return (
     <div className="app-shell">
       <div className="mx-auto max-w-7xl">
-        <div className="dashboard-card p-8 text-sm text-slate-600 dark:text-slate-300">Loading page...</div>
+        <div className="dashboard-card p-8 text-sm text-slate-600 dark:text-slate-300">{t("common.loadingPage")}</div>
       </div>
     </div>
   );
@@ -58,6 +62,7 @@ export default function App() {
         <Route path="/routes" element={withSuspense(<RoutesPage />)} />
         <Route path="/live-map" element={withSuspense(<LiveMapPage />)} />
         <Route path="/analytics" element={withSuspense(<AnalyticsPage />)} />
+        <Route path="/badge-pricing" element={withSuspense(<BadgePricingPage />)} />
         <Route path="/driver-hub" element={withSuspense(<DriverHubPage />)} />
         <Route path="/drivers" element={withSuspense(<DriversPage />)} />
         <Route path="/users" element={withSuspense(<UsersPage />)} />

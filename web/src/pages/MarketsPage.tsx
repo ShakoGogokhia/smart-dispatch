@@ -29,10 +29,22 @@ type Market = StorefrontMarket & {
   owner?: UserLite;
 };
 
+type BadgeRequest = {
+  id: number;
+  badge: string;
+  duration_days: number;
+  status: string;
+  notes?: string | null;
+  market?: { id: number; name: string; code: string } | null;
+  requester?: { id: number; name: string; email: string } | null;
+};
+
 type MarketDraft = {
   name: string;
   code: string;
   address: string;
+  lat: string;
+  lng: string;
   ownerId: string;
   isActive: boolean;
   isFeatured: boolean;
@@ -45,6 +57,8 @@ const emptyDraft: MarketDraft = {
   name: "",
   code: "",
   address: "",
+  lat: "",
+  lng: "",
   ownerId: "",
   isActive: true,
   isFeatured: false,
@@ -58,6 +72,8 @@ function toDraft(market: Market): MarketDraft {
     name: market.name,
     code: market.code,
     address: market.address ?? "",
+    lat: market.lat != null ? String(market.lat) : "",
+    lng: market.lng != null ? String(market.lng) : "",
     ownerId: String(market.owner_user_id),
     isActive: market.is_active,
     isFeatured: !!market.is_featured,
@@ -83,6 +99,12 @@ export default function MarketsPage() {
   const ownersQ = useQuery({
     queryKey: ["owners"],
     queryFn: async () => (await api.get("/api/users/owners")).data as UserLite[],
+    enabled: isAdmin,
+  });
+
+  const badgeRequestsQ = useQuery({
+    queryKey: ["badge-requests"],
+    queryFn: async () => (await api.get("/api/badge-requests")).data as BadgeRequest[],
     enabled: isAdmin,
   });
 
@@ -121,6 +143,8 @@ export default function MarketsPage() {
         name: createDraft.name.trim(),
         code: createDraft.code.trim(),
         address: createDraft.address.trim() || null,
+        lat: createDraft.lat.trim() ? Number(createDraft.lat) : null,
+        lng: createDraft.lng.trim() ? Number(createDraft.lng) : null,
         owner_user_id: Number(createDraft.ownerId),
         is_active: createDraft.isActive,
         is_featured: createDraft.isFeatured,
@@ -170,6 +194,8 @@ export default function MarketsPage() {
           name: editDraft.name.trim(),
           code: editDraft.code.trim(),
           address: editDraft.address.trim() || null,
+          lat: editDraft.lat.trim() ? Number(editDraft.lat) : null,
+          lng: editDraft.lng.trim() ? Number(editDraft.lng) : null,
           is_active: editDraft.isActive,
           is_featured: editDraft.isFeatured,
           featured_badge: editDraft.featuredBadge.trim() || null,
@@ -263,6 +289,14 @@ export default function MarketsPage() {
                     onChange={(e) => setCreateDraft((current) => ({ ...current, address: e.target.value }))}
                     placeholder="Service address or pickup zone"
                   />
+                </div>
+                <div className="field-group">
+                  <Label>Latitude</Label>
+                  <Input value={createDraft.lat} onChange={(e) => setCreateDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" />
+                </div>
+                <div className="field-group">
+                  <Label>Longitude</Label>
+                  <Input value={createDraft.lng} onChange={(e) => setCreateDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" />
                 </div>
                 <div className="field-group md:col-span-2">
                   <Label>Owner</Label>
@@ -367,6 +401,31 @@ export default function MarketsPage() {
             <div className="font-display theme-ink mt-3 text-4xl font-semibold">{promoCount}</div>
           </CardContent>
         </Card>
+      </section>
+
+      <section className="dashboard-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="section-kicker">Badge requests</div>
+            <h2 className="panel-title mt-2">Owner requests waiting for admin review</h2>
+          </div>
+          <span className="status-chip">{(badgeRequestsQ.data ?? []).filter((request) => request.status === "pending").length} pending</span>
+        </div>
+
+        <div className="mt-5 grid gap-3">
+          {(badgeRequestsQ.data ?? []).slice(0, 6).map((request) => (
+            <div key={request.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="theme-ink font-semibold">{request.market?.name ?? "Market"} • {request.badge}</div>
+                <div className="theme-copy text-sm">{request.requester?.name ?? "Owner"} • {request.duration_days} days • {request.notes || "No note"}</div>
+              </div>
+              <span className="status-chip">{request.status}</span>
+            </div>
+          ))}
+
+          {badgeRequestsQ.isLoading && <div className="theme-copy text-sm">Loading badge requests...</div>}
+          {!badgeRequestsQ.isLoading && !(badgeRequestsQ.data ?? []).length && <div className="theme-copy text-sm">No badge requests yet.</div>}
+        </div>
       </section>
 
       <section className="dashboard-card">
@@ -544,6 +603,14 @@ export default function MarketsPage() {
             <div className="field-group md:col-span-2">
               <Label>Address</Label>
               <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} />
+            </div>
+            <div className="field-group">
+              <Label>Latitude</Label>
+              <Input value={editDraft.lat} onChange={(e) => setEditDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" />
+            </div>
+            <div className="field-group">
+              <Label>Longitude</Label>
+              <Input value={editDraft.lng} onChange={(e) => setEditDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" />
             </div>
           </div>
 

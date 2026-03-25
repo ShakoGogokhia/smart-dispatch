@@ -23,6 +23,8 @@ export type StorefrontMarket = {
   name: string;
   code: string;
   address?: string | null;
+  lat?: number | string | null;
+  lng?: number | string | null;
   is_active: boolean;
   is_featured?: boolean;
   featured_badge?: string | null;

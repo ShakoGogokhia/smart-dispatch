@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\PromoCodeController;
 use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\PublicMarketController;
 use App\Http\Controllers\Api\DriverOrderController;
+use App\Http\Controllers\Api\MarketBadgeRequestController;
 
 /*
 |--------------------------------------------------------------------------
@@ -74,6 +75,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/orders/{order}', [OrderController::class, 'update']);
     Route::post('/orders/{order}/market-accept', [OrderController::class, 'marketAccept']);
     Route::post('/orders/{order}/mark-ready', [OrderController::class, 'markReady']);
+    Route::post('/orders/{order}/request-cancel', [OrderController::class, 'requestCancel']);
+    Route::post('/orders/{order}/rate', [OrderController::class, 'rate']);
+    Route::post('/orders/{order}/reorder', [OrderController::class, 'reorder']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
 
     /*
@@ -140,6 +144,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/live/locations', [LiveController::class, 'locations']);
     Route::get('/live/routes', [LiveController::class, 'routes']);
     Route::get('/live/alerts', [LiveController::class, 'alerts']);
+    Route::get('/live/history', [LiveController::class, 'history']);
 
     /*
     |--------------------------------------------------------------------------
@@ -169,6 +174,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/markets', [MarketController::class, 'index']);
         Route::post('/markets', [MarketController::class, 'store']);
         Route::patch('/markets/{market}', [MarketController::class, 'update']);
+        Route::get('/badge-requests', [MarketBadgeRequestController::class, 'index']);
 
         // Change owner
         Route::post('/markets/{market}/assign-owner', [MarketController::class, 'assignOwner']);
@@ -178,6 +184,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | Owner / Staff markets
     */
     Route::get('/my/markets', [MarketController::class, 'myMarkets']);
+    Route::get('/my/badge-requests', [MarketBadgeRequestController::class, 'index']);
 
     /*
     | Market scoped routes (owner or staff or admin)
@@ -198,6 +205,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/markets/{market}/staff', [MarketController::class, 'addStaff']);
         Route::delete('/markets/{market}/staff/{userId}', [MarketController::class, 'removeStaff']);
         Route::get('/markets/{market}/assignable-users', [UsersController::class, 'assignable']);
+        Route::post('/markets/{market}/badge-requests', [MarketBadgeRequestController::class, 'store']);
     });
 
 });
