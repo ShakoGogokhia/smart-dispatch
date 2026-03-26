@@ -66,6 +66,7 @@ export default function App() {
         <Route path="/driver-hub" element={withSuspense(<DriverHubPage />)} />
         <Route path="/drivers" element={withSuspense(<DriversPage />)} />
         <Route path="/users" element={withSuspense(<UsersPage />)} />
+        <Route path="/promo-codes" element={withSuspense(<MarketPromoCodesPage />)} />
 
         <Route path="/markets">
           <Route index element={withSuspense(<MarketsPage />)} />

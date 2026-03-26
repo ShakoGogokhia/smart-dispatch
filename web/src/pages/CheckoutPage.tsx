@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowLeft, MapPinned, ShoppingBag } from "lucide-react";
+import { ArrowLeft, MapPinned, ShoppingBag, TicketPercent } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
@@ -22,6 +22,20 @@ type Market = {
   name: string;
   code: string;
   address?: string | null;
+};
+
+type PromoPreview = {
+  valid: boolean;
+  message?: string;
+  discount_total: number | string;
+  total: number | string;
+  promo?: {
+    id: number;
+    code: string;
+    type: "percent" | "fixed";
+    value: number | string;
+    is_active: boolean;
+  };
 };
 
 function getErrorMessage(error: unknown) {
@@ -60,6 +74,25 @@ export default function CheckoutPage() {
     const subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
     return { items, subtotal };
   }, [cart]);
+
+  const promoQuery = useQuery({
+    queryKey: ["checkout-promo-preview", marketId, promoCode.trim().toUpperCase(), totals.subtotal],
+    queryFn: async () =>
+      (
+        await api.get(`/api/public/markets/${marketId}/validate-promo`, {
+          params: {
+            code: promoCode.trim(),
+            subtotal: totals.subtotal,
+          },
+        })
+      ).data as PromoPreview,
+    enabled: !!marketId && promoCode.trim().length > 0 && totals.subtotal > 0,
+    retry: false,
+  });
+
+  const promoPreview = promoCode.trim() ? promoQuery.data : null;
+  const discountTotal = promoPreview?.valid ? toNumber(promoPreview.discount_total) : 0;
+  const finalTotal = promoPreview?.valid ? toNumber(promoPreview.total) : totals.subtotal;
 
   const effectiveCustomerName = customerName || meQ.data?.name || "";
 
@@ -282,6 +315,42 @@ export default function CheckoutPage() {
                   placeholder={t("checkout.optional")}
                   className="h-11 rounded-2xl"
                 />
+              </div>
+
+              {promoCode.trim() ? (
+                promoQuery.isLoading ? (
+                  <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    Checking promo code...
+                  </div>
+                ) : promoPreview?.valid ? (
+                  <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <TicketPercent className="h-4 w-4" />
+                      {promoPreview.promo?.code} applied
+                    </div>
+                    <div className="mt-1">
+                      {promoPreview.promo?.type === "percent"
+                        ? `${toNumber(promoPreview.promo.value)}% discount applied`
+                        : `${formatMoney(promoPreview.promo?.value)} discount applied`}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    {promoPreview?.message || "Promo code was not found for this market."}
+                  </div>
+                )
+              ) : null}
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Discount</span>
+                <span className={`font-semibold ${discountTotal > 0 ? "text-emerald-700" : ""}`}>
+                  {discountTotal > 0 ? `-${formatMoney(discountTotal)}` : formatMoney(0)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-base">
+                <span className="font-semibold text-slate-700">Total</span>
+                <span className="text-xl font-semibold text-slate-950">{formatMoney(finalTotal)}</span>
               </div>
 
               {errorMessage && (

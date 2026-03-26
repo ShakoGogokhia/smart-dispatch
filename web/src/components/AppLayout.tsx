@@ -199,6 +199,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               entry={{ label: t("nav.drivers"), to: "/drivers", icon: Warehouse, end: true }}
               onNavigate={() => setMobileOpen(false)}
             />
+            <AppNavLink entry={{ label: "Global promos", to: "/promo-codes", icon: Activity, end: true }} onNavigate={() => setMobileOpen(false)} />
             <AppNavLink entry={{ label: t("nav.users"), to: "/users", icon: Users, end: true }} onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>

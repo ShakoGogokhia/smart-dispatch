@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Market;
+use App\Models\PromoCode;
+use Illuminate\Http\Request;
 
 class PublicMarketController extends Controller
 {
@@ -43,7 +45,7 @@ class PublicMarketController extends Controller
                 },
                 'promoCodes' => function ($query) {
                     $query
-                        ->where('is_active', true)
+                        ->activeApplicable()
                         ->latest()
                         ->limit(1);
                 },
@@ -147,7 +149,7 @@ class PublicMarketController extends Controller
         // If you have promo_codes table/model relation
         // return first active promo for market
         $promo = $market->promoCodes()
-            ->where('is_active', true)
+            ->activeApplicable()
             ->orderByDesc('id')
             ->first();
 
@@ -160,5 +162,74 @@ class PublicMarketController extends Controller
             'value' => $promo->value,
             'is_active' => (bool) $promo->is_active,
         ];
+    }
+
+    public function validatePromo(Request $request, Market $market)
+    {
+        abort_unless($market->is_active, 404);
+
+        $data = $request->validate([
+            'code' => ['required', 'string', 'max:50'],
+            'subtotal' => ['required', 'numeric', 'min:0'],
+        ]);
+
+        $subtotal = (float) $data['subtotal'];
+        $promo = $this->resolvePromoCode($market, $data['code']);
+
+        if (!$promo) {
+            return response()->json([
+                'valid' => false,
+                'message' => 'Promo code is invalid for this market.',
+                'discount_total' => 0,
+                'total' => $subtotal,
+            ]);
+        }
+
+        $discountTotal = $this->calculateDiscount($promo, $subtotal);
+
+        return response()->json([
+            'valid' => true,
+            'promo' => [
+                'id' => $promo->id,
+                'code' => $promo->code,
+                'type' => $promo->type,
+                'value' => $promo->value,
+                'is_active' => (bool) $promo->is_active,
+            ],
+            'discount_total' => $discountTotal,
+            'total' => max(0, $subtotal - $discountTotal),
+        ]);
+    }
+
+    private function resolvePromoCode(Market $market, string $code): ?PromoCode
+    {
+        $normalizedCode = mb_strtoupper(trim($code));
+
+        return PromoCode::query()
+            ->whereRaw('UPPER(code) = ?', [$normalizedCode])
+            ->where(function ($query) use ($market) {
+                $query
+                    ->where('market_id', $market->id)
+                    ->orWhereNull('market_id');
+            })
+            ->activeApplicable()
+            ->orderByRaw('CASE WHEN market_id = ? THEN 0 ELSE 1 END', [$market->id])
+            ->latest()
+            ->first();
+    }
+
+    private function calculateDiscount(PromoCode $promo, float $subtotal): float
+    {
+        if ($subtotal <= 0) {
+            return 0.0;
+        }
+
+        $value = (float) $promo->value;
+
+        if ($promo->type === 'percent') {
+            return min($subtotal, round($subtotal * ($value / 100), 2));
+        }
+
+        return min($subtotal, round($value, 2));
     }
 }

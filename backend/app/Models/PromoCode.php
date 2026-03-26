@@ -31,4 +31,21 @@ class PromoCode extends Model
     {
         return $this->belongsTo(Market::class);
     }
+
+    public function scopeActiveApplicable($query)
+    {
+        $now = now();
+
+        return $query
+            ->where('is_active', true)
+            ->where(function ($builder) use ($now) {
+                $builder->whereNull('starts_at')->orWhere('starts_at', '<=', $now);
+            })
+            ->where(function ($builder) use ($now) {
+                $builder->whereNull('ends_at')->orWhere('ends_at', '>=', $now);
+            })
+            ->where(function ($builder) {
+                $builder->whereNull('max_uses')->orWhereColumn('uses', '<', 'max_uses');
+            });
+    }
 }

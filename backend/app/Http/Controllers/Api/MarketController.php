@@ -43,7 +43,7 @@ class MarketController extends Controller
                 }])
                 ->with(['promoCodes' => function ($query) {
                     $query
-                        ->where('is_active', true)
+                        ->activeApplicable()
                         ->latest()
                         ->limit(1);
                 }])
@@ -75,7 +75,7 @@ class MarketController extends Controller
             }])
             ->with(['promoCodes' => function ($query) {
                 $query
-                    ->where('is_active', true)
+                    ->activeApplicable()
                     ->latest()
                     ->limit(1);
             }])
@@ -146,7 +146,7 @@ class MarketController extends Controller
                     'owner:id,name,email',
                     'promoCodes' => function ($query) {
                         $query
-                            ->where('is_active', true)
+                            ->activeApplicable()
                             ->latest()
                             ->limit(1);
                     },
@@ -236,7 +236,7 @@ public function addStaff(Request $request, Market $market)
     {
         $activePromo = $market->promoCodes
             ? $market->promoCodes->first()
-            : $market->promoCodes()->where('is_active', true)->latest()->first();
+            : $market->promoCodes()->activeApplicable()->latest()->first();
 
         return [
             'id' => $market->id,

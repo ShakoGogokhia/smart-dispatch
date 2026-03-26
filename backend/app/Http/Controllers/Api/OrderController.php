@@ -8,6 +8,7 @@ use App\Models\Market;
 use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\OrderItem;
+use App\Models\PromoCode;
 use App\Services\OrderDispatchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -128,11 +129,17 @@ class OrderController extends Controller
         });
 
         $subtotal = (float) $itemsPayload->sum('line_total');
-        $discountTotal = 0.0;
+        $promo = $market && !empty($data['promo_code']) ? $this->resolvePromoCode($market, $data['promo_code']) : null;
+
+        if ($market && !empty($data['promo_code']) && !$promo) {
+            return response()->json(['message' => 'Promo code is invalid for this market'], 422);
+        }
+
+        $discountTotal = $promo ? $this->calculateDiscount($promo, $subtotal) : 0.0;
         $total = max(0, $subtotal - $discountTotal);
         $nextId = (int) (Order::max('id') ?? 0) + 1;
 
-        $order = DB::transaction(function () use ($request, $data, $market, $itemsPayload, $subtotal, $discountTotal, $total, $nextId) {
+        $order = DB::transaction(function () use ($request, $data, $market, $itemsPayload, $subtotal, $discountTotal, $total, $nextId, $promo) {
             $order = Order::create([
                 'market_id' => $market?->id,
                 'customer_user_id' => $request->user()?->id,
@@ -159,6 +166,10 @@ class OrderController extends Controller
                 'promised_at' => now()->addMinutes($market ? 75 : 45),
                 'estimated_delivery_at' => now()->addMinutes($market ? 60 : 35),
             ]);
+
+            if ($promo) {
+                $promo->increment('uses');
+            }
 
             $itemsPayload->each(function (array $item) use ($order) {
                 OrderItem::create([
@@ -595,5 +606,37 @@ class OrderController extends Controller
             'promised_at' => $order->promised_at?->toDateTimeString(),
             'is_late' => (bool) ($order->promised_at && !$order->delivered_at && now()->gt($order->promised_at)),
         ];
+    }
+
+    private function resolvePromoCode(Market $market, string $code): ?PromoCode
+    {
+        $now = now();
+
+        return PromoCode::query()
+            ->whereRaw('UPPER(code) = ?', [mb_strtoupper(trim($code))])
+            ->where(function (Builder $query) use ($market) {
+                $query
+                    ->where('market_id', $market->id)
+                    ->orWhereNull('market_id');
+            })
+            ->activeApplicable()
+            ->orderByRaw('CASE WHEN market_id = ? THEN 0 ELSE 1 END', [$market->id])
+            ->latest()
+            ->first();
+    }
+
+    private function calculateDiscount(?PromoCode $promo, float $subtotal): float
+    {
+        if (!$promo || $subtotal <= 0) {
+            return 0.0;
+        }
+
+        $value = (float) $promo->value;
+
+        if ($promo->type === 'percent') {
+            return min($subtotal, round($subtotal * ($value / 100), 2));
+        }
+
+        return min($subtotal, round($value, 2));
     }
 }

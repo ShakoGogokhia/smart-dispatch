@@ -12,7 +12,7 @@ return new class extends Migration {
     {
         Schema::create('promo_codes', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('market_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('market_id')->nullable()->constrained()->nullOnDelete();
             $table->string('code');
             $table->enum('type', ['percent', 'fixed']);
             $table->decimal('value', 10, 2);

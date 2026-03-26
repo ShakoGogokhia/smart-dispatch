@@ -46,6 +46,7 @@ Route::prefix('public')->group(function () {
     Route::get('/markets/{market}', [PublicMarketController::class, 'market']);
     Route::get('/markets/{market}/items', [PublicMarketController::class, 'items']);
     Route::get('/markets/{market}/active-promo', [PublicMarketController::class, 'activePromo']); // optional
+    Route::get('/markets/{market}/validate-promo', [PublicMarketController::class, 'validatePromo']);
 });
 /*
 |--------------------------------------------------------------------------
@@ -54,6 +55,12 @@ Route::prefix('public')->group(function () {
 */
 
 Route::middleware('auth:sanctum')->group(function () {
+
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/promo-codes', [PromoCodeController::class, 'indexGlobal']);
+        Route::post('/promo-codes', [PromoCodeController::class, 'storeGlobal']);
+        Route::patch('/promo-codes/{promoCode}', [PromoCodeController::class, 'updateGlobal']);
+    });
 
     /*
     |--------------------------------------------------------------------------
