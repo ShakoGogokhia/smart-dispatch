@@ -1,5 +1,20 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowRight, BarChart3, GripVertical, ImagePlus, Megaphone, Search, Sparkles, TicketPercent, UserRound } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  ArrowRight,
+  BadgePercent,
+  BarChart3,
+  GripVertical,
+  Hash,
+  ImagePlus,
+  MapPinned,
+  Megaphone,
+  Search,
+  Sparkles,
+  Store,
+  TicketPercent,
+  Type,
+  UserRound,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -166,6 +181,119 @@ function toDraft(market: Market): MarketDraft {
     featuredHeadline: market.featured_headline ?? "",
     featuredCopy: market.featured_copy ?? "",
   };
+}
+
+function WorkspaceFieldCard({
+  children,
+  icon: Icon,
+  label,
+}: {
+  children: ReactNode;
+  icon: typeof Store;
+  label: string;
+}) {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
+        <Label className="field-label">{label}</Label>
+      </div>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
+function WorkspaceSwitchCard({
+  body,
+  checked,
+  onCheckedChange,
+  title,
+}: {
+  body: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  title: string;
+}) {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white p-4 md:col-span-2 dark:border-white/10 dark:bg-[#131d2b]">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="theme-ink font-medium">{title}</div>
+          <div className="theme-muted mt-1 text-sm leading-6">{body}</div>
+        </div>
+        <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceModalLayout({
+  controls,
+  preview,
+}: {
+  controls: ReactNode;
+  preview: ReactNode;
+}) {
+  return (
+    <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#131d2b]">
+        <div className="grid gap-4 lg:sticky lg:top-0">{preview}</div>
+      </aside>
+
+      <main className="grid gap-4 p-5 sm:p-6 md:grid-cols-2">{controls}</main>
+    </div>
+  );
+}
+
+function StorefrontPreviewCard({ draft, mode }: { draft: MarketDraft; mode: "create" | "edit" }) {
+  const headline = draft.featuredHeadline.trim() || draft.name.trim() || "New storefront";
+  const copy = draft.featuredCopy.trim() || draft.address.trim() || "Add public-facing copy, featured badge, and core identity details here.";
+
+  return (
+    <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0f1825]">
+      <div className="section-kicker">{mode === "create" ? "Storefront workspace" : "Storefront editor"}</div>
+      <div className="theme-ink mt-3 text-3xl font-semibold">{headline}</div>
+      <div className="theme-copy mt-2 text-sm leading-6">{draft.code.trim() || "MARKET-CODE"}</div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className={`status-chip ${draft.isActive ? "status-good" : "status-neutral"}`}>{draft.isActive ? "Live" : "Hidden"}</span>
+        <span className={`status-chip ${draft.isFeatured ? "status-warn" : "status-neutral"}`}>{draft.isFeatured ? "Promoted" : "Standard"}</span>
+        {draft.featuredBadge.trim() && <span className="status-chip status-good">{draft.featuredBadge.trim()}</span>}
+      </div>
+      <div className="theme-copy mt-4 text-sm leading-6">{copy}</div>
+    </div>
+  );
+}
+
+function BannerPreviewCard({ draft, mode }: { draft: BannerDraft; mode: "create" | "edit" }) {
+  return (
+    <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0f1825]">
+      <div className="section-kicker">{mode === "create" ? "Campaign workspace" : "Campaign editor"}</div>
+      <div className="theme-ink mt-3 text-3xl font-semibold">{draft.title.trim() || "Homepage campaign"}</div>
+      <div className="theme-copy mt-2 text-sm leading-6">{draft.theme} theme • sort #{draft.sortOrder || "0"}</div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className={`status-chip ${draft.isActive ? "status-good" : "status-neutral"}`}>{draft.isActive ? "Live when scheduled" : "Inactive"}</span>
+        <span className="status-chip status-neutral">{draft.marketId === "none" ? "Generic banner" : "Linked market"}</span>
+      </div>
+      <div className="theme-copy mt-4 text-sm leading-6">
+        {draft.subtitle.trim() || "Add a campaign message, CTA, and schedule to control the public homepage blocks."}
+      </div>
+    </div>
+  );
+}
+
+function OwnerPreviewCard({ marketName, ownerId }: { marketName?: string | null; ownerId: string }) {
+  return (
+    <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0f1825]">
+      <div className="section-kicker">Ownership change</div>
+      <div className="theme-ink mt-3 text-3xl font-semibold">{marketName || "Select market"}</div>
+      <div className="theme-copy mt-2 text-sm leading-6">
+        Assign a new owner and keep account responsibility aligned with the storefront.
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <span className="status-chip status-neutral">Owner ID {ownerId || "not selected"}</span>
+      </div>
+    </div>
+  );
 }
 
 export default function MarketsPage() {
@@ -444,93 +572,85 @@ export default function MarketsPage() {
                   New banner
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(1080px,calc(100%-2rem))]">
                 <DialogHeader>
-                  <DialogTitle>{editingBanner ? "Edit homepage banner" : "Create homepage banner"}</DialogTitle>
+                  <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+                    <div className="section-kicker">Campaign workspace</div>
+                    <DialogTitle className="panel-title mt-2">{editingBanner ? "Edit homepage banner" : "Create homepage banner"}</DialogTitle>
+                    <p className="theme-copy mt-2 text-sm leading-6">
+                      Build a cleaner promo block with a linked market, CTA, schedule, and activation state in one place.
+                    </p>
+                  </div>
                 </DialogHeader>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="field-group">
-                    <Label>Title</Label>
-                    <Input value={bannerDraft.title} onChange={(e) => setBannerDraft((current) => ({ ...current, title: e.target.value }))} />
-                  </div>
-                  <div className="field-group">
-                    <Label>Theme</Label>
-                    <Select value={bannerDraft.theme} onValueChange={(value) => setBannerDraft((current) => ({ ...current, theme: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select theme" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="cyan">cyan</SelectItem>
-                        <SelectItem value="warm">warm</SelectItem>
-                        <SelectItem value="emerald">emerald</SelectItem>
-                        <SelectItem value="midnight">midnight</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="field-group md:col-span-2">
-                    <Label>Subtitle</Label>
-                    <Input value={bannerDraft.subtitle} onChange={(e) => setBannerDraft((current) => ({ ...current, subtitle: e.target.value }))} />
-                  </div>
-                  <div className="field-group">
-                    <Label>CTA label</Label>
-                    <Input value={bannerDraft.ctaLabel} onChange={(e) => setBannerDraft((current) => ({ ...current, ctaLabel: e.target.value }))} />
-                  </div>
-                  <div className="field-group">
-                    <Label>CTA URL</Label>
-                    <Input value={bannerDraft.ctaUrl} onChange={(e) => setBannerDraft((current) => ({ ...current, ctaUrl: e.target.value }))} />
-                  </div>
-                  <div className="field-group">
-                    <Label>Linked market</Label>
-                    <Select value={bannerDraft.marketId} onValueChange={(value) => setBannerDraft((current) => ({ ...current, marketId: value }))}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select market" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No linked market</SelectItem>
-                        {markets.map((market) => (
-                          <SelectItem key={market.id} value={String(market.id)}>
-                            {market.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="field-group">
-                    <Label>Sort order</Label>
-                    <Input value={bannerDraft.sortOrder} onChange={(e) => setBannerDraft((current) => ({ ...current, sortOrder: e.target.value }))} />
-                  </div>
-                  <div className="field-group">
-                    <Label>Starts at</Label>
-                    <Input
-                      type="datetime-local"
-                      value={bannerDraft.startsAt}
-                      onChange={(e) => setBannerDraft((current) => ({ ...current, startsAt: e.target.value }))}
-                    />
-                  </div>
-                  <div className="field-group">
-                    <Label>Ends at</Label>
-                    <Input
-                      type="datetime-local"
-                      value={bannerDraft.endsAt}
-                      onChange={(e) => setBannerDraft((current) => ({ ...current, endsAt: e.target.value }))}
-                    />
-                  </div>
-                  <div className="subpanel flex items-center justify-between p-4 md:col-span-2">
-                    <div>
-                      <div className="theme-ink font-medium">Banner active</div>
-                      <div className="theme-muted text-sm">Inactive campaigns stay editable but do not appear publicly.</div>
-                    </div>
-                    <Switch
-                      checked={bannerDraft.isActive}
-                      onCheckedChange={(checked) => setBannerDraft((current) => ({ ...current, isActive: checked }))}
-                    />
-                  </div>
+                <div className="min-h-0 overflow-y-auto">
+                  <WorkspaceModalLayout
+                    preview={<BannerPreviewCard draft={bannerDraft} mode={editingBanner ? "edit" : "create"} />}
+                    controls={
+                      <>
+                        <WorkspaceFieldCard label="Title" icon={Type}>
+                          <Input value={bannerDraft.title} onChange={(e) => setBannerDraft((current) => ({ ...current, title: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Theme" icon={Sparkles}>
+                          <Select value={bannerDraft.theme} onValueChange={(value) => setBannerDraft((current) => ({ ...current, theme: value }))}>
+                            <SelectTrigger className="input-shell w-full">
+                              <SelectValue placeholder="Select theme" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="cyan">cyan</SelectItem>
+                              <SelectItem value="warm">warm</SelectItem>
+                              <SelectItem value="emerald">emerald</SelectItem>
+                              <SelectItem value="midnight">midnight</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Subtitle" icon={Megaphone}>
+                          <Input value={bannerDraft.subtitle} onChange={(e) => setBannerDraft((current) => ({ ...current, subtitle: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="CTA label" icon={BadgePercent}>
+                          <Input value={bannerDraft.ctaLabel} onChange={(e) => setBannerDraft((current) => ({ ...current, ctaLabel: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="CTA URL" icon={Hash}>
+                          <Input value={bannerDraft.ctaUrl} onChange={(e) => setBannerDraft((current) => ({ ...current, ctaUrl: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Linked market" icon={Store}>
+                          <Select value={bannerDraft.marketId} onValueChange={(value) => setBannerDraft((current) => ({ ...current, marketId: value }))}>
+                            <SelectTrigger className="input-shell w-full">
+                              <SelectValue placeholder="Select market" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No linked market</SelectItem>
+                              {markets.map((market) => (
+                                <SelectItem key={market.id} value={String(market.id)}>
+                                  {market.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Sort order" icon={Hash}>
+                          <Input value={bannerDraft.sortOrder} onChange={(e) => setBannerDraft((current) => ({ ...current, sortOrder: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Starts at" icon={Sparkles}>
+                          <Input type="datetime-local" value={bannerDraft.startsAt} onChange={(e) => setBannerDraft((current) => ({ ...current, startsAt: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Ends at" icon={Sparkles}>
+                          <Input type="datetime-local" value={bannerDraft.endsAt} onChange={(e) => setBannerDraft((current) => ({ ...current, endsAt: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceSwitchCard
+                          title="Banner active"
+                          body="Inactive campaigns stay editable but do not appear publicly."
+                          checked={bannerDraft.isActive}
+                          onCheckedChange={(checked) => setBannerDraft((current) => ({ ...current, isActive: checked }))}
+                        />
+                      </>
+                    }
+                  />
                 </div>
 
-                {bannerError && <div className="text-sm text-red-600">{bannerError}</div>}
+                {bannerError && <div className="px-6 text-sm text-red-700">{bannerError}</div>}
 
-                <DialogFooter>
+                <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
                   <Button onClick={() => saveBannerM.mutate()} disabled={!bannerDraft.title.trim() || saveBannerM.isPending}>
                     {saveBannerM.isPending ? "Saving..." : editingBanner ? "Save banner" : "Create banner"}
                   </Button>
@@ -542,123 +662,118 @@ export default function MarketsPage() {
               <DialogTrigger asChild>
                 <Button size="lg">Create market</Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(1080px,calc(100%-2rem))]">
                 <DialogHeader>
-                  <DialogTitle>Create market</DialogTitle>
+                  <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+                    <div className="section-kicker">Storefront workspace</div>
+                    <DialogTitle className="panel-title mt-2">Create market</DialogTitle>
+                    <p className="theme-copy mt-2 text-sm leading-6">
+                      Launch a new storefront with cleaner identity, location, ownership, and promotion settings in one polished workflow.
+                    </p>
+                  </div>
                 </DialogHeader>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="field-group">
-                  <Label>Name</Label>
-                  <Input value={createDraft.name} onChange={(e) => setCreateDraft((current) => ({ ...current, name: e.target.value }))} />
-                </div>
-                <div className="field-group">
-                  <Label>Code</Label>
-                  <Input value={createDraft.code} onChange={(e) => setCreateDraft((current) => ({ ...current, code: e.target.value }))} />
-                </div>
-                <div className="field-group md:col-span-2">
-                  <Label>Address</Label>
-                  <Input
-                    value={createDraft.address}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, address: e.target.value }))}
-                    placeholder="Service address or pickup zone"
+                <div className="min-h-0 overflow-y-auto">
+                  <WorkspaceModalLayout
+                    preview={<StorefrontPreviewCard draft={createDraft} mode="create" />}
+                    controls={
+                      <>
+                        <WorkspaceFieldCard label="Name" icon={Type}>
+                          <Input value={createDraft.name} onChange={(e) => setCreateDraft((current) => ({ ...current, name: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Code" icon={Hash}>
+                          <Input value={createDraft.code} onChange={(e) => setCreateDraft((current) => ({ ...current, code: e.target.value }))} className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Address" icon={MapPinned}>
+                          <Input
+                            value={createDraft.address}
+                            onChange={(e) => setCreateDraft((current) => ({ ...current, address: e.target.value }))}
+                            placeholder="Service address or pickup zone"
+                            className="input-shell"
+                          />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Owner" icon={UserRound}>
+                          <Select value={createDraft.ownerId} onValueChange={(value) => setCreateDraft((current) => ({ ...current, ownerId: value }))}>
+                            <SelectTrigger className="input-shell w-full">
+                              <SelectValue placeholder="Select owner user" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {owners.map((owner) => (
+                                <SelectItem key={owner.id} value={String(owner.id)}>
+                                  {owner.name} ({owner.email})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Latitude" icon={MapPinned}>
+                          <Input value={createDraft.lat} onChange={(e) => setCreateDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Longitude" icon={MapPinned}>
+                          <Input value={createDraft.lng} onChange={(e) => setCreateDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" className="input-shell" />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Featured badge" icon={BadgePercent}>
+                          <Input
+                            value={createDraft.featuredBadge}
+                            onChange={(e) => setCreateDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
+                            placeholder="Promoted market"
+                            className="input-shell"
+                          />
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {badgePresets.map((badge) => (
+                              <button
+                                key={badge}
+                                type="button"
+                                className="status-chip"
+                                onClick={() =>
+                                  setCreateDraft((current) => ({
+                                    ...current,
+                                    isFeatured: true,
+                                    featuredBadge: badge,
+                                  }))
+                                }
+                              >
+                                {badge}
+                              </button>
+                            ))}
+                          </div>
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Featured headline" icon={Sparkles}>
+                          <Input
+                            value={createDraft.featuredHeadline}
+                            onChange={(e) => setCreateDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
+                            placeholder="Fastest weekly essentials"
+                            className="input-shell"
+                          />
+                        </WorkspaceFieldCard>
+                        <WorkspaceFieldCard label="Featured copy" icon={Megaphone}>
+                          <Input
+                            value={createDraft.featuredCopy}
+                            onChange={(e) => setCreateDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
+                            placeholder="This message appears in the public spotlight experience."
+                            className="input-shell"
+                          />
+                        </WorkspaceFieldCard>
+                        <WorkspaceSwitchCard
+                          title="Market active"
+                          body="Inactive markets stay hidden from the public marketplace."
+                          checked={createDraft.isActive}
+                          onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isActive: checked }))}
+                        />
+                        <WorkspaceSwitchCard
+                          title="Promote on landing page"
+                          body="Featured markets receive the premium public treatment."
+                          checked={createDraft.isFeatured}
+                          onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isFeatured: checked }))}
+                        />
+                      </>
+                    }
                   />
                 </div>
-                <div className="field-group">
-                  <Label>Latitude</Label>
-                  <Input value={createDraft.lat} onChange={(e) => setCreateDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" />
-                </div>
-                <div className="field-group">
-                  <Label>Longitude</Label>
-                  <Input value={createDraft.lng} onChange={(e) => setCreateDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" />
-                </div>
-                <div className="field-group md:col-span-2">
-                  <Label>Owner</Label>
-                  <Select value={createDraft.ownerId} onValueChange={(value) => setCreateDraft((current) => ({ ...current, ownerId: value }))}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select owner user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {owners.map((owner) => (
-                        <SelectItem key={owner.id} value={String(owner.id)}>
-                          {owner.name} ({owner.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              <div className="section-divider" />
+                {createError && <div className="px-6 text-sm text-red-700">{createError}</div>}
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="field-group">
-                  <Label>Featured badge</Label>
-                  <Input
-                    value={createDraft.featuredBadge}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
-                    placeholder="Promoted market"
-                  />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {badgePresets.map((badge) => (
-                      <button
-                        key={badge}
-                        type="button"
-                        className="status-chip"
-                        onClick={() =>
-                          setCreateDraft((current) => ({
-                            ...current,
-                            isFeatured: true,
-                            featuredBadge: badge,
-                          }))
-                        }
-                      >
-                        {badge}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="field-group">
-                  <Label>Featured headline</Label>
-                  <Input
-                    value={createDraft.featuredHeadline}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
-                    placeholder="Fastest weekly essentials"
-                  />
-                </div>
-                <div className="field-group md:col-span-2">
-                  <Label>Featured copy</Label>
-                  <Input
-                    value={createDraft.featuredCopy}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
-                    placeholder="This message appears in the public spotlight experience."
-                  />
-                </div>
-                <div className="subpanel flex items-center justify-between p-4">
-                  <div>
-                    <div className="theme-ink font-medium">Market active</div>
-                    <div className="theme-muted text-sm">Inactive markets stay hidden from the public marketplace.</div>
-                  </div>
-                  <Switch
-                    checked={createDraft.isActive}
-                    onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isActive: checked }))}
-                  />
-                </div>
-                <div className="subpanel flex items-center justify-between p-4">
-                  <div>
-                    <div className="theme-ink font-medium">Promote on landing page</div>
-                    <div className="theme-muted text-sm">Featured markets receive the premium public treatment.</div>
-                  </div>
-                  <Switch
-                    checked={createDraft.isFeatured}
-                    onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isFeatured: checked }))}
-                  />
-                </div>
-              </div>
-
-                {createError && <div className="text-sm text-red-600">{createError}</div>}
-
-                <DialogFooter>
+                <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
                   <Button onClick={() => createMarketM.mutate()} disabled={!canCreate || createMarketM.isPending}>
                     {createMarketM.isPending ? "Creating..." : "Create market"}
                   </Button>
@@ -999,36 +1114,40 @@ export default function MarketsPage() {
       )}
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent>
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(920px,calc(100%-2rem))]">
           <DialogHeader>
-            <DialogTitle>Assign owner</DialogTitle>
+            <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+              <div className="section-kicker">Ownership workspace</div>
+              <DialogTitle className="panel-title mt-2">Assign owner</DialogTitle>
+              <p className="theme-copy mt-2 text-sm leading-6">Move storefront ownership cleanly without digging through separate admin forms.</p>
+            </div>
           </DialogHeader>
 
-          <div className="grid gap-4">
-            <div className="subpanel p-4 text-sm">
-              Market: <span className="font-semibold">{assignMarket?.name}</span>
-            </div>
-
-            <div className="field-group">
-              <Label>Owner</Label>
-              <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select owner user" />
-                </SelectTrigger>
-                <SelectContent>
-                  {owners.map((owner) => (
-                    <SelectItem key={owner.id} value={String(owner.id)}>
-                      {owner.name} ({owner.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {assignError && <div className="text-sm text-red-600">{assignError}</div>}
+          <div className="min-h-0 overflow-y-auto">
+            <WorkspaceModalLayout
+              preview={<OwnerPreviewCard marketName={assignMarket?.name} ownerId={assignOwnerId} />}
+              controls={
+                <WorkspaceFieldCard label="Owner" icon={UserRound}>
+                  <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
+                    <SelectTrigger className="input-shell w-full">
+                      <SelectValue placeholder="Select owner user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {owners.map((owner) => (
+                        <SelectItem key={owner.id} value={String(owner.id)}>
+                          {owner.name} ({owner.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </WorkspaceFieldCard>
+              }
+            />
           </div>
 
-          <DialogFooter>
+          {assignError && <div className="px-6 text-sm text-red-700">{assignError}</div>}
+
+          <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
             <Button onClick={() => assignOwnerM.mutate()} disabled={!assignMarket || !assignOwnerId || assignOwnerM.isPending}>
               {assignOwnerM.isPending ? "Saving..." : "Save owner"}
             </Button>
@@ -1037,101 +1156,99 @@ export default function MarketsPage() {
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(1080px,calc(100%-2rem))]">
           <DialogHeader>
-            <DialogTitle>Edit storefront</DialogTitle>
+            <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+              <div className="section-kicker">Storefront editor</div>
+              <DialogTitle className="panel-title mt-2">Edit storefront</DialogTitle>
+              <p className="theme-copy mt-2 text-sm leading-6">
+                Refine the storefront identity, featured messaging, and visibility controls in the same polished workspace.
+              </p>
+            </div>
           </DialogHeader>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="field-group">
-              <Label>Name</Label>
-              <Input value={editDraft.name} onChange={(e) => setEditDraft((current) => ({ ...current, name: e.target.value }))} />
-            </div>
-            <div className="field-group">
-              <Label>Code</Label>
-              <Input value={editDraft.code} onChange={(e) => setEditDraft((current) => ({ ...current, code: e.target.value }))} />
-            </div>
-            <div className="field-group md:col-span-2">
-              <Label>Address</Label>
-              <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} />
-            </div>
-            <div className="field-group">
-              <Label>Latitude</Label>
-              <Input value={editDraft.lat} onChange={(e) => setEditDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" />
-            </div>
-            <div className="field-group">
-              <Label>Longitude</Label>
-              <Input value={editDraft.lng} onChange={(e) => setEditDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" />
-            </div>
-          </div>
-
-          <div className="section-divider" />
-
-          <div className="grid gap-4 md:grid-cols-2">
-                <div className="field-group">
-                  <Label>Featured badge</Label>
-                  <Input
-                    value={editDraft.featuredBadge}
-                    onChange={(e) => setEditDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
-                    placeholder="Promoted market"
+          <div className="min-h-0 overflow-y-auto">
+            <WorkspaceModalLayout
+              preview={<StorefrontPreviewCard draft={editDraft} mode="edit" />}
+              controls={
+                <>
+                  <WorkspaceFieldCard label="Name" icon={Type}>
+                    <Input value={editDraft.name} onChange={(e) => setEditDraft((current) => ({ ...current, name: e.target.value }))} className="input-shell" />
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Code" icon={Hash}>
+                    <Input value={editDraft.code} onChange={(e) => setEditDraft((current) => ({ ...current, code: e.target.value }))} className="input-shell" />
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Address" icon={MapPinned}>
+                    <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} className="input-shell" />
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Latitude" icon={MapPinned}>
+                    <Input value={editDraft.lat} onChange={(e) => setEditDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" className="input-shell" />
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Longitude" icon={MapPinned}>
+                    <Input value={editDraft.lng} onChange={(e) => setEditDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" className="input-shell" />
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Featured badge" icon={BadgePercent}>
+                    <Input
+                      value={editDraft.featuredBadge}
+                      onChange={(e) => setEditDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
+                      placeholder="Promoted market"
+                      className="input-shell"
+                    />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {badgePresets.map((badge) => (
+                        <button
+                          key={badge}
+                          type="button"
+                          className="status-chip"
+                          onClick={() =>
+                            setEditDraft((current) => ({
+                              ...current,
+                              isFeatured: true,
+                              featuredBadge: badge,
+                            }))
+                          }
+                        >
+                          {badge}
+                        </button>
+                      ))}
+                    </div>
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Featured headline" icon={Sparkles}>
+                    <Input
+                      value={editDraft.featuredHeadline}
+                      onChange={(e) => setEditDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
+                      placeholder="City's fastest essentials drop"
+                      className="input-shell"
+                    />
+                  </WorkspaceFieldCard>
+                  <WorkspaceFieldCard label="Featured copy" icon={Megaphone}>
+                    <Input
+                      value={editDraft.featuredCopy}
+                      onChange={(e) => setEditDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
+                      placeholder="Shown on the public landing spotlight."
+                      className="input-shell"
+                    />
+                  </WorkspaceFieldCard>
+                  <WorkspaceSwitchCard
+                    title="Storefront active"
+                    body="Controls whether the market is visible publicly."
+                    checked={editDraft.isActive}
+                    onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isActive: checked }))}
                   />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {badgePresets.map((badge) => (
-                      <button
-                        key={badge}
-                        type="button"
-                        className="status-chip"
-                        onClick={() =>
-                          setEditDraft((current) => ({
-                            ...current,
-                            isFeatured: true,
-                            featuredBadge: badge,
-                          }))
-                        }
-                      >
-                        {badge}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-            <div className="field-group">
-              <Label>Featured headline</Label>
-              <Input
-                value={editDraft.featuredHeadline}
-                onChange={(e) => setEditDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
-                placeholder="City's fastest essentials drop"
-              />
-            </div>
-            <div className="field-group md:col-span-2">
-              <Label>Featured copy</Label>
-              <Input
-                value={editDraft.featuredCopy}
-                onChange={(e) => setEditDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
-                placeholder="Shown on the public landing spotlight."
-              />
-            </div>
-            <div className="subpanel flex items-center justify-between p-4">
-              <div>
-                <div className="theme-ink font-medium">Storefront active</div>
-                <div className="theme-muted text-sm">Controls whether the market is visible publicly.</div>
-              </div>
-              <Switch checked={editDraft.isActive} onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isActive: checked }))} />
-            </div>
-            <div className="subpanel flex items-center justify-between p-4">
-              <div>
-                <div className="theme-ink font-medium">Featured promotion placement</div>
-                <div className="theme-muted text-sm">Moves this market into the premium public spotlight.</div>
-              </div>
-              <Switch
-                checked={editDraft.isFeatured}
-                onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isFeatured: checked }))}
-              />
-            </div>
+                  <WorkspaceSwitchCard
+                    title="Featured promotion placement"
+                    body="Moves this market into the premium public spotlight."
+                    checked={editDraft.isFeatured}
+                    onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isFeatured: checked }))}
+                  />
+                </>
+              }
+            />
           </div>
 
-          {updateError && <div className="text-sm text-red-600">{updateError}</div>}
+          {updateError && <div className="px-6 text-sm text-red-700">{updateError}</div>}
 
-          <DialogFooter>
+          <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
             <Button onClick={() => updateMarketM.mutate()} disabled={!editMarket || updateMarketM.isPending || !editDraft.name.trim()}>
               {updateMarketM.isPending ? "Saving..." : "Save storefront"}
             </Button>
