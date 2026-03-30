@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import AppLayout from "@/components/AppLayout";
+import PublicLayout from "@/components/PublicLayout";
 import RequireAuth from "@/components/RequireAuth";
 import { useI18n } from "@/lib/i18n";
 
@@ -52,9 +53,11 @@ function withSuspense(element: ReactNode) {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={withSuspense(<PublicMarketsPage />)} />
-      <Route path="/m/:marketId" element={withSuspense(<PublicMarketPage />)} />
-      <Route path="/login" element={withSuspense(<LoginPage />)} />
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={withSuspense(<PublicMarketsPage />)} />
+        <Route path="/m/:marketId" element={withSuspense(<PublicMarketPage />)} />
+        <Route path="/login" element={withSuspense(<LoginPage />)} />
+      </Route>
 
       <Route element={<ProtectedLayout />}>
         <Route path="/checkout" element={withSuspense(<CheckoutPage />)} />

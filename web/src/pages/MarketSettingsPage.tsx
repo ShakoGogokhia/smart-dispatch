@@ -4,6 +4,8 @@ import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
+import { clearMarketDraft, loadMarketDraft, saveMarketDraft } from "@/lib/publicMarketplace";
 import { useMe } from "@/lib/useMe";
 import type { StorefrontMarket } from "@/lib/storefront";
 
@@ -27,6 +29,67 @@ type StaffUser = {
   is_owner?: boolean;
   pivot?: { role?: string };
 };
+
+type BadgeAudit = {
+  id: number;
+  action: string;
+  previous_badge?: string | null;
+  next_badge?: string | null;
+  previous_badge_expires_at?: string | null;
+  next_badge_expires_at?: string | null;
+  created_at?: string | null;
+  user?: { id: number; name: string; email: string } | null;
+};
+
+const badgePresets = ["VIP Market", "Staff Pick", "New Market", "Discounted", "Seasonal"];
+
+function toDateTimeInput(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function fromDateTimeInput(value: string) {
+  return value.trim() ? value : null;
+}
+
+function buildFeaturedPayload({
+  badgeExpiresAt,
+  featuredBadge,
+  featuredCopy,
+  featuredHeadline,
+  featuredEndsAt,
+  featuredStartsAt,
+  featuredSortOrder,
+  isFeatured,
+}: {
+  badgeExpiresAt: string;
+  featuredBadge: string;
+  featuredCopy: string;
+  featuredHeadline: string;
+  featuredEndsAt: string;
+  featuredStartsAt: string;
+  featuredSortOrder: string;
+  isFeatured: boolean;
+}) {
+  const nextBadge = featuredBadge.trim();
+  const shouldFeature = isFeatured || Boolean(nextBadge);
+
+  return {
+    is_featured: shouldFeature,
+    featured_badge: shouldFeature ? nextBadge || "Featured" : null,
+    featured_headline: featuredHeadline.trim() || null,
+    featured_copy: featuredCopy.trim() || null,
+    badge_expires_at: fromDateTimeInput(badgeExpiresAt),
+    featured_starts_at: fromDateTimeInput(featuredStartsAt),
+    featured_ends_at: fromDateTimeInput(featuredEndsAt),
+    featured_sort_order: Number(featuredSortOrder || 0),
+  };
+}
 
 export default function MarketSettingsPage() {
   const { marketId } = useParams();
@@ -53,6 +116,7 @@ export default function MarketSettingsPage() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [category, setCategory] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -60,19 +124,104 @@ export default function MarketSettingsPage() {
   const [featuredBadge, setFeaturedBadge] = useState("");
   const [featuredHeadline, setFeaturedHeadline] = useState("");
   const [featuredCopy, setFeaturedCopy] = useState("");
+  const [minimumOrder, setMinimumOrder] = useState("0");
+  const [deliveryEtaMinutes, setDeliveryEtaMinutes] = useState("");
+  const [featuredSortOrder, setFeaturedSortOrder] = useState("0");
+  const [badgeExpiresAt, setBadgeExpiresAt] = useState("");
+  const [featuredStartsAt, setFeaturedStartsAt] = useState("");
+  const [featuredEndsAt, setFeaturedEndsAt] = useState("");
+  const [opensAt, setOpensAt] = useState("");
+  const [closesAt, setClosesAt] = useState("");
+  const draftKey = `market-settings-${id}`;
 
   useEffect(() => {
     if (!market) return;
-    setName(market.name ?? "");
-    setAddress(market.address ?? "");
-    setLat(market.lat != null ? String(market.lat) : "");
-    setLng(market.lng != null ? String(market.lng) : "");
-    setIsActive(typeof market.is_active === "boolean" ? market.is_active : true);
-    setIsFeatured(!!market.is_featured);
-    setFeaturedBadge(market.featured_badge ?? "");
-    setFeaturedHeadline(market.featured_headline ?? "");
-    setFeaturedCopy(market.featured_copy ?? "");
+    const draft = loadMarketDraft(draftKey, {
+      name: market.name ?? "",
+      address: market.address ?? "",
+      category: market.category ?? "",
+      lat: market.lat != null ? String(market.lat) : "",
+      lng: market.lng != null ? String(market.lng) : "",
+      isActive: typeof market.is_active === "boolean" ? market.is_active : true,
+      isFeatured: !!market.is_featured,
+      featuredBadge: market.featured_badge ?? "",
+      featuredHeadline: market.featured_headline ?? "",
+      featuredCopy: market.featured_copy ?? "",
+      minimumOrder: String(market.minimum_order ?? 0),
+      deliveryEtaMinutes: market.delivery_eta_minutes != null ? String(market.delivery_eta_minutes) : "",
+      featuredSortOrder: String(market.featured_sort_order ?? 0),
+      badgeExpiresAt: toDateTimeInput(market.badge_expires_at),
+      featuredStartsAt: toDateTimeInput(market.featured_starts_at),
+      featuredEndsAt: toDateTimeInput(market.featured_ends_at),
+      opensAt: market.opens_at ?? "",
+      closesAt: market.closes_at ?? "",
+    });
+
+    setName(draft.name);
+    setAddress(draft.address);
+    setCategory(draft.category);
+    setLat(draft.lat);
+    setLng(draft.lng);
+    setIsActive(draft.isActive);
+    setIsFeatured(draft.isFeatured);
+    setFeaturedBadge(draft.featuredBadge);
+    setFeaturedHeadline(draft.featuredHeadline);
+    setFeaturedCopy(draft.featuredCopy);
+    setMinimumOrder(draft.minimumOrder);
+    setDeliveryEtaMinutes(draft.deliveryEtaMinutes);
+    setFeaturedSortOrder(draft.featuredSortOrder);
+    setBadgeExpiresAt(draft.badgeExpiresAt);
+    setFeaturedStartsAt(draft.featuredStartsAt);
+    setFeaturedEndsAt(draft.featuredEndsAt);
+    setOpensAt(draft.opensAt);
+    setClosesAt(draft.closesAt);
   }, [market]);
+
+  useEffect(() => {
+    if (!market) return;
+
+    saveMarketDraft(draftKey, {
+      name,
+      address,
+      category,
+      lat,
+      lng,
+      isActive,
+      isFeatured,
+      featuredBadge,
+      featuredHeadline,
+      featuredCopy,
+      minimumOrder,
+      deliveryEtaMinutes,
+      featuredSortOrder,
+      badgeExpiresAt,
+      featuredStartsAt,
+      featuredEndsAt,
+      opensAt,
+      closesAt,
+    });
+  }, [
+    address,
+    badgeExpiresAt,
+    category,
+    closesAt,
+    deliveryEtaMinutes,
+    draftKey,
+    featuredBadge,
+    featuredCopy,
+    featuredEndsAt,
+    featuredHeadline,
+    featuredSortOrder,
+    featuredStartsAt,
+    isActive,
+    isFeatured,
+    lat,
+    lng,
+    market,
+    minimumOrder,
+    name,
+    opensAt,
+  ]);
 
   const [tab, setTab] = useState<"details" | "staff">("details");
 
@@ -81,18 +230,30 @@ export default function MarketSettingsPage() {
       const payload = {
         name: name.trim(),
         address: address.trim() || null,
+        category: category.trim() || null,
         lat: lat.trim() ? Number(lat) : null,
         lng: lng.trim() ? Number(lng) : null,
         is_active: isActive,
-        is_featured: isFeatured,
-        featured_badge: featuredBadge.trim() || null,
-        featured_headline: featuredHeadline.trim() || null,
-        featured_copy: featuredCopy.trim() || null,
+        minimum_order: Number(minimumOrder || 0),
+        delivery_eta_minutes: deliveryEtaMinutes.trim() ? Number(deliveryEtaMinutes) : null,
+        opens_at: opensAt || null,
+        closes_at: closesAt || null,
+        ...buildFeaturedPayload({
+          badgeExpiresAt,
+          featuredBadge,
+          featuredCopy,
+          featuredEndsAt,
+          featuredHeadline,
+          featuredSortOrder,
+          featuredStartsAt,
+          isFeatured,
+        }),
       };
       const res = await api.patch(`/api/markets/${id}`, payload);
       return res.data as Market;
     },
     onSuccess: async () => {
+      clearMarketDraft(draftKey);
       await qc.invalidateQueries({ queryKey: ["market-settings-source"] });
       await qc.invalidateQueries({ queryKey: ["markets"] });
       await qc.invalidateQueries({ queryKey: ["my-markets"] });
@@ -101,6 +262,7 @@ export default function MarketSettingsPage() {
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
 
   const uploadLogoM = useMutation({
     mutationFn: async () => {
@@ -122,10 +284,37 @@ export default function MarketSettingsPage() {
     },
   });
 
+  const uploadCoverM = useMutation({
+    mutationFn: async () => {
+      if (!coverFile) throw new Error("Select a file first");
+      const formData = new FormData();
+      formData.append("cover", coverFile);
+
+      return (
+        await api.post(`/api/markets/${id}/cover`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: async () => {
+      setCoverFile(null);
+      await qc.invalidateQueries({ queryKey: ["market-settings-source"] });
+      await qc.invalidateQueries({ queryKey: ["markets"] });
+      await qc.invalidateQueries({ queryKey: ["public-markets"] });
+    },
+  });
+
   const staffQ = useQuery({
     queryKey: ["market-staff", id],
     queryFn: async () => (await api.get(`/api/markets/${id}/staff`)).data as StaffUser[],
     enabled: Number.isFinite(id) && tab === "staff",
+    retry: false,
+  });
+
+  const badgeAuditsQ = useQuery({
+    queryKey: ["market-badge-audits", id],
+    queryFn: async () => (await api.get(`/api/markets/${id}/badge-audits`)).data as BadgeAudit[],
+    enabled: Number.isFinite(id),
     retry: false,
   });
 
@@ -170,6 +359,11 @@ export default function MarketSettingsPage() {
   const logoError =
     (uploadLogoM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
     (uploadLogoM.error as { message?: string })?.message ??
+    null;
+
+  const coverError =
+    (uploadCoverM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
+    (uploadCoverM.error as { message?: string })?.message ??
     null;
 
   const staffError =
@@ -278,6 +472,10 @@ export default function MarketSettingsPage() {
                         <Input value={address} onChange={(e) => setAddress(e.target.value)} />
                       </div>
                       <div className="field-group">
+                        <Label>Category</Label>
+                        <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Grocery" />
+                      </div>
+                      <div className="field-group">
                         <Label>Market latitude</Label>
                         <Input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="41.7151" />
                       </div>
@@ -286,8 +484,39 @@ export default function MarketSettingsPage() {
                         <Input value={lng} onChange={(e) => setLng(e.target.value)} placeholder="44.8271" />
                       </div>
                       <div className="field-group">
+                        <Label>Minimum order</Label>
+                        <Input value={minimumOrder} onChange={(e) => setMinimumOrder(e.target.value)} placeholder="20" />
+                      </div>
+                      <div className="field-group">
+                        <Label>Delivery ETA minutes</Label>
+                        <Input value={deliveryEtaMinutes} onChange={(e) => setDeliveryEtaMinutes(e.target.value)} placeholder="35" />
+                      </div>
+                      <div className="field-group">
+                        <Label>Opens at</Label>
+                        <Input type="time" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} />
+                      </div>
+                      <div className="field-group">
+                        <Label>Closes at</Label>
+                        <Input type="time" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} />
+                      </div>
+                      <div className="field-group">
                         <Label>Featured badge</Label>
                         <Input value={featuredBadge} onChange={(e) => setFeaturedBadge(e.target.value)} placeholder="Promoted market" />
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {badgePresets.map((badge) => (
+                            <button
+                              key={badge}
+                              type="button"
+                              className="status-chip"
+                              onClick={() => {
+                                setIsFeatured(true);
+                                setFeaturedBadge(badge);
+                              }}
+                            >
+                              {badge}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                       <div className="field-group">
                         <Label>Featured headline</Label>
@@ -304,6 +533,22 @@ export default function MarketSettingsPage() {
                           onChange={(e) => setFeaturedCopy(e.target.value)}
                           placeholder="Shown on the landing page when the storefront is promoted."
                         />
+                      </div>
+                      <div className="field-group">
+                        <Label>Badge expires at</Label>
+                        <Input type="datetime-local" value={badgeExpiresAt} onChange={(e) => setBadgeExpiresAt(e.target.value)} />
+                      </div>
+                      <div className="field-group">
+                        <Label>Featured sort order</Label>
+                        <Input value={featuredSortOrder} onChange={(e) => setFeaturedSortOrder(e.target.value)} placeholder="0" />
+                      </div>
+                      <div className="field-group">
+                        <Label>Promotion starts at</Label>
+                        <Input type="datetime-local" value={featuredStartsAt} onChange={(e) => setFeaturedStartsAt(e.target.value)} />
+                      </div>
+                      <div className="field-group">
+                        <Label>Promotion ends at</Label>
+                        <Input type="datetime-local" value={featuredEndsAt} onChange={(e) => setFeaturedEndsAt(e.target.value)} />
                       </div>
                     </div>
 
@@ -355,9 +600,66 @@ export default function MarketSettingsPage() {
                       {logoError && <div className="text-sm text-red-600">{logoError}</div>}
                     </div>
 
+                    <div className="subpanel grid gap-4 p-4">
+                      <div className="flex items-center gap-2">
+                        <ImagePlus className="h-4 w-4 text-cyan-600 dark:text-cyan-200" />
+                        <div className="theme-ink font-medium">Market cover image</div>
+                      </div>
+
+                      {market.cover_url ? (
+                        <img src={market.cover_url} alt={`${market.name} cover`} className="h-40 w-full rounded-2xl border object-cover" />
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-8 text-sm text-slate-500">
+                          No cover uploaded yet. This image will be used on public market cards.
+                        </div>
+                      )}
+
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+                        className="input-shell"
+                      />
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button variant="secondary" onClick={() => uploadCoverM.mutate()} disabled={!coverFile || uploadCoverM.isPending}>
+                          {uploadCoverM.isPending ? "Uploading..." : "Upload cover"}
+                        </Button>
+                      </div>
+
+                      {coverError && <div className="text-sm text-red-600">{coverError}</div>}
+                    </div>
+
                     {updateError && <div className="text-sm text-red-600">{updateError}</div>}
 
                     <div className="flex flex-wrap items-center gap-3">
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          clearMarketDraft(draftKey);
+                          if (!market) return;
+                          setName(market.name ?? "");
+                          setAddress(market.address ?? "");
+                          setCategory(market.category ?? "");
+                          setLat(market.lat != null ? String(market.lat) : "");
+                          setLng(market.lng != null ? String(market.lng) : "");
+                          setIsActive(typeof market.is_active === "boolean" ? market.is_active : true);
+                          setIsFeatured(!!market.is_featured);
+                          setFeaturedBadge(market.featured_badge ?? "");
+                          setFeaturedHeadline(market.featured_headline ?? "");
+                          setFeaturedCopy(market.featured_copy ?? "");
+                          setMinimumOrder(String(market.minimum_order ?? 0));
+                          setDeliveryEtaMinutes(market.delivery_eta_minutes != null ? String(market.delivery_eta_minutes) : "");
+                          setFeaturedSortOrder(String(market.featured_sort_order ?? 0));
+                          setBadgeExpiresAt(toDateTimeInput(market.badge_expires_at));
+                          setFeaturedStartsAt(toDateTimeInput(market.featured_starts_at));
+                          setFeaturedEndsAt(toDateTimeInput(market.featured_ends_at));
+                          setOpensAt(market.opens_at ?? "");
+                          setClosesAt(market.closes_at ?? "");
+                        }}
+                      >
+                        Reset draft
+                      </Button>
                       <Button onClick={() => updateMarketM.mutate()} disabled={updateMarketM.isPending || !name.trim() || !isAdmin}>
                         {updateMarketM.isPending ? "Saving..." : "Save changes"}
                       </Button>
@@ -431,6 +733,42 @@ export default function MarketSettingsPage() {
                 )}
               </CardContent>
             </Card>
+          </section>
+
+          <section className="dashboard-card">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="section-kicker">Badge audit log</div>
+                <h2 className="panel-title mt-2">Who changed market badges and when</h2>
+              </div>
+              <span className="status-chip">{(badgeAuditsQ.data ?? []).length} entries</span>
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              {badgeAuditsQ.isLoading ? (
+                <div className="theme-copy text-sm">Loading badge audit log...</div>
+              ) : (
+                (badgeAuditsQ.data ?? []).slice(0, 8).map((audit) => (
+                  <div key={audit.id} className="subpanel flex flex-col gap-2 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="theme-ink font-semibold">
+                        {audit.user?.name ?? "System"} • {audit.action}
+                      </div>
+                      <div className="theme-copy text-sm">
+                        {audit.previous_badge || "No badge"} to {audit.next_badge || "No badge"}
+                      </div>
+                    </div>
+                    <div className="text-sm text-slate-500">
+                      {audit.created_at ? formatDateTime(audit.created_at) : "No timestamp"}
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {!badgeAuditsQ.isLoading && !(badgeAuditsQ.data ?? []).length && (
+                <div className="theme-copy text-sm">No badge changes have been recorded yet.</div>
+              )}
+            </div>
           </section>
         </>
       )}

@@ -181,6 +181,69 @@
     @apply relative min-h-screen px-4 py-4 md:px-6 md:py-6;
   }
 
+  .public-marketplace-shell {
+    background:
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.12), transparent 18%),
+      radial-gradient(circle at 85% 10%, rgba(250, 204, 21, 0.1), transparent 20%),
+      linear-gradient(180deg, #f8fbfd 0%, #eef5f8 44%, #eaf2f5 100%);
+  }
+
+  .public-header,
+  .public-footer,
+  .public-hero,
+  .public-market-hero,
+  .public-market-section {
+    @apply rounded-[28px] border;
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(226, 232, 240, 0.92);
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(16px);
+  }
+
+  .dark .public-header,
+  .dark .public-footer,
+  .dark .public-hero,
+  .dark .public-market-hero,
+  .dark .public-market-section {
+    background: rgba(9, 13, 20, 0.92);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  }
+
+  .dark .public-marketplace-shell {
+    background:
+      radial-gradient(circle at top left, rgba(34, 211, 238, 0.1), transparent 18%),
+      radial-gradient(circle at 85% 10%, rgba(250, 204, 21, 0.08), transparent 20%),
+      linear-gradient(180deg, #05080d 0%, #070b11 44%, #090d14 100%);
+  }
+
+  .public-header,
+  .public-footer {
+    @apply flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between md:p-6;
+  }
+
+  .public-hero {
+    @apply p-6 md:p-8;
+  }
+
+  .public-market-hero,
+  .public-market-section {
+    @apply p-5 md:p-6;
+  }
+
+  .public-logo {
+    @apply flex items-center gap-3;
+  }
+
+  .public-logo__mark {
+    @apply flex h-12 w-12 items-center justify-center rounded-[16px] border border-cyan-300/14 bg-cyan-300/10 text-cyan-50;
+  }
+
+  .public-header .status-chip,
+  .public-footer .status-chip {
+    @apply text-slate-700 dark:text-slate-100;
+  }
+
   .storefront-shell::before {
     content: "";
     position: absolute;
@@ -664,6 +727,281 @@
     backdrop-filter: blur(14px);
   }
 
+  .public-search-shell {
+    @apply flex items-center gap-3 rounded-full border border-slate-200 bg-white px-4 py-2.5 dark:border-white/10 dark:bg-white/6;
+    backdrop-filter: blur(12px);
+  }
+
+  .public-category-strip {
+    @apply mt-8 flex gap-3 overflow-x-auto pb-1;
+    scrollbar-width: none;
+  }
+
+  .public-category-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .public-category-tile {
+    @apply flex min-w-[132px] shrink-0 flex-col items-center gap-3 rounded-[22px] border border-slate-200 px-4 py-4 text-center text-sm font-medium text-slate-950 dark:border-white/8 dark:text-white;
+    background: rgba(255, 255, 255, 0.72);
+  }
+
+  .public-category-tile:hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(203, 213, 225, 0.96);
+  }
+
+  .dark .public-category-tile:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  .public-category-tile__icon {
+    @apply flex h-14 w-14 items-center justify-center rounded-[18px] text-slate-950 dark:text-white;
+    background: rgba(15, 23, 42, 0.06);
+  }
+
+  .public-category-tile__label {
+    @apply leading-5 text-slate-900 dark:text-slate-100;
+  }
+
+  .public-category-tile-muted .public-category-tile__icon {
+    background: rgba(15, 23, 42, 0.05);
+  }
+
+  .dark .public-category-tile,
+  .dark .public-category-tile-muted .public-category-tile__icon {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .public-promo-grid {
+    @apply grid gap-5 lg:grid-cols-2;
+  }
+
+  .public-promo-card {
+    @apply relative overflow-hidden rounded-[32px] border border-white/8 p-6 md:p-8;
+    min-height: 320px;
+  }
+
+  .public-promo-card__content {
+    @apply relative z-10 max-w-md;
+  }
+
+  .public-promo-card__badge {
+    position: absolute;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    font-family: var(--font-display);
+    font-size: clamp(4rem, 10vw, 6rem);
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.18);
+    letter-spacing: -0.08em;
+  }
+
+  .public-promo-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.24), transparent 24%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent 45%);
+    pointer-events: none;
+  }
+
+  .public-promo-card-cyan {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), transparent 24%),
+      linear-gradient(135deg, #14b8d4 0%, #0d7f98 100%);
+  }
+
+  .public-promo-card-warm {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.1), transparent 24%),
+      linear-gradient(135deg, #342113 0%, #14181f 100%);
+  }
+
+  .public-section-icon {
+    @apply flex h-11 w-11 items-center justify-center rounded-[16px] border text-white;
+  }
+
+  .public-section-icon-cyan {
+    border-color: rgba(34, 211, 238, 0.2);
+    background: rgba(34, 211, 238, 0.14);
+  }
+
+  .public-section-icon-amber {
+    border-color: rgba(250, 204, 21, 0.18);
+    background: rgba(250, 204, 21, 0.12);
+  }
+
+  .public-section-icon-emerald {
+    border-color: rgba(16, 185, 129, 0.18);
+    background: rgba(16, 185, 129, 0.12);
+  }
+
+  .public-section-icon-slate {
+    border-color: rgba(148, 163, 184, 0.16);
+    background: rgba(148, 163, 184, 0.1);
+  }
+
+  .public-arrow-button {
+    @apply h-11 w-11 rounded-full border border-slate-200 bg-white p-0 text-slate-950 hover:bg-slate-50 dark:border-white/10 dark:bg-white/6 dark:text-white dark:hover:bg-white/12;
+  }
+
+  .public-empty-state {
+    @apply rounded-[24px] border border-dashed border-slate-200 px-5 py-6 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400;
+    background: rgba(255, 255, 255, 0.74);
+  }
+
+  .public-market-card {
+    @apply flex h-full flex-col overflow-hidden rounded-[26px] border border-slate-200 dark:border-white/8;
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.1);
+  }
+
+  .dark .public-market-card {
+    background: #151a21;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  }
+
+  .public-market-card__media {
+    @apply relative flex min-h-[190px] flex-col justify-between p-4;
+  }
+
+  .public-market-card__body {
+    @apply flex flex-1 flex-col border-t border-slate-200 p-4 dark:border-white/6;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 249, 251, 0.98));
+  }
+
+  .dark .public-market-card__body {
+    background: linear-gradient(180deg, rgba(17, 22, 29, 0.72), rgba(12, 16, 22, 0.92));
+  }
+
+  .public-market-card__art {
+    @apply pointer-events-none flex items-end justify-end;
+  }
+
+  .public-market-card__topbar {
+    @apply flex items-start justify-between gap-3;
+  }
+
+  .public-market-card__badge-row {
+    @apply flex min-w-0 flex-wrap gap-2;
+  }
+
+  .public-market-card__status-row {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  .public-market-card__availability {
+    white-space: nowrap;
+  }
+
+  .public-market-card__intro {
+    @apply min-w-0;
+    min-height: 3.75rem;
+  }
+
+  .public-market-card__title {
+    @apply text-xl font-semibold text-slate-950 dark:text-white;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-height: 1.25;
+    min-height: 3rem;
+  }
+
+  .public-market-card__subtitle {
+    @apply mt-1 text-sm text-slate-600 dark:text-slate-300;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    min-height: 1.25rem;
+  }
+
+  .public-market-card__details {
+    @apply mt-4 grid gap-3 text-sm;
+    flex: 1;
+  }
+
+  .public-market-card__metrics {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .public-market-card__metrics .status-chip,
+  .public-market-card__badge-row .status-chip,
+  .public-market-card__status-row .status-chip {
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .public-market-card__preview {
+    min-height: 2.5rem;
+  }
+
+  .public-market-card__footer-row {
+    @apply flex items-center justify-between gap-4;
+    min-height: 2rem;
+  }
+
+  .public-market-card__glyph {
+    font-family: var(--font-display);
+    font-size: clamp(3rem, 7vw, 4.5rem);
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.24);
+    letter-spacing: -0.08em;
+  }
+
+  .market-tone-default .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.3), transparent 24%),
+      linear-gradient(135deg, #dbe8f1 0%, #bacddb 100%);
+  }
+
+  .market-tone-discounted .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.3), transparent 24%),
+      linear-gradient(135deg, #29c5e6 0%, #8ee6f4 100%);
+  }
+
+  .market-tone-vip .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), transparent 24%),
+      linear-gradient(135deg, #f6c34a 0%, #f2a445 100%);
+  }
+
+  .market-tone-staff .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), transparent 24%),
+      linear-gradient(135deg, #43c5a7 0%, #92ead8 100%);
+  }
+
+  .dark .market-tone-default .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), transparent 24%),
+      linear-gradient(135deg, #1a222c 0%, #0d1218 100%);
+  }
+
+  .dark .market-tone-discounted .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.18), transparent 24%),
+      linear-gradient(135deg, #0ea5c6 0%, #0f172a 100%);
+  }
+
+  .dark .market-tone-vip .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.12), transparent 24%),
+      linear-gradient(135deg, #f59e0b 0%, #3b2412 100%);
+  }
+
+  .dark .market-tone-staff .public-market-card__media {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.12), transparent 24%),
+      linear-gradient(135deg, #0f766e 0%, #0f172a 100%);
+  }
+
   html[lang="ka"] .section-kicker,
   html[lang="ka"] .field-label,
   html[lang="ka"] .mobile-record-label,
@@ -699,6 +1037,10 @@
 
     .feature-market-row {
       @apply items-start;
+    }
+
+    .public-promo-card {
+      min-height: 260px;
     }
   }
 }

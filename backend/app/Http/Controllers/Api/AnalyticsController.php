@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Driver;
 use App\Models\Market;
+use App\Models\MarketPublicClick;
 use App\Models\Order;
 use App\Models\RoutePlan;
 use Illuminate\Http\Request;
@@ -121,6 +122,52 @@ class AnalyticsController extends Controller
             'by_market' => $byMarket,
             'by_driver' => $byDriver,
             'funnel' => $funnel,
+        ]);
+    }
+
+    public function publicMarketplace(Request $request)
+    {
+        $from = $request->query('from', now()->subDays(30)->toDateString());
+        $to = $request->query('to', now()->toDateString());
+
+        $clicks = MarketPublicClick::query()
+            ->whereBetween('created_at', [$from . ' 00:00:00', $to . ' 23:59:59']);
+
+        $topMarkets = Market::query()
+            ->select('id', 'name', 'code', 'featured_badge')
+            ->get()
+            ->map(function (Market $market) use ($clicks) {
+                $marketClicks = (clone $clicks)->where('market_id', $market->id);
+
+                return [
+                    'market_id' => $market->id,
+                    'market_name' => $market->name,
+                    'market_code' => $market->code,
+                    'featured_badge' => $market->featured_badge,
+                    'clicks' => (clone $marketClicks)->count(),
+                    'latest_click_at' => optional((clone $marketClicks)->latest()->first())?->created_at?->toDateTimeString(),
+                ];
+            })
+            ->sortByDesc('clicks')
+            ->values()
+            ->take(10)
+            ->values();
+
+        $topSources = (clone $clicks)
+            ->get()
+            ->groupBy(fn (MarketPublicClick $click) => $click->source ?: 'unknown')
+            ->map(fn ($group, $source) => [
+                'source' => $source,
+                'clicks' => $group->count(),
+            ])
+            ->sortByDesc('clicks')
+            ->values();
+
+        return response()->json([
+            'range' => ['from' => $from, 'to' => $to],
+            'total_clicks' => (clone $clicks)->count(),
+            'top_markets' => $topMarkets,
+            'top_sources' => $topSources,
         ]);
     }
 }

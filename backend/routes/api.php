@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\PublicMarketController;
 use App\Http\Controllers\Api\DriverOrderController;
 use App\Http\Controllers\Api\MarketBadgeRequestController;
+use App\Http\Controllers\Api\MarketBannerController;
 
 /*
 |--------------------------------------------------------------------------
@@ -43,10 +44,12 @@ Route::post('/register', [AuthController::class, 'register']);
 
 Route::prefix('public')->group(function () {
     Route::get('/markets', [PublicMarketController::class, 'markets']);
+    Route::post('/markets/{market}/track-click', [PublicMarketController::class, 'trackClick']);
     Route::get('/markets/{market}', [PublicMarketController::class, 'market']);
     Route::get('/markets/{market}/items', [PublicMarketController::class, 'items']);
     Route::get('/markets/{market}/active-promo', [PublicMarketController::class, 'activePromo']); // optional
     Route::get('/markets/{market}/validate-promo', [PublicMarketController::class, 'validatePromo']);
+    Route::get('/banners', [MarketBannerController::class, 'publicIndex']);
 });
 /*
 |--------------------------------------------------------------------------
@@ -60,6 +63,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/promo-codes', [PromoCodeController::class, 'indexGlobal']);
         Route::post('/promo-codes', [PromoCodeController::class, 'storeGlobal']);
         Route::patch('/promo-codes/{promoCode}', [PromoCodeController::class, 'updateGlobal']);
+        Route::get('/analytics/public-marketplace', [AnalyticsController::class, 'publicMarketplace']);
+        Route::get('/banners', [MarketBannerController::class, 'index']);
+        Route::post('/banners', [MarketBannerController::class, 'store']);
+        Route::patch('/banners/{banner}', [MarketBannerController::class, 'update']);
     });
 
     /*
@@ -68,6 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
     Route::get('/me', [AuthController::class, 'me']);
+    Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::match(['patch', 'post'], '/me/language', [AuthController::class, 'updateLanguage']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -180,6 +188,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Markets CRUD
         Route::get('/markets', [MarketController::class, 'index']);
         Route::post('/markets', [MarketController::class, 'store']);
+        Route::patch('/markets/featured-order', [MarketController::class, 'reorderFeatured']);
         Route::patch('/markets/{market}', [MarketController::class, 'update']);
         Route::get('/badge-requests', [MarketBadgeRequestController::class, 'index']);
 
@@ -203,6 +212,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/markets/{market}/items', [ItemController::class, 'store']);
         Route::patch('/markets/{market}/items/{item}', [ItemController::class, 'update']);
         Route::post('/markets/{market}/logo', [MarketController::class, 'uploadLogo']);
+        Route::post('/markets/{market}/cover', [MarketController::class, 'uploadCover']);
         // Promo Codes
         Route::get('/markets/{market}/promo-codes', [PromoCodeController::class, 'index']);
         Route::post('/markets/{market}/promo-codes', [PromoCodeController::class, 'store']);
@@ -211,6 +221,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/markets/{market}/staff', [MarketController::class, 'staff']);
         Route::post('/markets/{market}/staff', [MarketController::class, 'addStaff']);
         Route::delete('/markets/{market}/staff/{userId}', [MarketController::class, 'removeStaff']);
+        Route::get('/markets/{market}/badge-audits', [MarketController::class, 'badgeAudits']);
         Route::get('/markets/{market}/assignable-users', [UsersController::class, 'assignable']);
         Route::post('/markets/{market}/badge-requests', [MarketBadgeRequestController::class, 'store']);
     });

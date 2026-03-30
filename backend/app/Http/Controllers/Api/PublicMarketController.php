@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Market;
+use App\Models\MarketPublicClick;
 use App\Models\PromoCode;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
 class PublicMarketController extends Controller
@@ -12,20 +14,32 @@ class PublicMarketController extends Controller
     protected function applyFeaturedOrdering($query)
     {
         if (Market::hasFeaturedColumns()) {
-            $query->orderByDesc('is_featured');
+            $query
+                ->orderByDesc('is_featured')
+                ->orderBy('featured_sort_order')
+                ->orderBy('name');
         }
 
         return $query;
     }
 
-    // GET /api/public/markets
     public function markets()
     {
         $markets = $this->applyFeaturedOrdering(Market::query())
             ->where('is_active', true)
-            ->withCount(['items as active_items_count' => function ($query) {
-                $query->where('is_active', true);
-            }])
+            ->withCount([
+                'items as active_items_count' => function ($query) {
+                    $query->where('is_active', true);
+                },
+                'orders as rating_count' => function ($query) {
+                    $query->whereNotNull('customer_rating');
+                },
+            ])
+            ->withAvg([
+                'orders as average_rating' => function ($query) {
+                    $query->whereNotNull('customer_rating');
+                },
+            ], 'customer_rating')
             ->with([
                 'items' => function ($query) {
                     $query
@@ -50,81 +64,46 @@ class PublicMarketController extends Controller
                         ->limit(1);
                 },
             ])
-            ->orderBy('name')
             ->get();
 
-        return $markets->map(function (Market $market) {
-            $activePromo = $market->promoCodes->first();
-
-            return [
-                'id' => $market->id,
-                'name' => $market->name,
-                'code' => $market->code,
-                'address' => $market->address,
-                'lat' => $market->lat !== null ? (float) $market->lat : null,
-                'lng' => $market->lng !== null ? (float) $market->lng : null,
-                'is_active' => (bool) $market->is_active,
-                'is_featured' => Market::hasFeaturedColumns() ? (bool) $market->is_featured : false,
-                'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
-                'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
-                'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
-                'logo_url' => $market->logo_url,
-                'active_items_count' => (int) ($market->active_items_count ?? 0),
-                'active_promo' => $activePromo ? [
-                    'id' => $activePromo->id,
-                    'code' => $activePromo->code,
-                    'type' => $activePromo->type,
-                    'value' => $activePromo->value,
-                    'is_active' => (bool) $activePromo->is_active,
-                ] : null,
-                'item_preview' => $market->items->take(4)->map(function ($item) {
-                    return [
-                        'id' => $item->id,
-                        'name' => $item->name,
-                        'sku' => $item->sku,
-                        'price' => $item->price,
-                        'discount_type' => $item->discount_type,
-                        'discount_value' => $item->discount_value,
-                        'stock_qty' => $item->stock_qty,
-                    ];
-                })->values(),
-            ];
-        });
+        return $markets->map(fn (Market $market) => $this->serializeMarket($market))->values();
     }
 
-    // GET /api/public/markets/{market}
     public function market(Market $market)
     {
         abort_unless($market->is_active, 404);
 
-        $market->loadCount(['items as active_items_count' => function ($query) {
-            $query->where('is_active', true);
-        }]);
+        $market
+            ->loadCount([
+                'items as active_items_count' => function ($query) {
+                    $query->where('is_active', true);
+                },
+                'orders as rating_count' => function ($query) {
+                    $query->whereNotNull('customer_rating');
+                },
+            ])
+            ->loadAvg([
+                'orders as average_rating' => function ($query) {
+                    $query->whereNotNull('customer_rating');
+                },
+            ], 'customer_rating')
+            ->load([
+                'promoCodes' => function ($query) {
+                    $query
+                        ->activeApplicable()
+                        ->latest()
+                        ->limit(1);
+                },
+            ]);
 
-        return [
-            'id' => $market->id,
-            'name' => $market->name,
-            'code' => $market->code,
-            'address' => $market->address,
-            'lat' => $market->lat !== null ? (float) $market->lat : null,
-            'lng' => $market->lng !== null ? (float) $market->lng : null,
-            'is_active' => (bool) $market->is_active,
-            'is_featured' => Market::hasFeaturedColumns() ? (bool) $market->is_featured : false,
-            'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
-            'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
-            'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
-            'logo_url' => $market->logo_url,
-            'active_items_count' => (int) ($market->active_items_count ?? 0),
-        ];
+        return $this->serializeMarket($market);
     }
 
-    // GET /api/public/markets/{market}/items
-    public function items(Market $market)
+    public function items(Request $request, Market $market)
     {
         abort_unless($market->is_active, 404);
 
-        // Assuming you have Item model + items table with market_id
-        return $market->items()
+        $query = $market->items()
             ->where('is_active', true)
             ->select([
                 'id',
@@ -137,23 +116,32 @@ class PublicMarketController extends Controller
                 'is_active',
                 'stock_qty',
             ])
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        if ($request->filled('q')) {
+            $search = mb_strtolower(trim((string) $request->query('q')));
+            $query->where(function (Builder $builder) use ($search) {
+                $builder
+                    ->whereRaw('LOWER(name) LIKE ?', ["%{$search}%"])
+                    ->orWhereRaw('LOWER(sku) LIKE ?', ["%{$search}%"]);
+            });
+        }
+
+        return $query->get();
     }
 
-    // GET /api/public/markets/{market}/active-promo  (optional)
     public function activePromo(Market $market)
     {
         abort_unless($market->is_active, 404);
 
-        // If you have promo_codes table/model relation
-        // return first active promo for market
         $promo = $market->promoCodes()
             ->activeApplicable()
             ->orderByDesc('id')
             ->first();
 
-        if (!$promo) return null;
+        if (!$promo) {
+            return null;
+        }
 
         return [
             'id' => $promo->id,
@@ -199,6 +187,77 @@ class PublicMarketController extends Controller
             'discount_total' => $discountTotal,
             'total' => max(0, $subtotal - $discountTotal),
         ]);
+    }
+
+    public function trackClick(Request $request, Market $market)
+    {
+        abort_unless($market->is_active, 404);
+
+        $data = $request->validate([
+            'source' => ['nullable', 'string', 'max:80'],
+            'visitor_key' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        MarketPublicClick::create([
+            'market_id' => $market->id,
+            'user_id' => $request->user()?->id,
+            'visitor_key' => $data['visitor_key'] ?? null,
+            'source' => $data['source'] ?? 'public-card',
+        ]);
+
+        return response()->json(['tracked' => true]);
+    }
+
+    private function serializeMarket(Market $market): array
+    {
+        $activePromo = $market->promoCodes->first();
+        $featuredBadge = $market->hasActiveBadge() ? $market->featured_badge : null;
+
+        return [
+            'id' => $market->id,
+            'name' => $market->name,
+            'code' => $market->code,
+            'address' => $market->address,
+            'category' => $market->category,
+            'lat' => Market::hasCoordinateColumns() && $market->lat !== null ? (float) $market->lat : null,
+            'lng' => Market::hasCoordinateColumns() && $market->lng !== null ? (float) $market->lng : null,
+            'is_active' => (bool) $market->is_active,
+            'is_open_now' => $market->is_open_now,
+            'opens_at' => $market->opens_at,
+            'closes_at' => $market->closes_at,
+            'is_featured' => Market::hasFeaturedColumns() ? $market->isFeatureLive() : false,
+            'featured_badge' => $featuredBadge,
+            'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
+            'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
+            'badge_expires_at' => $featuredBadge ? optional($market->badge_expires_at)?->toDateTimeString() : null,
+            'logo_url' => $market->logo_url,
+            'cover_url' => $market->cover_url,
+            'minimum_order' => (float) ($market->minimum_order ?? 0),
+            'delivery_eta_minutes' => $market->delivery_eta_minutes ? (int) $market->delivery_eta_minutes : null,
+            'active_items_count' => (int) ($market->active_items_count ?? 0),
+            'average_rating' => $market->average_rating !== null ? round((float) $market->average_rating, 2) : null,
+            'rating_count' => (int) ($market->rating_count ?? 0),
+            'active_promo' => $activePromo ? [
+                'id' => $activePromo->id,
+                'code' => $activePromo->code,
+                'type' => $activePromo->type,
+                'value' => $activePromo->value,
+                'is_active' => (bool) $activePromo->is_active,
+            ] : null,
+            'item_preview' => $market->relationLoaded('items')
+                ? $market->items->take(4)->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'sku' => $item->sku,
+                        'price' => $item->price,
+                        'discount_type' => $item->discount_type,
+                        'discount_value' => $item->discount_value,
+                        'stock_qty' => $item->stock_qty,
+                    ];
+                })->values()
+                : [],
+        ];
     }
 
     private function resolvePromoCode(Market $market, string $code): ?PromoCode

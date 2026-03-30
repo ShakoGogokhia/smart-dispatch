@@ -23,17 +23,52 @@ export type StorefrontMarket = {
   name: string;
   code: string;
   address?: string | null;
+  category?: string | null;
   lat?: number | string | null;
   lng?: number | string | null;
   is_active: boolean;
+  is_open_now?: boolean | null;
+  opens_at?: string | null;
+  closes_at?: string | null;
   is_featured?: boolean;
+  is_currently_featured?: boolean;
   featured_badge?: string | null;
   featured_headline?: string | null;
   featured_copy?: string | null;
+  badge_expires_at?: string | null;
+  badge_is_active?: boolean;
+  featured_starts_at?: string | null;
+  featured_ends_at?: string | null;
+  featured_sort_order?: number;
   logo_url?: string | null;
+  cover_url?: string | null;
+  minimum_order?: number;
+  delivery_eta_minutes?: number | null;
   active_items_count?: number;
+  average_rating?: number | null;
+  rating_count?: number;
+  public_clicks_count?: number;
   item_preview?: StorefrontItemPreview[];
   active_promo?: MarketPromo | null;
+};
+
+export type MarketBanner = {
+  id: number;
+  title: string;
+  subtitle?: string | null;
+  cta_label?: string | null;
+  cta_url?: string | null;
+  theme: string;
+  is_active: boolean;
+  is_live?: boolean;
+  sort_order: number;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  market?: {
+    id: number;
+    name: string;
+    code: string;
+  } | null;
 };
 
 export function calcStorefrontPrice(item: Pick<StorefrontItemPreview, "price" | "discount_type" | "discount_value">) {
@@ -71,4 +106,23 @@ export function getMarketCopy(market: Pick<StorefrontMarket, "featured_copy" | "
       ? `${market.name} is ready to serve this area with a faster storefront and cleaner checkout flow.`
       : `${market.name} is ready for orders with a curated catalog and quick delivery handoff.`)
   );
+}
+
+export function formatEtaWindow(minutes?: number | null) {
+  if (!minutes || minutes <= 0) {
+    return "ETA on request";
+  }
+
+  const lowerBound = Math.max(10, minutes - 10);
+  const upperBound = minutes + 10;
+
+  return `${lowerBound}-${upperBound} min`;
+}
+
+export function formatMarketHours(open?: string | null, close?: string | null) {
+  if (!open || !close) {
+    return "Hours not set";
+  }
+
+  return `${open.slice(0, 5)}-${close.slice(0, 5)}`;
 }

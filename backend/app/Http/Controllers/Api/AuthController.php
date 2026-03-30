@@ -96,6 +96,24 @@ class AuthController extends Controller
         ]);
     }
 
+    public function updateProfile(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'language' => ['nullable', 'string', 'in:en,ka'],
+        ]);
+
+        $user = $request->user();
+        $user->forceFill([
+            'name' => $data['name'],
+            'language' => $data['language'] ?? $user->language,
+        ])->save();
+
+        return response()->json([
+            'user' => $this->serializeUser($user),
+        ]);
+    }
+
     public function updateLanguage(Request $request)
     {
         $data = $request->validate([
