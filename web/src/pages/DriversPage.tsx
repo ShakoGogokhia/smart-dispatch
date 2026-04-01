@@ -207,9 +207,9 @@ export default function DriversPage() {
       </div>
 
       <Dialog open={createVehicleOpen} onOpenChange={setCreateVehicleOpen}>
-        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(980px,calc(100%-2rem))]">
+        <DialogContent className="app-modal-shell sm:max-w-[min(980px,calc(100%-2rem))]">
           <DialogHeader>
-            <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+            <div className="app-modal-header">
               <div className="section-kicker">{t("drivers.vehicles")}</div>
               <DialogTitle className="panel-title mt-2">{t("drivers.createVehicle")}</DialogTitle>
               <p className="theme-copy mt-2 text-sm leading-6">Give dispatch a clear vehicle profile with capacity and stop limits in one readable form.</p>
@@ -249,7 +249,7 @@ export default function DriversPage() {
 
           {vehicleError && <div className="px-6 text-sm text-red-700">{vehicleError}</div>}
 
-          <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
+          <DialogFooter className="app-modal-footer">
             <Button onClick={() => createVehicleM.mutate()} disabled={createVehicleM.isPending || !vehicleName.trim()}>
               {createVehicleM.isPending ? t("users.creating") : t("drivers.createVehicle")}
             </Button>
@@ -258,9 +258,9 @@ export default function DriversPage() {
       </Dialog>
 
       <Dialog open={createDriverOpen} onOpenChange={setCreateDriverOpen}>
-        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(980px,calc(100%-2rem))]">
+        <DialogContent className="app-modal-shell sm:max-w-[min(980px,calc(100%-2rem))]">
           <DialogHeader>
-            <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+            <div className="app-modal-header">
               <div className="section-kicker">{t("nav.drivers")}</div>
               <DialogTitle className="panel-title mt-2">{t("drivers.createDriver")}</DialogTitle>
               <p className="theme-copy mt-2 text-sm leading-6">Create the driver account and optional vehicle assignment in a layout that is actually easy to read.</p>
@@ -311,7 +311,7 @@ export default function DriversPage() {
 
           {driverError && <div className="px-6 text-sm text-red-700">{driverError}</div>}
 
-          <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
+          <DialogFooter className="app-modal-footer">
             <Button
               onClick={() => createDriverM.mutate()}
               disabled={createDriverM.isPending || !driverName.trim() || !driverEmail.trim() || !driverPassword}

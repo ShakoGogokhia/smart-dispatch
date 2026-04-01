@@ -181,6 +181,10 @@
     @apply relative min-h-screen px-4 py-4 md:px-6 md:py-6;
   }
 
+  .app-shell-mobile-safe {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .storefront-shell::before {
     content: "";
     position: absolute;
@@ -194,6 +198,10 @@
 
   .editorial-shell {
     @apply relative mx-auto grid max-w-[1560px] gap-5 lg:grid-cols-[300px_minmax(0,1fr)];
+  }
+
+  .editorial-shell-mobile {
+    @apply gap-4 md:gap-5;
   }
 
   .rail-panel,
@@ -247,6 +255,68 @@
 
   .dashboard-card {
     @apply p-5 md:p-6;
+  }
+
+  .mobile-device-shell {
+    @apply relative grid gap-4;
+  }
+
+  .mobile-device-shell__topbar {
+    @apply sticky top-0 z-30 flex items-center justify-between gap-3 rounded-[28px] border px-4 py-3;
+    background: rgba(255, 255, 255, 0.84);
+    border-color: rgba(226, 232, 240, 0.82);
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(18px);
+  }
+
+  .dark .mobile-device-shell__topbar {
+    background: rgba(14, 22, 34, 0.88);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
+  }
+
+  .mobile-main-panel {
+    min-height: calc(100vh - 13rem);
+  }
+
+  .mobile-app-icon {
+    @apply h-11 w-11 rounded-[16px] border border-slate-200/80 bg-white/90 text-slate-700 dark:border-white/10 dark:bg-white/6 dark:text-slate-100;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .mobile-status-pill {
+    @apply flex h-11 min-w-11 items-center justify-center rounded-[16px] border px-3 text-sm font-semibold text-cyan-700 dark:text-cyan-100;
+    background: rgba(88, 181, 196, 0.12);
+    border-color: rgba(88, 181, 196, 0.18);
+  }
+
+  .mobile-drawer {
+    background: transparent !important;
+  }
+
+  .mobile-bottom-nav {
+    @apply fixed inset-x-4 z-40 grid grid-cols-5 gap-2 rounded-[30px] border p-2 xl:hidden;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(255, 255, 255, 0.86);
+    border-color: rgba(226, 232, 240, 0.84);
+    box-shadow: 0 18px 46px rgba(15, 23, 42, 0.14);
+    backdrop-filter: blur(22px);
+  }
+
+  .dark .mobile-bottom-nav {
+    background: rgba(14, 22, 34, 0.92);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34);
+  }
+
+  .mobile-bottom-nav__item {
+    @apply flex min-w-0 flex-col items-center justify-center gap-1 rounded-[22px] px-2 py-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400;
+  }
+
+  .mobile-bottom-nav__item-active {
+    @apply text-slate-950 dark:text-white;
+    background: rgba(88, 181, 196, 0.12);
+    box-shadow: inset 0 0 0 1px rgba(88, 181, 196, 0.16);
   }
 
   .market-rail {
@@ -527,6 +597,89 @@
     backdrop-filter: blur(8px);
   }
 
+  .app-modal-shell {
+    @apply grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border p-0;
+    background: rgba(248, 246, 240, 0.98);
+    border-color: rgba(226, 232, 240, 0.88);
+  }
+
+  .dark .app-modal-shell {
+    background: rgba(13, 20, 32, 0.98);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .app-modal-header {
+    @apply shrink-0 border-b px-6 py-5 text-left;
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(226, 232, 240, 0.88);
+  }
+
+  .dark .app-modal-header {
+    background: rgba(19, 29, 43, 0.96);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .app-modal-body {
+    @apply min-h-0 overflow-y-auto overscroll-contain;
+  }
+
+  .app-modal-layout {
+    @apply grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)];
+  }
+
+  .app-modal-layout-wide {
+    @apply grid gap-0 lg:grid-cols-[340px_minmax(0,1fr)];
+  }
+
+  .app-modal-sidebar {
+    @apply border-b p-5 lg:border-b-0 lg:border-r;
+    background: rgba(255, 255, 255, 0.94);
+    border-color: rgba(226, 232, 240, 0.88);
+  }
+
+  .dark .app-modal-sidebar {
+    background: rgba(19, 29, 43, 0.96);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .app-modal-sidebar-sticky {
+    @apply grid gap-4 lg:sticky lg:top-0;
+  }
+
+  .app-modal-main {
+    @apply grid gap-4 p-5 sm:p-6;
+  }
+
+  .app-modal-main-grid {
+    @apply md:grid-cols-2;
+  }
+
+  .app-modal-card {
+    @apply rounded-[24px] border bg-white p-4 dark:border-white/10 dark:bg-[#131d2b];
+    border-color: rgba(226, 232, 240, 0.88);
+  }
+
+  .app-modal-preview {
+    @apply rounded-[26px] border p-5 dark:border-white/10 dark:bg-[#0f1825];
+    background: rgba(247, 244, 236, 0.98);
+    border-color: rgba(226, 232, 240, 0.88);
+  }
+
+  .dark .app-modal-preview {
+    background: rgba(15, 24, 37, 0.98);
+  }
+
+  .app-modal-footer {
+    @apply shrink-0 border-t px-6 py-4;
+    background: rgba(248, 250, 252, 0.92);
+    border-color: rgba(226, 232, 240, 0.88);
+  }
+
+  .dark .app-modal-footer {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
   .section-divider {
     @apply h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent dark:via-white/12;
   }
@@ -685,6 +838,62 @@
   }
 
   @media (max-width: 767px) {
+    .app-shell {
+      @apply px-3 py-3;
+    }
+
+    .mobile-device-shell__topbar {
+      top: 0.25rem;
+    }
+
+    .paper-panel,
+    .dashboard-card,
+    .intro-panel,
+    .rail-panel,
+    .ink-panel,
+    .hero-panel,
+    .spotlight-panel,
+    .landing-stage,
+    .staff-strip {
+      border-radius: 24px;
+    }
+
+    .hero-panel {
+      @apply p-5;
+    }
+
+    .section-title {
+      @apply text-3xl;
+    }
+
+    .intro-title,
+    .panel-title {
+      @apply text-[1.7rem];
+    }
+
+    .table-shell {
+      margin-inline: -0.25rem;
+    }
+
+    .table-shell table {
+      min-width: 680px;
+    }
+
+    .map-frame {
+      border-radius: 24px;
+    }
+
+    .mobile-bottom-nav {
+      inset-inline: 0.75rem;
+      gap: 0.4rem;
+      padding: 0.45rem;
+    }
+
+    .mobile-bottom-nav__item {
+      padding-inline: 0.1rem;
+      font-size: 10px;
+    }
+
     .table-desktop {
       @apply hidden;
     }
@@ -693,12 +902,34 @@
       @apply grid;
     }
 
+    .hero-grid,
+    .hero-stats,
+    .data-grid,
+    .feature-grid {
+      @apply grid-cols-1;
+    }
+
     .spotlight-item-row {
       @apply items-start;
     }
 
     .feature-market-row {
       @apply items-start;
+    }
+  }
+
+  @media (min-width: 768px) {
+    .mobile-bottom-nav {
+      max-width: 720px;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .app-shell-mobile-safe {
+      padding-bottom: 1.5rem;
     }
   }
 }

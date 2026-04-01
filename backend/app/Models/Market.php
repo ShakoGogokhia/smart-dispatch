@@ -26,6 +26,8 @@ class Market extends Model
         'featured_headline',
         'featured_copy',
         'logo_path',
+        'delivery_slots',
+        'approval_status',
     ];
 
     protected $casts = [
@@ -33,6 +35,7 @@ class Market extends Model
         'is_featured' => 'boolean',
         'lat' => 'decimal:7',
         'lng' => 'decimal:7',
+        'delivery_slots' => 'array',
     ];
 
     protected $appends = [
@@ -59,6 +62,11 @@ class Market extends Model
     public function promoCodes()
     {
         return $this->hasMany(PromoCode::class);
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(ProductReview::class);
     }
 
     public function getLogoUrlAttribute(): ?string

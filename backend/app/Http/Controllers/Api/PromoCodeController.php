@@ -2,12 +2,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Market;
 use App\Models\PromoCode;
+use App\Services\AppNotificationService;
+use Illuminate\Http\Request;
 
 class PromoCodeController extends Controller
 {
+    public function __construct(private AppNotificationService $notifications)
+    {
+    }
+
     public function indexGlobal()
     {
         return PromoCode::query()
@@ -80,9 +85,31 @@ class PromoCodeController extends Controller
             'starts_at' => $data['starts_at'] ?? null,
             'ends_at' => $data['ends_at'] ?? null,
             'max_uses' => $data['max_uses'] ?? null,
-            'is_active' => $data['is_active'] ?? true,
+            'is_active' => $request->user()->hasRole('admin') ? ($data['is_active'] ?? true) : false,
             'uses' => 0,
         ]);
+
+        if (!$request->user()->hasRole('admin')) {
+            \App\Models\WorkflowApproval::create([
+                'type' => 'promo',
+                'status' => 'pending',
+                'requested_by' => $request->user()->id,
+                'market_id' => $market->id,
+                'promo_code_id' => $promo->id,
+                'payload' => [
+                    'code' => $promo->code,
+                    'type' => $promo->type,
+                    'value' => $promo->value,
+                ],
+            ]);
+
+            $this->notifications->notifyAdmins(
+                'approval.created',
+                'Promo approval requested',
+                "{$market->name} submitted promo code {$promo->code} for approval.",
+                ['market_id' => $market->id, 'promo_code_id' => $promo->id],
+            );
+        }
 
         return response()->json($promo, 201);
     }

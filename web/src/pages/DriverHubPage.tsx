@@ -86,6 +86,7 @@ export default function DriverHubPage() {
   const queryClient = useQueryClient();
   const [lat, setLat] = useState("41.7151");
   const [lng, setLng] = useState("44.8271");
+  const [proofSignature, setProofSignature] = useState("");
 
   const feedQ = useQuery({
     queryKey: ["driver-feed"],
@@ -122,7 +123,9 @@ export default function DriverHubPage() {
 
   const actionM = useMutation({
     mutationFn: async ({ orderId, action }: { orderId: number; action: string }) =>
-      (await api.post(`/api/driver/orders/${orderId}/${action}`)).data,
+      (
+        await api.post(`/api/driver/orders/${orderId}/${action}`, action === "delivered" ? { proof_signature_name: proofSignature || null } : undefined)
+      ).data,
     onSuccess: refreshQueries,
   });
 
@@ -228,6 +231,11 @@ export default function DriverHubPage() {
               <CardTitle className="font-display text-2xl">Recent earnings</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">Delivered: {feedQ.data?.driver?.transactions?.length ?? 0}</div>
+                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">Offers live: {offeredOrders.length}</div>
+                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">Active drops: {assignedOrders.length}</div>
+              </div>
               {(feedQ.data?.driver?.transactions ?? []).length === 0 ? (
                 <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">No earnings yet.</div>
               ) : (
@@ -237,7 +245,7 @@ export default function DriverHubPage() {
                       <div>
                         <div className="font-semibold text-slate-950">{transaction.description || "Delivery earning"}</div>
                         <div className="mt-1 text-sm text-slate-500">
-                          {transaction.distance_km ?? 0} km • {transaction.weather_condition || "clear"} • {formatDateTime(transaction.created_at)}
+                          {transaction.distance_km ?? 0} km - {transaction.weather_condition || "clear"} - {formatDateTime(transaction.created_at)}
                         </div>
                       </div>
                       <Badge className="rounded-full">{formatMoney(transaction.amount)}</Badge>
@@ -289,6 +297,12 @@ export default function DriverHubPage() {
               <CardTitle className="font-display text-2xl">{t("driverHub.assignedDeliveries")}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
+              <div className="grid gap-3 rounded-[24px] border border-slate-200/80 p-4">
+                <div className="grid gap-2">
+                  <Label>Proof signature</Label>
+                  <Input value={proofSignature} onChange={(event) => setProofSignature(event.target.value)} className="rounded-2xl" />
+                </div>
+              </div>
               {assignedOrders.length === 0 ? (
                 <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
                   {t("driverHub.noAssigned")}

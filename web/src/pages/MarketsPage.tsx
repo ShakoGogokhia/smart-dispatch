@@ -39,6 +39,16 @@ type BadgeRequest = {
   requester?: { id: number; name: string; email: string } | null;
 };
 
+type WorkflowApproval = {
+  id: number;
+  type: string;
+  status: string;
+  notes?: string | null;
+  requester?: { id: number; name: string; email: string } | null;
+  market?: { id: number; name: string; code: string } | null;
+  order?: { id: number; code: string } | null;
+};
+
 type MarketDraft = {
   name: string;
   code: string;
@@ -105,6 +115,12 @@ export default function MarketsPage() {
   const badgeRequestsQ = useQuery({
     queryKey: ["badge-requests"],
     queryFn: async () => (await api.get("/api/badge-requests")).data as BadgeRequest[],
+    enabled: isAdmin,
+  });
+
+  const approvalsQ = useQuery({
+    queryKey: ["workflow-approvals"],
+    queryFn: async () => (await api.get("/api/workflow-approvals")).data as WorkflowApproval[],
     enabled: isAdmin,
   });
 
@@ -236,6 +252,13 @@ export default function MarketsPage() {
   const featuredCount = markets.filter((market) => market.is_featured).length;
   const activeCount = markets.filter((market) => market.is_active).length;
   const promoCount = markets.filter((market) => market.active_promo).length;
+  const reviewApprovalM = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: "approved" | "rejected" }) =>
+      (await api.post(`/api/workflow-approvals/${id}/review`, { status })).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["workflow-approvals"] });
+    },
+  });
 
   if (!isAdmin) {
     return (
@@ -268,40 +291,45 @@ export default function MarketsPage() {
             <DialogTrigger asChild>
               <Button size="lg">Create market</Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="app-modal-shell sm:max-w-[min(840px,calc(100%-2rem))]">
               <DialogHeader>
-                <DialogTitle>Create market</DialogTitle>
+                <div className="app-modal-header">
+                  <DialogTitle className="panel-title">Create market</DialogTitle>
+                </div>
               </DialogHeader>
 
+              <div className="app-modal-body">
+              <div className="app-modal-main">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="field-group">
-                  <Label>Name</Label>
-                  <Input value={createDraft.name} onChange={(e) => setCreateDraft((current) => ({ ...current, name: e.target.value }))} />
+                  <Label className="field-label">Name</Label>
+                  <Input value={createDraft.name} onChange={(e) => setCreateDraft((current) => ({ ...current, name: e.target.value }))} className="input-shell" />
                 </div>
                 <div className="field-group">
-                  <Label>Code</Label>
-                  <Input value={createDraft.code} onChange={(e) => setCreateDraft((current) => ({ ...current, code: e.target.value }))} />
+                  <Label className="field-label">Code</Label>
+                  <Input value={createDraft.code} onChange={(e) => setCreateDraft((current) => ({ ...current, code: e.target.value }))} className="input-shell" />
                 </div>
                 <div className="field-group md:col-span-2">
-                  <Label>Address</Label>
+                  <Label className="field-label">Address</Label>
                   <Input
                     value={createDraft.address}
                     onChange={(e) => setCreateDraft((current) => ({ ...current, address: e.target.value }))}
                     placeholder="Service address or pickup zone"
+                    className="input-shell"
                   />
                 </div>
                 <div className="field-group">
-                  <Label>Latitude</Label>
-                  <Input value={createDraft.lat} onChange={(e) => setCreateDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" />
+                  <Label className="field-label">Latitude</Label>
+                  <Input value={createDraft.lat} onChange={(e) => setCreateDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" className="input-shell" />
                 </div>
                 <div className="field-group">
-                  <Label>Longitude</Label>
-                  <Input value={createDraft.lng} onChange={(e) => setCreateDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" />
+                  <Label className="field-label">Longitude</Label>
+                  <Input value={createDraft.lng} onChange={(e) => setCreateDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" className="input-shell" />
                 </div>
                 <div className="field-group md:col-span-2">
-                  <Label>Owner</Label>
+                  <Label className="field-label">Owner</Label>
                   <Select value={createDraft.ownerId} onValueChange={(value) => setCreateDraft((current) => ({ ...current, ownerId: value }))}>
-                    <SelectTrigger>
+                    <SelectTrigger className="input-shell w-full">
                       <SelectValue placeholder="Select owner user" />
                     </SelectTrigger>
                     <SelectContent>
@@ -314,32 +342,34 @@ export default function MarketsPage() {
                   </Select>
                 </div>
               </div>
-
               <div className="section-divider" />
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="field-group">
-                  <Label>Featured badge</Label>
+                  <Label className="field-label">Featured badge</Label>
                   <Input
                     value={createDraft.featuredBadge}
                     onChange={(e) => setCreateDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
                     placeholder="Promoted market"
+                    className="input-shell"
                   />
                 </div>
                 <div className="field-group">
-                  <Label>Featured headline</Label>
+                  <Label className="field-label">Featured headline</Label>
                   <Input
                     value={createDraft.featuredHeadline}
                     onChange={(e) => setCreateDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
                     placeholder="Fastest weekly essentials"
+                    className="input-shell"
                   />
                 </div>
                 <div className="field-group md:col-span-2">
-                  <Label>Featured copy</Label>
+                  <Label className="field-label">Featured copy</Label>
                   <Input
                     value={createDraft.featuredCopy}
                     onChange={(e) => setCreateDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
                     placeholder="This message appears in the public spotlight experience."
+                    className="input-shell"
                   />
                 </div>
                 <div className="subpanel flex items-center justify-between p-4">
@@ -365,8 +395,10 @@ export default function MarketsPage() {
               </div>
 
               {createError && <div className="text-sm text-red-600">{createError}</div>}
+              </div>
+              </div>
 
-              <DialogFooter>
+              <DialogFooter className="app-modal-footer">
                 <Button onClick={() => createMarketM.mutate()} disabled={!canCreate || createMarketM.isPending}>
                   {createMarketM.isPending ? "Creating..." : "Create market"}
                 </Button>
@@ -406,6 +438,39 @@ export default function MarketsPage() {
       <section className="dashboard-card">
         <div className="flex items-center justify-between gap-3">
           <div>
+            <div className="section-kicker">Approvals</div>
+            <h2 className="panel-title mt-2">Market, promo, badge, and refund workflow</h2>
+          </div>
+          <span className="status-chip">{(approvalsQ.data ?? []).filter((request) => request.status === "pending").length} pending</span>
+        </div>
+
+        <div className="mt-5 grid gap-3">
+          {(approvalsQ.data ?? []).slice(0, 8).map((approval) => (
+            <div key={approval.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="theme-ink font-semibold">{approval.type} - {approval.market?.name || approval.order?.code || "General request"}</div>
+                <div className="theme-copy text-sm">{approval.requester?.name || "Requester"} - {approval.notes || "No notes"}</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="status-chip">{approval.status}</span>
+                {approval.status === "pending" && (
+                  <>
+                    <Button size="sm" onClick={() => reviewApprovalM.mutate({ id: approval.id, status: "approved" })}>Approve</Button>
+                    <Button size="sm" variant="secondary" onClick={() => reviewApprovalM.mutate({ id: approval.id, status: "rejected" })}>Reject</Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {approvalsQ.isLoading && <div className="theme-copy text-sm">Loading approvals...</div>}
+          {!approvalsQ.isLoading && !(approvalsQ.data ?? []).length && <div className="theme-copy text-sm">No workflow approvals yet.</div>}
+        </div>
+      </section>
+
+      <section className="dashboard-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
             <div className="section-kicker">Badge requests</div>
             <h2 className="panel-title mt-2">Owner requests waiting for admin review</h2>
           </div>
@@ -416,8 +481,8 @@ export default function MarketsPage() {
           {(badgeRequestsQ.data ?? []).slice(0, 6).map((request) => (
             <div key={request.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="theme-ink font-semibold">{request.market?.name ?? "Market"} • {request.badge}</div>
-                <div className="theme-copy text-sm">{request.requester?.name ?? "Owner"} • {request.duration_days} days • {request.notes || "No note"}</div>
+                <div className="theme-ink font-semibold">{request.market?.name ?? "Market"} - {request.badge}</div>
+                <div className="theme-copy text-sm">{request.requester?.name ?? "Owner"} - {request.duration_days} days - {request.notes || "No note"}</div>
               </div>
               <span className="status-chip">{request.status}</span>
             </div>
@@ -548,20 +613,23 @@ export default function MarketsPage() {
       )}
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent>
+        <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
           <DialogHeader>
-            <DialogTitle>Assign owner</DialogTitle>
+            <div className="app-modal-header">
+              <DialogTitle className="panel-title">Assign owner</DialogTitle>
+            </div>
           </DialogHeader>
 
-          <div className="grid gap-4">
+          <div className="app-modal-body">
+          <div className="app-modal-main">
             <div className="subpanel p-4 text-sm">
               Market: <span className="font-semibold">{assignMarket?.name}</span>
             </div>
 
             <div className="field-group">
-              <Label>Owner</Label>
+              <Label className="field-label">Owner</Label>
               <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
-                <SelectTrigger>
+                <SelectTrigger className="input-shell w-full">
                   <SelectValue placeholder="Select owner user" />
                 </SelectTrigger>
                 <SelectContent>
@@ -576,8 +644,9 @@ export default function MarketsPage() {
 
             {assignError && <div className="text-sm text-red-600">{assignError}</div>}
           </div>
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="app-modal-footer">
             <Button onClick={() => assignOwnerM.mutate()} disabled={!assignMarket || !assignOwnerId || assignOwnerM.isPending}>
               {assignOwnerM.isPending ? "Saving..." : "Save owner"}
             </Button>
@@ -586,59 +655,65 @@ export default function MarketsPage() {
       </Dialog>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="app-modal-shell sm:max-w-[min(840px,calc(100%-2rem))]">
           <DialogHeader>
-            <DialogTitle>Edit storefront</DialogTitle>
+            <div className="app-modal-header">
+              <DialogTitle className="panel-title">Edit storefront</DialogTitle>
+            </div>
           </DialogHeader>
 
+          <div className="app-modal-body">
+          <div className="app-modal-main">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="field-group">
-              <Label>Name</Label>
-              <Input value={editDraft.name} onChange={(e) => setEditDraft((current) => ({ ...current, name: e.target.value }))} />
+              <Label className="field-label">Name</Label>
+              <Input value={editDraft.name} onChange={(e) => setEditDraft((current) => ({ ...current, name: e.target.value }))} className="input-shell" />
             </div>
             <div className="field-group">
-              <Label>Code</Label>
-              <Input value={editDraft.code} onChange={(e) => setEditDraft((current) => ({ ...current, code: e.target.value }))} />
+              <Label className="field-label">Code</Label>
+              <Input value={editDraft.code} onChange={(e) => setEditDraft((current) => ({ ...current, code: e.target.value }))} className="input-shell" />
             </div>
             <div className="field-group md:col-span-2">
-              <Label>Address</Label>
-              <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} />
+              <Label className="field-label">Address</Label>
+              <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} className="input-shell" />
             </div>
             <div className="field-group">
-              <Label>Latitude</Label>
-              <Input value={editDraft.lat} onChange={(e) => setEditDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" />
+              <Label className="field-label">Latitude</Label>
+              <Input value={editDraft.lat} onChange={(e) => setEditDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" className="input-shell" />
             </div>
             <div className="field-group">
-              <Label>Longitude</Label>
-              <Input value={editDraft.lng} onChange={(e) => setEditDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" />
+              <Label className="field-label">Longitude</Label>
+              <Input value={editDraft.lng} onChange={(e) => setEditDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" className="input-shell" />
             </div>
           </div>
-
           <div className="section-divider" />
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="field-group">
-              <Label>Featured badge</Label>
+              <Label className="field-label">Featured badge</Label>
               <Input
                 value={editDraft.featuredBadge}
                 onChange={(e) => setEditDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
                 placeholder="Promoted market"
+                className="input-shell"
               />
             </div>
             <div className="field-group">
-              <Label>Featured headline</Label>
+              <Label className="field-label">Featured headline</Label>
               <Input
                 value={editDraft.featuredHeadline}
                 onChange={(e) => setEditDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
                 placeholder="City's fastest essentials drop"
+                className="input-shell"
               />
             </div>
             <div className="field-group md:col-span-2">
-              <Label>Featured copy</Label>
+              <Label className="field-label">Featured copy</Label>
               <Input
                 value={editDraft.featuredCopy}
                 onChange={(e) => setEditDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
                 placeholder="Shown on the public landing spotlight."
+                className="input-shell"
               />
             </div>
             <div className="subpanel flex items-center justify-between p-4">
@@ -658,11 +733,13 @@ export default function MarketsPage() {
                 onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isFeatured: checked }))}
               />
             </div>
+            </div>
+          </div>
           </div>
 
           {updateError && <div className="text-sm text-red-600">{updateError}</div>}
 
-          <DialogFooter>
+          <DialogFooter className="app-modal-footer">
             <Button onClick={() => updateMarketM.mutate()} disabled={!editMarket || updateMarketM.isPending || !editDraft.name.trim()}>
               {updateMarketM.isPending ? "Saving..." : "Save storefront"}
             </Button>

@@ -83,6 +83,10 @@ class AuthController extends Controller
             'email' => $u->email,
             'language' => $u->language,
             'roles' => $u->getRoleNames()->values(),
+            'permissions' => $this->permissionsForRoles($u->getRoleNames()->values()->all()),
+            'notification_summary' => [
+                'unread' => $u->appNotifications()->whereNull('read_at')->count(),
+            ],
             'driver' => $u->driver ? [
                 'id' => $u->driver->id,
                 'status' => $u->driver->status,
@@ -94,6 +98,23 @@ class AuthController extends Controller
                 'transactions' => $u->driver->transactions,
             ] : null,
         ]);
+    }
+
+    private function permissionsForRoles(array $roles): array
+    {
+        $matrix = [
+            'admin' => ['manage_users', 'manage_markets', 'review_approvals', 'manage_refunds', 'view_analytics'],
+            'owner' => ['manage_market_items', 'request_promos', 'request_badges', 'view_market_orders'],
+            'staff' => ['manage_market_items', 'view_market_orders'],
+            'customer' => ['place_orders', 'favorite_items', 'rate_orders', 'request_refunds'],
+            'driver' => ['accept_orders', 'upload_proof', 'view_route'],
+        ];
+
+        return collect($roles)
+            ->flatMap(fn (string $role) => $matrix[$role] ?? [])
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function updateLanguage(Request $request)

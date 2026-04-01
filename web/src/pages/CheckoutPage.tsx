@@ -22,6 +22,7 @@ type Market = {
   name: string;
   code: string;
   address?: string | null;
+  delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
 };
 
 type PromoPreview = {
@@ -61,6 +62,7 @@ export default function CheckoutPage() {
   const [priority, setPriority] = useState("2");
   const [promoCode, setPromoCode] = useState("");
   const [notes, setNotes] = useState("");
+  const [deliverySlot, setDeliverySlot] = useState("");
 
   const marketQ = useQuery({
     queryKey: ["checkout-market", marketId],
@@ -112,6 +114,12 @@ export default function CheckoutPage() {
         size: Math.max(totals.items, 1),
         promo_code: promoCode.trim() || null,
         notes: notes.trim() || null,
+        ...(deliverySlot
+          ? {
+              time_window_start: deliverySlot.split("|")[1],
+              time_window_end: deliverySlot.split("|")[2],
+            }
+          : {}),
         items: cart.map((item) => ({
           item_id: item.item_id,
           name: item.name,
@@ -220,6 +228,27 @@ export default function CheckoutPage() {
                 <Label>{t("checkout.deliveryNotes")}</Label>
                 <Input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 rounded-2xl" />
               </div>
+              {(marketQ.data?.delivery_slots ?? []).length > 0 && (
+                <div className="grid gap-2">
+                  <Label>Delivery slot</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {(marketQ.data?.delivery_slots ?? []).map((slot, index) => {
+                      const label = typeof slot === "string" ? slot : slot.label || `${slot.from} - ${slot.to}`;
+                      const value = typeof slot === "string" ? `${slot}|${slot}|${slot}` : `${label}|${slot.from}|${slot.to}`;
+                      return (
+                        <button
+                          key={`${label}-${index}`}
+                          type="button"
+                          onClick={() => setDeliverySlot(value)}
+                          className={`status-chip ${deliverySlot === value ? "status-good" : "status-neutral"}`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

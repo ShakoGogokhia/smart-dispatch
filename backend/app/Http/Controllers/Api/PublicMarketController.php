@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Market;
+use App\Models\ProductReview;
 use App\Models\PromoCode;
 use Illuminate\Http\Request;
 
@@ -69,6 +70,7 @@ class PublicMarketController extends Controller
                 'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
                 'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
                 'logo_url' => $market->logo_url,
+                'delivery_slots' => $market->delivery_slots ?? [],
                 'active_items_count' => (int) ($market->active_items_count ?? 0),
                 'active_promo' => $activePromo ? [
                     'id' => $activePromo->id,
@@ -114,6 +116,7 @@ class PublicMarketController extends Controller
             'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
             'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
             'logo_url' => $market->logo_url,
+            'delivery_slots' => $market->delivery_slots ?? [],
             'active_items_count' => (int) ($market->active_items_count ?? 0),
         ];
     }
@@ -136,9 +139,39 @@ class PublicMarketController extends Controller
                 'discount_value',
                 'is_active',
                 'stock_qty',
+                'category',
+                'image_url',
+                'variants',
+                'availability_schedule',
+                'low_stock_threshold',
             ])
+            ->withCount('reviews')
+            ->withAvg('reviews', 'rating')
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'market_id' => $item->market_id,
+                    'name' => $item->name,
+                    'sku' => $item->sku,
+                    'category' => $item->category,
+                    'image_url' => $item->image_url,
+                    'variants' => $item->variants,
+                    'availability_schedule' => $item->availability_schedule,
+                    'price' => $item->price,
+                    'discount_type' => $item->discount_type,
+                    'discount_value' => $item->discount_value,
+                    'is_active' => (bool) $item->is_active,
+                    'stock_qty' => $item->stock_qty,
+                    'low_stock_threshold' => $item->low_stock_threshold,
+                    'is_low_stock' => $item->stock_qty <= $item->low_stock_threshold,
+                    'review_summary' => [
+                        'count' => (int) ($item->reviews_count ?? 0),
+                        'average' => $item->reviews_avg_rating !== null ? round((float) $item->reviews_avg_rating, 1) : null,
+                    ],
+                ];
+            });
     }
 
     // GET /api/public/markets/{market}/active-promo  (optional)

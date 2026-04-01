@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
                       <div>
                         <div className="section-kicker">{entry.date}</div>
                         <div className="theme-ink mt-2 font-semibold">
-                          {entry.total} total • {entry.delivered} delivered
+                  {entry.total} total - {entry.delivered} delivered
                         </div>
                       </div>
                       <span className="status-chip">{entry.cancelled} cancelled</span>
@@ -162,7 +162,7 @@ export default function AnalyticsPage() {
                         <div className="section-kicker">{entry.market_code}</div>
                         <div className="theme-ink mt-2 font-semibold">{entry.market_name}</div>
                         <div className="theme-copy mt-2 text-sm">
-                          {entry.orders} orders • {entry.delivered} delivered
+                  {entry.orders} orders - {entry.delivered} delivered
                         </div>
                       </div>
                       <div className="text-right">
@@ -187,7 +187,7 @@ export default function AnalyticsPage() {
                         <div className="section-kicker">{text.assigned}</div>
                         <div className="theme-ink mt-2 font-semibold">{entry.driver_name}</div>
                         <div className="theme-copy mt-2 text-sm">
-                          {entry.assigned} assigned • {entry.delivered} delivered • {entry.failed} failed
+                  {entry.assigned} assigned - {entry.delivered} delivered - {entry.failed} failed
                         </div>
                       </div>
                       <div className="status-chip">

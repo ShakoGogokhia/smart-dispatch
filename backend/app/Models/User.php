@@ -61,4 +61,14 @@ class User extends Authenticatable
             ->withPivot('role')
             ->withTimestamps();
     }
+
+    public function favorites()
+    {
+        return $this->hasMany(Favorite::class);
+    }
+
+    public function appNotifications()
+    {
+        return $this->hasMany(AppNotification::class)->latest();
+    }
 }

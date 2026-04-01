@@ -12,10 +12,20 @@ export type StorefrontItemPreview = {
   id: number;
   name: string;
   sku: string;
+  category?: string | null;
+  image_url?: string | null;
+  variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
+  availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
   price: number | string;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: number | string;
   stock_qty: number;
+  low_stock_threshold?: number;
+  is_low_stock?: boolean;
+  review_summary?: {
+    count?: number;
+    average?: number | null;
+  };
 };
 
 export type StorefrontMarket = {
@@ -31,6 +41,7 @@ export type StorefrontMarket = {
   featured_headline?: string | null;
   featured_copy?: string | null;
   logo_url?: string | null;
+  delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
   active_items_count?: number;
   item_preview?: StorefrontItemPreview[];
   active_promo?: MarketPromo | null;

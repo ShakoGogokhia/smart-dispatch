@@ -12,6 +12,7 @@ class Order extends Model
         'assigned_driver_id',
         'offered_driver_id',
         'code',
+        'receipt_number',
         'pickup_lat',
         'pickup_lng',
         'dropoff_lat',
@@ -25,6 +26,7 @@ class Order extends Model
         'weather_condition',
         'time_window_start',
         'time_window_end',
+        'delivery_slot_label',
         'priority',
         'size',
         'subtotal',
@@ -46,8 +48,12 @@ class Order extends Model
         'cancellation_reason',
         'proof_of_delivery_note',
         'proof_of_delivery_photo_url',
+        'proof_of_delivery_signature_name',
         'customer_rating',
         'customer_feedback',
+        'refund_requested_at',
+        'refund_status',
+        'refund_reason',
     ];
 
     protected $casts = [
@@ -62,6 +68,7 @@ class Order extends Model
         'promised_at' => 'datetime',
         'estimated_delivery_at' => 'datetime',
         'cancellation_requested_at' => 'datetime',
+        'refund_requested_at' => 'datetime',
         'driver_distance_km' => 'decimal:2',
         'driver_weather_multiplier' => 'decimal:2',
         'driver_earning_amount' => 'decimal:2',

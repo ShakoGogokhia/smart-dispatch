@@ -30,11 +30,21 @@ type Item = {
   market_id: number;
   name: string;
   sku: string;
+  category?: string | null;
+  image_url?: string | null;
+  variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
+  availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
   price: string | number;
   discount_type: "none" | "percent" | "fixed";
   discount_value: string | number;
   stock_qty: number;
+  low_stock_threshold?: number;
+  is_low_stock?: boolean;
   is_active: boolean;
+  review_summary?: {
+    count?: number;
+    average?: number | null;
+  };
 };
 
 export default function MarketItemsPage() {
@@ -59,16 +69,27 @@ export default function MarketItemsPage() {
   const [discountValue, setDiscountValue] = useState("");
   const [stockQty, setStockQty] = useState("0");
   const [isActive, setIsActive] = useState(true);
+  const [category, setCategory] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [variants, setVariants] = useState("");
+  const [availabilitySchedule, setAvailabilitySchedule] = useState("");
+  const [lowStockThreshold, setLowStockThreshold] = useState("5");
+  const [csvDraft, setCsvDraft] = useState("name,sku,category,price,discount_type,discount_value,stock_qty,low_stock_threshold,is_active,image_url,variants,availability_schedule");
 
   const createM = useMutation({
     mutationFn: async () => {
       const payload = {
         name,
         sku,
+        category: category || null,
+        image_url: imageUrl || null,
+        variants: variants ? JSON.parse(variants) : null,
+        availability_schedule: availabilitySchedule ? JSON.parse(availabilitySchedule) : null,
         price: Number(price),
         discount_type: discountType,
         discount_value: Number(discountValue || 0),
         stock_qty: Number(stockQty || 0),
+        low_stock_threshold: Number(lowStockThreshold || 5),
         is_active: isActive,
       };
       return (await api.post(`/api/markets/${id}/items`, payload)).data as Item;
@@ -79,6 +100,7 @@ export default function MarketItemsPage() {
       setName(""); setSku(""); setPrice("");
       setDiscountType("none"); setDiscountValue("");
       setStockQty("0"); setIsActive(true);
+      setCategory(""); setImageUrl(""); setVariants(""); setAvailabilitySchedule(""); setLowStockThreshold("5");
     },
   });
 
@@ -96,6 +118,11 @@ export default function MarketItemsPage() {
         discount_type: editItem.discount_type,
         discount_value: Number(editItem.discount_value || 0),
         stock_qty: Number(editItem.stock_qty || 0),
+        category: editItem.category ?? null,
+        image_url: editItem.image_url ?? null,
+        variants: editItem.variants ?? null,
+        availability_schedule: editItem.availability_schedule ?? null,
+        low_stock_threshold: Number(editItem.low_stock_threshold || 5),
         is_active: !!editItem.is_active,
       };
       return (
@@ -121,41 +148,59 @@ export default function MarketItemsPage() {
 
   const canCreate = name.trim() && sku.trim() && price.trim();
 
+  const importM = useMutation({
+    mutationFn: async () => (await api.post(`/api/markets/${id}/items/import-csv`, { csv: csvDraft })).data,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ["market-items", id] });
+    },
+  });
+
   return (
     <div className="grid gap-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle>Market Items (Market #{id})</CardTitle>
-
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>Add Item</Button>
-            </DialogTrigger>
-            <DialogContent>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" asChild>
+              <a href={`${api.defaults.baseURL}/api/markets/${id}/items/export-csv`} target="_blank" rel="noreferrer">Export CSV</a>
+            </Button>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>Add Item</Button>
+              </DialogTrigger>
+            <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
               <DialogHeader>
-                <DialogTitle>Add Item</DialogTitle>
+                <div className="app-modal-header">
+                  <DialogTitle className="panel-title">Add item</DialogTitle>
+                </div>
               </DialogHeader>
 
-              <div className="grid gap-4">
+              <div className="app-modal-body">
+              <div className="app-modal-main">
                 <div className="grid gap-2">
-                  <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} />
+                  <Label className="field-label">Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} className="input-shell" />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>SKU</Label>
-                  <Input value={sku} onChange={(e) => setSku(e.target.value)} />
+                  <Label className="field-label">SKU</Label>
+                  <Input value={sku} onChange={(e) => setSku(e.target.value)} className="input-shell" />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Price</Label>
-                  <Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 10.50" />
+                  <Label className="field-label">Category</Label>
+                  <Input value={category} onChange={(e) => setCategory(e.target.value)} className="input-shell" />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Discount Type</Label>
+                  <Label className="field-label">Price</Label>
+                  <Input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g. 10.50" className="input-shell" />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="field-label">Discount Type</Label>
                   <Select value={discountType} onValueChange={(v) => setDiscountType(v as any)}>
-                    <SelectTrigger>
+                    <SelectTrigger className="input-shell w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -167,37 +212,67 @@ export default function MarketItemsPage() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Discount Value</Label>
+                  <Label className="field-label">Discount Value</Label>
                   <Input
                     value={discountValue}
                     onChange={(e) => setDiscountValue(e.target.value)}
                     placeholder={discountType === "percent" ? "e.g. 10 (means 10%)" : "e.g. 2.00"}
+                    className="input-shell"
                   />
                 </div>
 
                 <div className="grid gap-2">
-                  <Label>Stock Qty</Label>
-                  <Input value={stockQty} onChange={(e) => setStockQty(e.target.value)} />
+                  <Label className="field-label">Stock Qty</Label>
+                  <Input value={stockQty} onChange={(e) => setStockQty(e.target.value)} className="input-shell" />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="field-label">Low Stock Threshold</Label>
+                  <Input value={lowStockThreshold} onChange={(e) => setLowStockThreshold(e.target.value)} className="input-shell" />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="field-label">Image URL</Label>
+                  <Input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="input-shell" />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="field-label">Variants JSON</Label>
+                  <Input value={variants} onChange={(e) => setVariants(e.target.value)} className="input-shell" placeholder='[{"name":"Size","value":"L"}]' />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="field-label">Availability Schedule JSON</Label>
+                  <Input value={availabilitySchedule} onChange={(e) => setAvailabilitySchedule(e.target.value)} className="input-shell" placeholder='[{"day":"Mon","from":"09:00","to":"18:00"}]' />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Label>Active</Label>
+                  <Label className="field-label">Active</Label>
                   <Switch checked={isActive} onCheckedChange={setIsActive} />
                 </div>
 
                 {createError && <div className="text-sm text-red-600">{createError}</div>}
               </div>
+              </div>
 
-              <DialogFooter>
+              <DialogFooter className="app-modal-footer">
                 <Button onClick={() => createM.mutate()} disabled={!canCreate || createM.isPending}>
                   {createM.isPending ? "Saving..." : "Save"}
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </CardHeader>
 
         <CardContent className="grid gap-4">
+          <div className="grid gap-2">
+            <Label className="field-label">Bulk CSV import</Label>
+            <Input value={csvDraft} onChange={(e) => setCsvDraft(e.target.value)} className="input-shell" />
+            <Button variant="secondary" onClick={() => importM.mutate()} disabled={importM.isPending}>
+              {importM.isPending ? "Importing..." : "Import CSV"}
+            </Button>
+          </div>
           {itemsQ.isLoading ? (
             <div className="text-sm text-muted-foreground">Loading...</div>
           ) : itemsQ.error ? (
@@ -210,9 +285,11 @@ export default function MarketItemsPage() {
                     <TableHead>ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>SKU</TableHead>
+                    <TableHead>Category</TableHead>
                     <TableHead>Price</TableHead>
                     <TableHead>Discount</TableHead>
                     <TableHead>Stock</TableHead>
+                    <TableHead>Reviews</TableHead>
                     <TableHead>Active</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -223,13 +300,15 @@ export default function MarketItemsPage() {
                       <TableCell>{it.id}</TableCell>
                       <TableCell className="font-medium">{it.name}</TableCell>
                       <TableCell>{it.sku}</TableCell>
+                      <TableCell>{it.category || "-"}</TableCell>
                       <TableCell>{it.price}</TableCell>
                       <TableCell>
                         {it.discount_type === "none"
                           ? "-"
                           : `${it.discount_type} ${it.discount_value}`}
                       </TableCell>
-                      <TableCell>{it.stock_qty}</TableCell>
+                      <TableCell>{it.stock_qty}{it.is_low_stock ? " (Low)" : ""}</TableCell>
+                      <TableCell>{it.review_summary?.average ?? "-"} / {it.review_summary?.count ?? 0}</TableCell>
                       <TableCell>{it.is_active ? "Yes" : "No"}</TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -260,44 +339,59 @@ export default function MarketItemsPage() {
 
       {/* Edit modal */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent>
+        <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
           <DialogHeader>
-            <DialogTitle>Edit Item</DialogTitle>
+            <div className="app-modal-header">
+              <DialogTitle className="panel-title">Edit item</DialogTitle>
+            </div>
           </DialogHeader>
 
+          <div className="app-modal-body">
           {editItem && (
-            <div className="grid gap-4">
+            <div className="app-modal-main">
               <div className="grid gap-2">
-                <Label>Name</Label>
+                <Label className="field-label">Name</Label>
                 <Input
                   value={editItem.name}
                   onChange={(e) => setEditItem({ ...editItem, name: e.target.value })}
+                  className="input-shell"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label>SKU</Label>
+                <Label className="field-label">SKU</Label>
                 <Input
                   value={editItem.sku}
                   onChange={(e) => setEditItem({ ...editItem, sku: e.target.value })}
+                  className="input-shell"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label>Price</Label>
+                <Label className="field-label">Category</Label>
+                <Input
+                  value={editItem.category ?? ""}
+                  onChange={(e) => setEditItem({ ...editItem, category: e.target.value })}
+                  className="input-shell"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="field-label">Price</Label>
                 <Input
                   value={String(editItem.price)}
                   onChange={(e) => setEditItem({ ...editItem, price: e.target.value })}
+                  className="input-shell"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label>Discount Type</Label>
+                <Label className="field-label">Discount Type</Label>
                 <Select
                   value={editItem.discount_type}
                   onValueChange={(v) => setEditItem({ ...editItem, discount_type: v as any })}
                 >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="input-shell w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     <SelectItem value="percent">Percent</SelectItem>
@@ -307,23 +401,43 @@ export default function MarketItemsPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label>Discount Value</Label>
+                <Label className="field-label">Discount Value</Label>
                 <Input
                   value={String(editItem.discount_value)}
                   onChange={(e) => setEditItem({ ...editItem, discount_value: e.target.value })}
+                  className="input-shell"
                 />
               </div>
 
               <div className="grid gap-2">
-                <Label>Stock Qty</Label>
+                <Label className="field-label">Stock Qty</Label>
                 <Input
                   value={String(editItem.stock_qty)}
                   onChange={(e) => setEditItem({ ...editItem, stock_qty: Number(e.target.value) })}
+                  className="input-shell"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="field-label">Low Stock Threshold</Label>
+                <Input
+                  value={String(editItem.low_stock_threshold ?? 5)}
+                  onChange={(e) => setEditItem({ ...editItem, low_stock_threshold: Number(e.target.value) })}
+                  className="input-shell"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label className="field-label">Image URL</Label>
+                <Input
+                  value={editItem.image_url ?? ""}
+                  onChange={(e) => setEditItem({ ...editItem, image_url: e.target.value })}
+                  className="input-shell"
                 />
               </div>
 
               <div className="flex items-center justify-between">
-                <Label>Active</Label>
+                <Label className="field-label">Active</Label>
                 <Switch
                   checked={!!editItem.is_active}
                   onCheckedChange={(v) => setEditItem({ ...editItem, is_active: v })}
@@ -333,8 +447,9 @@ export default function MarketItemsPage() {
               {updateError && <div className="text-sm text-red-600">{updateError}</div>}
             </div>
           )}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="app-modal-footer">
             <Button onClick={() => updateM.mutate()} disabled={!editItem || updateM.isPending}>
               {updateM.isPending ? "Saving..." : "Save"}
             </Button>

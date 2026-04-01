@@ -3,22 +3,23 @@ import {
   Activity,
   BarChart3,
   Compass,
+  Home,
   LogOut,
   Map,
-  Menu,
   Package,
+  PanelLeftOpen,
   ShoppingBag,
   Sparkles,
   Store,
   Truck,
   Users,
   Warehouse,
-  X,
   Zap,
 } from "lucide-react";
-import { Link, NavLink, useNavigate, useParams } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
 import { api } from "@/lib/api";
@@ -26,6 +27,7 @@ import { auth } from "@/lib/auth";
 import { getActiveMarketId, setActiveMarketId } from "@/lib/cart";
 import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
+import type { NotificationRecord } from "@/types/api";
 
 type MarketLite = { id: number; name: string; code: string };
 
@@ -34,6 +36,7 @@ type NavEntry = {
   to: string;
   icon: typeof Package;
   end?: boolean;
+  mobileLabel?: string;
 };
 
 function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () => void }) {
@@ -63,6 +66,7 @@ function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () =>
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { marketId: routeMarketId } = useParams();
   const meQ = useMe();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -82,6 +86,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     retry: false,
   });
 
+  const notificationsQ = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => (await api.get("/api/notifications")).data as NotificationRecord[],
+    enabled: !!meQ.data,
+    refetchInterval: 15000,
+  });
+
   const storedMarketId = getActiveMarketId() || undefined;
   const autoMarketId = myMarketsQ.data?.length === 1 ? String(myMarketsQ.data[0].id) : undefined;
   const currentMarketId = routeMarketId || storedMarketId || autoMarketId;
@@ -89,6 +100,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     () => myMarketsQ.data?.find((market) => String(market.id) === currentMarketId) ?? null,
     [currentMarketId, myMarketsQ.data],
   );
+
+  const currentPath = location.pathname;
 
   useEffect(() => {
     if (routeMarketId) {
@@ -109,11 +122,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const primaryNav: NavEntry[] = isCustomerOnly
     ? [{ label: t("nav.orders"), to: "/orders", icon: Package }]
     : [
-        ...(isDriver ? [{ label: t("nav.driverHub"), to: "/driver-hub", icon: Truck }] : []),
-        { label: t("nav.orders"), to: "/orders", icon: Package, end: true },
-        { label: t("nav.routes"), to: "/routes", icon: Truck, end: true },
-        { label: t("nav.liveMap"), to: "/live-map", icon: Map, end: true },
-        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3, end: true },
+        ...(isDriver ? [{ label: t("nav.driverHub"), to: "/driver-hub", icon: Truck, mobileLabel: "Driver" }] : []),
+        { label: t("nav.orders"), to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
+        { label: t("nav.routes"), to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
+        { label: t("nav.liveMap"), to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
+        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
       ];
 
   const marketNav: NavEntry[] = currentMarketId
@@ -123,6 +136,57 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         { label: t("nav.promos"), to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
       ]
     : [];
+
+  const marketHubEntry: NavEntry | null = isCustomerOnly
+    ? null
+    : {
+        label: isAdmin ? t("nav.allMarkets") : t("nav.myMarkets"),
+        to: isAdmin ? "/markets" : "/my-markets",
+        icon: Store,
+        end: true,
+        mobileLabel: "Markets",
+      };
+
+  const bottomNav = isCustomerOnly
+    ? [{ label: t("nav.orders"), to: "/orders", icon: Home, end: true, mobileLabel: "Orders" }]
+    : [
+        { label: t("nav.orders"), to: "/orders", icon: Home, end: true, mobileLabel: "Home" },
+        isDriver
+          ? { label: t("nav.driverHub"), to: "/driver-hub", icon: Truck, end: true, mobileLabel: "Driver" }
+          : { label: t("nav.routes"), to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
+        { label: t("nav.liveMap"), to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
+        marketHubEntry ?? { label: t("nav.orders"), to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
+        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
+      ];
+
+  const activeBottomEntry = bottomNav.find((entry) =>
+    entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`),
+  );
+
+  const currentSectionTitle = useMemo(() => {
+    const allEntries = [
+      ...primaryNav,
+      ...(marketHubEntry ? [marketHubEntry] : []),
+      ...marketNav,
+      ...(isAdmin
+        ? [
+            { label: t("nav.drivers"), to: "/drivers", icon: Warehouse, end: true },
+            { label: "Global promos", to: "/promo-codes", icon: Activity, end: true },
+            { label: t("nav.users"), to: "/users", icon: Users, end: true },
+          ]
+        : []),
+    ];
+
+    const matchingEntry = allEntries.find((entry) =>
+      entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`),
+    );
+
+    return matchingEntry?.label ?? t("layout.workspaceTitle");
+  }, [currentPath, isAdmin, marketHubEntry, marketNav, primaryNav, t]);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [currentPath]);
 
   const sidebar = (
     <div className="rail-panel page-enter flex h-full flex-col gap-4">
@@ -152,6 +216,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               {t(`role.${role}`)}
             </span>
           ))}
+          {(meQ.data?.permissions ?? []).slice(0, 3).map((permission: string) => (
+            <span key={permission} className="data-pill">
+              {permission}
+            </span>
+          ))}
         </div>
         {currentMarket && (
           <div className="subpanel mt-4 p-4">
@@ -160,6 +229,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <div className="theme-muted text-sm">{currentMarket.code}</div>
           </div>
         )}
+        <div className="subpanel mt-4 p-4">
+          <div className="section-kicker">Notifications</div>
+          <div className="theme-ink mt-2 text-base font-semibold">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</div>
+          <div className="mt-3 grid gap-2">
+            {(notificationsQ.data ?? []).slice(0, 3).map((notification) => (
+              <div key={notification.id} className="rounded-[16px] border border-slate-200/80 bg-white/80 px-3 py-3 text-sm dark:border-white/10 dark:bg-white/5">
+                <div className="font-semibold">{notification.title}</div>
+                <div className="theme-muted mt-1 text-xs">{notification.message}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -215,52 +296,106 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="app-shell">
-      <div className="editorial-shell">
-        <aside className="hidden lg:block">{sidebar}</aside>
+    <div className="app-shell app-shell-mobile-safe">
+      <div className="editorial-shell editorial-shell-mobile">
+        <aside className="hidden xl:block">{sidebar}</aside>
 
-        <div className="grid min-w-0 gap-5">
-          <div className="paper-panel page-enter page-enter-delay-1 flex flex-wrap items-start justify-between gap-4 px-5 py-4 md:px-6">
-            <div>
-              <div className="command-chip">
-                <Sparkles className="h-3.5 w-3.5" />
-                {t("layout.workspaceLabel")}
+        <div className="grid min-w-0 gap-4 md:gap-5">
+          <div className="mobile-device-shell page-enter page-enter-delay-1">
+            <div className="mobile-device-shell__topbar xl:hidden">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  className="mobile-app-icon p-0"
+                  onClick={() => setMobileOpen(true)}
+                  aria-label="Open navigation"
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </Button>
+                <div className="min-w-0">
+                  <div className="section-kicker">{activeBottomEntry?.mobileLabel || t("layout.workspaceLabel")}</div>
+                  <div className="truncate font-display text-lg font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
+                    {currentSectionTitle}
+                  </div>
+                </div>
               </div>
-              <div className="font-display theme-ink mt-4 text-2xl font-semibold tracking-[-0.05em] md:text-3xl">
-                {t("layout.workspaceTitle")}
-              </div>
-              <div className="theme-copy mt-2 max-w-2xl text-sm">
-                {t("layout.workspaceCopy")}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="data-pill">{roleLabels.length ? roleLabels.join(", ") : t("layout.workspaceMember")}</span>
-                <span className="data-pill">{currentMarket?.code || t("layout.globalWorkspace")}</span>
+              <div className="flex items-center gap-2">
+                <div className="mobile-status-pill">
+                  {notificationsQ.data?.filter((item) => !item.read_at).length ?? 0}
+                </div>
+                <ThemeToggle className="mobile-app-icon" />
               </div>
             </div>
 
-            <div className="ml-auto flex items-center gap-3">
-              <div className="hidden text-right md:block">
-                <div className="section-kicker">{t("layout.signedInAs")}</div>
-                <div className="theme-ink mt-2 text-sm font-semibold">{meQ.data?.name || t("common.loadingUser")}</div>
+            <div className="paper-panel hidden xl:flex xl:flex-wrap xl:items-start xl:justify-between xl:gap-4 xl:px-5 xl:py-4 2xl:px-6">
+              <div>
+                <div className="command-chip">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t("layout.workspaceLabel")}
+                </div>
+                <div className="font-display theme-ink mt-4 text-2xl font-semibold tracking-[-0.05em] md:text-3xl">
+                  {t("layout.workspaceTitle")}
+                </div>
+                <div className="theme-copy mt-2 max-w-2xl text-sm">
+                  {t("layout.workspaceCopy")}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="data-pill">{roleLabels.length ? roleLabels.join(", ") : t("layout.workspaceMember")}</span>
+                  <span className="data-pill">{currentMarket?.code || t("layout.globalWorkspace")}</span>
+                  <span className="data-pill">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</span>
+                </div>
               </div>
-              <ThemeToggle />
-              <Button
-                variant="secondary"
-                className="h-12 w-12 rounded-[16px] p-0 lg:hidden"
-                onClick={() => setMobileOpen((value) => !value)}
-              >
-                {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-              </Button>
+
+              <div className="ml-auto flex items-center gap-3">
+                <div className="hidden text-right md:block">
+                  <div className="section-kicker">{t("layout.signedInAs")}</div>
+                  <div className="theme-ink mt-2 text-sm font-semibold">{meQ.data?.name || t("common.loadingUser")}</div>
+                </div>
+                <ThemeToggle />
+              </div>
             </div>
+
+            <main className="paper-panel mobile-main-panel page-enter page-enter-delay-2 overflow-hidden p-4 md:p-6">
+              {children}
+            </main>
           </div>
 
-          {mobileOpen && <div className="lg:hidden">{sidebar}</div>}
+          <nav className="mobile-bottom-nav xl:hidden" aria-label="Primary">
+            {bottomNav.map((entry) => {
+              const Icon = entry.icon;
+              const isActive = entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`);
 
-          <main className="paper-panel page-enter page-enter-delay-2 min-h-[calc(100vh-9rem)] overflow-hidden p-4 md:p-6">
-            {children}
-          </main>
+              return (
+                <NavLink
+                  key={entry.to}
+                  to={entry.to}
+                  end={entry.end}
+                  className={() => ["mobile-bottom-nav__item", isActive ? "mobile-bottom-nav__item-active" : ""].join(" ").trim()}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{entry.mobileLabel ?? entry.label}</span>
+                </NavLink>
+              );
+            })}
+          </nav>
         </div>
       </div>
+
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent
+          side="left"
+          className="mobile-drawer border-0 p-0 shadow-none sm:max-w-md"
+          showCloseButton={false}
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>{t("layout.workspaceTitle")}</SheetTitle>
+            <SheetDescription>{t("layout.workspaceCopy")}</SheetDescription>
+          </SheetHeader>
+          <div className="h-full overflow-y-auto p-4">
+            {sidebar}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

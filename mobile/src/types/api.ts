@@ -13,6 +13,39 @@ export type UserLite = {
   roles?: string[];
 };
 
+export type NotificationRecord = {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  payload?: Record<string, unknown> | null;
+  read_at?: string | null;
+  created_at?: string | null;
+};
+
+export type ReviewRecord = {
+  id: number;
+  rating: number;
+  comment?: string | null;
+  created_at?: string;
+  user?: { id: number; name: string } | null;
+};
+
+export type WorkflowApproval = {
+  id: number;
+  type: "market_creation" | "promo" | "badge" | "refund";
+  status: "pending" | "approved" | "rejected";
+  notes?: string | null;
+  payload?: Record<string, unknown> | null;
+  reviewed_at?: string | null;
+  created_at?: string | null;
+  requester?: UserLite | null;
+  reviewer?: UserLite | null;
+  market?: MarketLite | null;
+  order?: { id: number; code: string } | null;
+  promo_code?: { id: number; code: string; market_id?: number | null } | null;
+};
+
 export type Vehicle = {
   id: number;
   name: string;
@@ -49,6 +82,7 @@ export type MarketLite = {
   owner_user_id?: number;
   owner?: UserLite;
   logo_url?: string | null;
+  delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
 };
 
 export type OrderItem = {
@@ -99,6 +133,7 @@ export type Order = {
   delivery_proof?: {
     note?: string | null;
     photo_url?: string | null;
+    signature_name?: string | null;
   };
   driver_compensation?: {
     distance_km?: number | string | null;
@@ -114,6 +149,20 @@ export type Order = {
     can_cancel?: boolean;
     can_rate?: boolean;
     can_reorder?: boolean;
+    can_request_refund?: boolean;
+  };
+  receipt?: {
+    number?: string | null;
+    issued_at?: string | null;
+    subtotal?: number | string;
+    discount_total?: number | string;
+    total?: number | string;
+    items?: Array<{ name: string; qty: number; unit_price?: number | string; line_total?: number | string }>;
+  };
+  refund_summary?: {
+    status?: string | null;
+    reason?: string | null;
+    requested_at?: string | null;
   };
 };
 
@@ -191,11 +240,21 @@ export type Item = {
   market_id?: number;
   name: string;
   sku: string;
+  category?: string | null;
+  image_url?: string | null;
+  variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
+  availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
   price: string | number;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: string | number;
   stock_qty: number;
+  low_stock_threshold?: number;
+  is_low_stock?: boolean;
   is_active: boolean;
+  review_summary?: {
+    count?: number;
+    average?: number | null;
+  };
 };
 
 export type PromoCode = {
@@ -228,4 +287,9 @@ export type UserRecord = {
   email: string;
   language?: "en" | "ka";
   roles: string[];
+};
+
+export type FavoritePayload = {
+  markets: MarketLite[];
+  items: Item[];
 };

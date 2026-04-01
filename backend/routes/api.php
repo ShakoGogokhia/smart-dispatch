@@ -30,6 +30,10 @@ use App\Http\Controllers\Api\UsersController;
 use App\Http\Controllers\Api\PublicMarketController;
 use App\Http\Controllers\Api\DriverOrderController;
 use App\Http\Controllers\Api\MarketBadgeRequestController;
+use App\Http\Controllers\Api\FavoriteController;
+use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ReviewController;
+use App\Http\Controllers\Api\WorkflowApprovalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,6 +51,7 @@ Route::prefix('public')->group(function () {
     Route::get('/markets/{market}/items', [PublicMarketController::class, 'items']);
     Route::get('/markets/{market}/active-promo', [PublicMarketController::class, 'activePromo']); // optional
     Route::get('/markets/{market}/validate-promo', [PublicMarketController::class, 'validatePromo']);
+    Route::get('/items/{item}/reviews', [ReviewController::class, 'index']);
 });
 /*
 |--------------------------------------------------------------------------
@@ -70,6 +75,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::match(['patch', 'post'], '/me/language', [AuthController::class, 'updateLanguage']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::get('/favorites', [FavoriteController::class, 'index']);
+    Route::post('/favorites/toggle', [FavoriteController::class, 'toggle']);
+    Route::post('/items/{item}/reviews', [ReviewController::class, 'store']);
+    Route::get('/workflow-approvals', [WorkflowApprovalController::class, 'index']);
+    Route::post('/workflow-approvals', [WorkflowApprovalController::class, 'store']);
+    Route::post('/workflow-approvals/{workflowApproval}/review', [WorkflowApprovalController::class, 'review']);
 
     /*
     |--------------------------------------------------------------------------
@@ -83,6 +96,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/market-accept', [OrderController::class, 'marketAccept']);
     Route::post('/orders/{order}/mark-ready', [OrderController::class, 'markReady']);
     Route::post('/orders/{order}/request-cancel', [OrderController::class, 'requestCancel']);
+    Route::post('/orders/{order}/request-refund', [OrderController::class, 'requestRefund']);
     Route::post('/orders/{order}/rate', [OrderController::class, 'rate']);
     Route::post('/orders/{order}/reorder', [OrderController::class, 'reorder']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
@@ -202,6 +216,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/markets/{market}/items', [ItemController::class, 'index']);
         Route::post('/markets/{market}/items', [ItemController::class, 'store']);
         Route::patch('/markets/{market}/items/{item}', [ItemController::class, 'update']);
+        Route::post('/markets/{market}/items/import-csv', [ItemController::class, 'importCsv']);
+        Route::get('/markets/{market}/items/export-csv', [ItemController::class, 'exportCsv']);
         Route::post('/markets/{market}/logo', [MarketController::class, 'uploadLogo']);
         // Promo Codes
         Route::get('/markets/{market}/promo-codes', [PromoCodeController::class, 'index']);

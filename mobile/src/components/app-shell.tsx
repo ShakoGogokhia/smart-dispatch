@@ -8,7 +8,7 @@ import { api } from "@/src/lib/api";
 import { getActiveMarketId, setActiveMarketId } from "@/src/lib/storage";
 import { useAuth, usePreferences } from "@/src/providers/app-providers";
 import { useMe } from "@/src/lib/use-me";
-import type { MarketLite } from "@/src/types/api";
+import type { MarketLite, NotificationRecord } from "@/src/types/api";
 import type { ProtectedRouteName } from "@/src/types/navigation";
 
 type AppShellProps = PropsWithChildren<{
@@ -44,6 +44,13 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
     queryFn: async () => (await api.get("/api/my/markets")).data as MarketLite[],
     enabled: !!meQ.data && !isCustomerOnly,
     retry: false,
+  });
+
+  const notificationsQ = useQuery({
+    queryKey: ["notifications"],
+    queryFn: async () => (await api.get("/api/notifications")).data as NotificationRecord[],
+    enabled: !!meQ.data,
+    refetchInterval: 15000,
   });
 
   useEffect(() => {
@@ -132,6 +139,7 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
             <Pill key={role}>{role}</Pill>
           ))}
           {currentMarket ? <Pill tone="success">{currentMarket.code}</Pill> : null}
+          <Pill tone="warning">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</Pill>
         </View>
       </HeroCard>
 
@@ -145,6 +153,9 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
             <View style={styles.pillRow}>
               {roles.map((role: string) => (
                 <Pill key={role}>{role}</Pill>
+              ))}
+              {(meQ.data?.permissions ?? []).slice(0, 3).map((permission: string) => (
+                <Pill key={permission}>{permission}</Pill>
               ))}
             </View>
           </SectionCard>
@@ -173,6 +184,18 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
               }}
             />
           ))}
+        </View>
+
+        <View style={styles.modalSection}>
+          <Text style={[styles.sectionTitle, { color: palette.text }]}>Notifications</Text>
+          <SectionCard>
+            {(notificationsQ.data ?? []).slice(0, 3).map((entry) => (
+              <View key={entry.id} style={styles.noticeRow}>
+                <Text style={[styles.sectionLead, { color: palette.text }]}>{entry.title}</Text>
+                <Text style={[styles.sectionHint, { color: palette.muted }]}>{entry.message}</Text>
+              </View>
+            ))}
+          </SectionCard>
         </View>
 
         <View style={styles.modalSection}>
@@ -263,6 +286,10 @@ const styles = StyleSheet.create({
   sectionHint: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  noticeRow: {
+    gap: 4,
+    marginBottom: 10,
   },
   choiceRow: {
     flexDirection: "row",

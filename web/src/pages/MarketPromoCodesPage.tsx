@@ -314,9 +314,9 @@ export default function MarketPromoCodesPage() {
       </section>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(1080px,calc(100%-2rem))]">
+        <DialogContent className="app-modal-shell sm:max-w-[min(1080px,calc(100%-2rem))]">
           <DialogHeader>
-            <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+            <div className="app-modal-header">
               <div className="section-kicker">Promotion workspace</div>
               <DialogTitle className="panel-title mt-2">Edit promo code</DialogTitle>
               <p className="theme-copy mt-2 text-sm leading-6">Update the code, schedule, limit, and live state without squeezing the form into a tiny modal.</p>
@@ -389,7 +389,7 @@ export default function MarketPromoCodesPage() {
 
           {updateError && <div className="px-6 text-sm text-red-600">{updateError}</div>}
 
-          <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
+          <DialogFooter className="app-modal-footer">
             <Button onClick={() => updateM.mutate()} disabled={!editPromo || updateM.isPending}>
               {updateM.isPending ? "Saving..." : "Save promo"}
             </Button>
@@ -398,9 +398,9 @@ export default function MarketPromoCodesPage() {
       </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420] sm:max-w-[min(1080px,calc(100%-2rem))]">
+        <DialogContent className="app-modal-shell sm:max-w-[min(1080px,calc(100%-2rem))]">
           <DialogHeader>
-            <div className="border-b border-slate-200 bg-white/92 px-6 py-5 dark:border-white/10 dark:bg-[#131d2b]">
+            <div className="app-modal-header">
               <div className="section-kicker">Promotion workspace</div>
               <DialogTitle className="panel-title mt-2">Add promo code</DialogTitle>
               <p className="theme-copy mt-2 text-sm leading-6">Create a readable offer with clear value, schedule, usage limit, and live visibility settings.</p>
@@ -462,7 +462,7 @@ export default function MarketPromoCodesPage() {
 
           {createError && <div className="px-6 text-sm text-red-600">{createError}</div>}
 
-          <DialogFooter className="border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
+          <DialogFooter className="app-modal-footer">
             <Button onClick={() => createM.mutate()} disabled={!canCreate || createM.isPending}>
               {createM.isPending ? "Saving..." : "Save promo"}
             </Button>

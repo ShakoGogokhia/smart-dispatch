@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppButton, EmptyBlock, HelperText, HeroCard, InputField, LoadingBlock, Pill, Screen, SectionCard, StatCard, StatGrid, uiStyles } from "@/src/components/ui";
@@ -12,7 +12,7 @@ import { clearCart, getActiveMarketId, loadCart, saveCart, setActiveMarketId } f
 import type { CartItem } from "@/src/lib/storage";
 import { useProtectedAccess } from "@/src/hooks/use-protected-access";
 import { useAuth, usePreferences } from "@/src/providers/app-providers";
-import type { Item, MarketLite, PromoCode } from "@/src/types/api";
+import type { FavoritePayload, Item, MarketLite, PromoCode, ReviewRecord } from "@/src/types/api";
 import type { RootStackParamList } from "@/src/types/navigation";
 
 type PublicMarketsProps = NativeStackScreenProps<RootStackParamList, "PublicMarkets">;
@@ -121,7 +121,7 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
             English
           </AppButton>
           <AppButton variant={language === "ka" ? "primary" : "secondary"} compact onPress={() => void setLanguage("ka")}>
-            ქართული
+            Georgian
           </AppButton>
           <AppButton variant="secondary" compact onPress={() => void toggleTheme()}>
             Theme: {theme}
@@ -162,9 +162,13 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
 export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   const { token, setPendingRoute } = useAuth();
   const { language } = usePreferences();
+  const queryClient = useQueryClient();
   const { marketId } = route.params;
   const [cart, setCart] = useState<CartItem[]>([]);
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [reviewComment, setReviewComment] = useState("");
   const [cartReady, setCartReady] = useState(false);
 
   useEffect(() => {
@@ -208,16 +212,64 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
     retry: false,
   });
 
+  const favoritesQ = useQuery({
+    queryKey: ["favorites"],
+    queryFn: async () => (await api.get("/api/favorites")).data as FavoritePayload,
+    enabled: !!token,
+    retry: false,
+  });
+
+  const reviewsQ = useQuery({
+    queryKey: ["item-reviews", selectedItemId],
+    queryFn: async () => (await api.get(`/api/public/items/${selectedItemId}/reviews`)).data as ReviewRecord[],
+    enabled: selectedItemId != null,
+  });
+
+  const favoriteM = useMutation({
+    mutationFn: async (payload: { market_id?: number; item_id?: number }) => (await api.post("/api/favorites/toggle", payload)).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["favorites"] });
+    },
+  });
+
+  const reviewM = useMutation({
+    mutationFn: async () => {
+      if (!selectedItemId) {
+        throw new Error("No item selected");
+      }
+
+      return (
+        await api.post(`/api/items/${selectedItemId}/reviews`, {
+          rating: 5,
+          comment: reviewComment || null,
+        })
+      ).data;
+    },
+    onSuccess: async () => {
+      setReviewComment("");
+      await queryClient.invalidateQueries({ queryKey: ["item-reviews", selectedItemId] });
+      await queryClient.invalidateQueries({ queryKey: ["public-market-items", marketId] });
+    },
+  });
+
+  const categories = useMemo(() => {
+    const source = new Set((itemsQ.data ?? []).map((item) => item.category).filter((value): value is string => typeof value === "string" && value.length > 0));
+    return ["All", ...Array.from(source)];
+  }, [itemsQ.data]);
+
+  const favoriteItemIds = new Set((favoritesQ.data?.items ?? []).map((item) => item.id));
+  const favoriteMarketIds = new Set((favoritesQ.data?.markets ?? []).map((entry) => entry.id));
+
   const filteredItems = useMemo(() => {
     const text = query.trim().toLowerCase();
     const items = itemsQ.data ?? [];
 
-    if (!text) {
-      return items;
-    }
-
-    return items.filter((item) => item.name.toLowerCase().includes(text) || item.sku.toLowerCase().includes(text));
-  }, [itemsQ.data, query]);
+    return items.filter((item) => {
+      const matchesText = !text || item.name.toLowerCase().includes(text) || item.sku.toLowerCase().includes(text);
+      const matchesCategory = category === "All" || item.category === category;
+      return matchesText && matchesCategory;
+    });
+  }, [category, itemsQ.data, query]);
 
   const totals = useMemo(() => {
     const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
@@ -270,6 +322,11 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           <Pill tone={marketQ.data?.is_active === false ? "warning" : "success"}>
             {marketQ.data?.is_active === false ? "Unavailable" : "Open for orders"}
           </Pill>
+          {token ? (
+            <AppButton compact variant="secondary" onPress={() => favoriteM.mutate({ market_id: Number(marketId) })}>
+              {favoriteMarketIds.has(Number(marketId)) ? "Favorited" : "Favorite"}
+            </AppButton>
+          ) : null}
         </View>
 
         {promoQ.data?.is_active ? (
@@ -278,7 +335,22 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           </HelperText>
         ) : null}
 
+        {(marketQ.data?.delivery_slots ?? []).length ? (
+          <HelperText>
+            Delivery slots: {(marketQ.data?.delivery_slots ?? []).map((slot: any) => typeof slot === "string" ? slot : slot.label || `${slot.from}-${slot.to}`).join(", ")}
+          </HelperText>
+        ) : null}
+
         <InputField label="Search items" value={query} onChangeText={setQuery} placeholder="Search by name or SKU" />
+
+        <HelperText>Categories</HelperText>
+        <View style={styles.filterRow}>
+          {categories.map((entry) => (
+            <Pressable key={entry} onPress={() => setCategory(entry)} style={[styles.filterChip, category === entry && styles.filterChipActive]}>
+              <Text style={styles.filterChipText}>{entry}</Text>
+            </Pressable>
+          ))}
+        </View>
       </SectionCard>
 
       <SectionCard title="Cart" subtitle="Stored per market so checkout can continue later.">
@@ -340,19 +412,47 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
               <SectionCard
                 key={item.id}
                 title={item.name}
-                subtitle={`${item.sku} • ${item.stock_qty} in stock`}
+                subtitle={`${item.sku} • ${item.category || "General"} • ${item.stock_qty} in stock`}
                 right={<Pill tone={outOfStock ? "danger" : "success"}>{outOfStock ? "Out of stock" : "Ready"}</Pill>}
               >
                 <Text style={styles.price}>{formatMoney(finalPrice, language)}</Text>
                 {discounted ? <HelperText>{formatMoney(basePrice, language)} regular</HelperText> : null}
-                <AppButton onPress={() => addToCart(item)} disabled={outOfStock || !item.is_active}>
-                  {outOfStock ? "Unavailable" : "Add to cart"}
-                </AppButton>
+                <HelperText>Reviews: {item.review_summary?.average ?? "-"} / {item.review_summary?.count ?? 0}</HelperText>
+                <View style={styles.heroActions}>
+                  <AppButton onPress={() => addToCart(item)} disabled={outOfStock || !item.is_active}>
+                    {outOfStock ? "Unavailable" : "Add to cart"}
+                  </AppButton>
+                  <AppButton compact variant="secondary" onPress={() => setSelectedItemId(item.id)}>
+                    Reviews
+                  </AppButton>
+                  {token ? (
+                    <AppButton compact variant="secondary" onPress={() => favoriteM.mutate({ item_id: item.id })}>
+                      {favoriteItemIds.has(item.id) ? "Saved" : "Save"}
+                    </AppButton>
+                  ) : null}
+                </View>
               </SectionCard>
             );
           })}
         </View>
       )}
+
+      {selectedItemId != null ? (
+        <SectionCard title="Reviews">
+          {(reviewsQ.data ?? []).map((review) => (
+            <SectionCard key={review.id} title={`${review.user?.name || "Customer"} - ${review.rating}/5`} subtitle={review.comment || "No comment"} />
+          ))}
+          {token ? (
+            <>
+              <InputField label="Review" value={reviewComment} onChangeText={setReviewComment} placeholder="Share a quick note" />
+              <View style={styles.heroActions}>
+                <AppButton onPress={() => reviewM.mutate()} disabled={reviewM.isPending}>Post review</AppButton>
+                <AppButton variant="secondary" onPress={() => setSelectedItemId(null)}>Close</AppButton>
+              </View>
+            </>
+          ) : null}
+        </SectionCard>
+      ) : null}
     </Screen>
   );
 }
@@ -414,7 +514,7 @@ export function LoginScreen({ navigation }: LoginProps) {
             English
           </AppButton>
           <AppButton variant={language === "ka" ? "primary" : "secondary"} compact onPress={() => void setLanguage("ka")}>
-            ქართული
+            Georgian
           </AppButton>
         </View>
 
@@ -458,6 +558,7 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
   const [priority, setPriority] = useState("2");
   const [promoCode, setPromoCode] = useState("");
   const [notes, setNotes] = useState("");
+  const [deliverySlot, setDeliverySlot] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -518,6 +619,12 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
           size: Math.max(totals.items, 1),
           promo_code: promoCode.trim() || null,
           notes: notes.trim() || null,
+          ...(deliverySlot
+            ? {
+                time_window_start: deliverySlot.split("|")[1],
+                time_window_end: deliverySlot.split("|")[2],
+              }
+            : {}),
           items: cart.map((item) => ({
             item_id: item.item_id,
             name: item.name,
@@ -583,6 +690,22 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
         <InputField label="Dropoff longitude" value={dropoffLng} onChangeText={setDropoffLng} placeholder="44.8271" keyboardType="numeric" />
         <InputField label="Promo code" value={promoCode} onChangeText={setPromoCode} placeholder="Optional" />
         <InputField label="Delivery notes" value={notes} onChangeText={setNotes} placeholder="Optional notes" multiline />
+        {(marketQ.data?.delivery_slots ?? []).length ? (
+          <>
+            <HelperText>Delivery slot</HelperText>
+            <View style={styles.filterRow}>
+              {(marketQ.data?.delivery_slots ?? []).map((slot: any, index: number) => {
+                const label = typeof slot === "string" ? slot : slot.label || `${slot.from} - ${slot.to}`;
+                const value = typeof slot === "string" ? `${slot}|${slot}|${slot}` : `${label}|${slot.from}|${slot.to}`;
+                return (
+                  <Pressable key={`${label}-${index}`} onPress={() => setDeliverySlot(value)} style={[styles.filterChip, deliverySlot === value && styles.filterChipActive]}>
+                    <Text style={styles.filterChipText}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
       </SectionCard>
 
       <SectionCard title="Summary" subtitle={marketQ.data?.name || "No market selected"}>
@@ -638,9 +761,26 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#0f172a",
   },
-  heroImage: {
-    width: "100%",
-    height: 180,
-    borderRadius: 18,
+  filterRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  filterChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#ffffff",
+  },
+  filterChipActive: {
+    backgroundColor: "#cffafe",
+    borderColor: "#0891b2",
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#0f172a",
   },
 });

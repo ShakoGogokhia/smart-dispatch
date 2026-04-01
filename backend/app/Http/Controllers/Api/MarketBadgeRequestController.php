@@ -5,10 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Market;
 use App\Models\MarketBadgeRequest;
+use App\Models\WorkflowApproval;
+use App\Services\AppNotificationService;
 use Illuminate\Http\Request;
 
 class MarketBadgeRequestController extends Controller
 {
+    public function __construct(private AppNotificationService $notifications)
+    {
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -40,6 +46,25 @@ class MarketBadgeRequestController extends Controller
             'notes' => $data['notes'] ?? null,
             'status' => 'pending',
         ]);
+
+        WorkflowApproval::create([
+            'type' => 'badge',
+            'status' => 'pending',
+            'requested_by' => $request->user()->id,
+            'market_id' => $market->id,
+            'payload' => [
+                'badge' => $badgeRequest->badge,
+                'duration_days' => $badgeRequest->duration_days,
+            ],
+            'notes' => $badgeRequest->notes,
+        ]);
+
+        $this->notifications->notifyAdmins(
+            'approval.created',
+            'Badge approval requested',
+            "{$market->name} submitted a badge request for {$badgeRequest->badge}.",
+            ['market_id' => $market->id, 'badge_request_id' => $badgeRequest->id],
+        );
 
         return response()->json(
             $this->serialize($badgeRequest->load(['market:id,name,code', 'requester:id,name,email'])),

@@ -99,6 +99,7 @@ class MarketController extends Controller
             'featured_badge' => ['nullable', 'string', 'max:40'],
             'featured_headline' => ['nullable', 'string', 'max:120'],
             'featured_copy' => ['nullable', 'string', 'max:255'],
+            'delivery_slots' => ['nullable', 'array'],
         ]);
 
         $market = Market::create([
@@ -109,6 +110,7 @@ class MarketController extends Controller
             'lat' => $data['lat'] ?? null,
             'lng' => $data['lng'] ?? null,
             'is_active' => $data['is_active'] ?? true,
+            'delivery_slots' => $data['delivery_slots'] ?? [],
             ...$this->featuredAttributes($data),
         ]);
 
@@ -134,6 +136,7 @@ class MarketController extends Controller
             'featured_badge' => ['nullable', 'string', 'max:40'],
             'featured_headline' => ['nullable', 'string', 'max:120'],
             'featured_copy' => ['nullable', 'string', 'max:255'],
+            'delivery_slots' => ['nullable', 'array'],
         ]);
 
         $market->update([
@@ -254,6 +257,8 @@ public function addStaff(Request $request, Market $market)
             'owner' => $market->owner,
             'logo_path' => $market->logo_path,
             'logo_url' => $market->logo_url,
+            'delivery_slots' => $market->delivery_slots ?? [],
+            'approval_status' => $market->approval_status ?? 'approved',
             'active_items_count' => (int) ($market->active_items_count ?? 0),
             'active_promo' => $activePromo ? [
                 'id' => $activePromo->id,

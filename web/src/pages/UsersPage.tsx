@@ -161,32 +161,36 @@ export default function UsersPage() {
                 {t("users.addUser")}
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
               <DialogHeader>
-                <DialogTitle>{t("users.createUser")}</DialogTitle>
+                <div className="app-modal-header">
+                  <DialogTitle className="panel-title">{t("users.createUser")}</DialogTitle>
+                </div>
               </DialogHeader>
-              <div className="grid gap-4">
+              <div className="app-modal-body">
+              <div className="app-modal-main">
                 <div className="grid gap-2">
-                  <Label>{t("auth.name")}</Label>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} />
+                  <Label className="field-label">{t("auth.name")}</Label>
+                  <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{t("auth.email")}</Label>
-                  <Input value={email} onChange={(event) => setEmail(event.target.value)} />
+                  <Label className="field-label">{t("auth.email")}</Label>
+                  <Input value={email} onChange={(event) => setEmail(event.target.value)} className="input-shell" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{t("auth.password")}</Label>
-                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+                  <Label className="field-label">{t("auth.password")}</Label>
+                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="input-shell" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{t("users.roles")}</Label>
+                  <Label className="field-label">{t("users.roles")}</Label>
                   <RolePicker value={roles} onChange={setRoles} />
                 </div>
                 {getErrorMessage(createUserM.error) && (
                   <div className="text-sm text-red-700">{getErrorMessage(createUserM.error)}</div>
                 )}
               </div>
-              <DialogFooter>
+              </div>
+              <DialogFooter className="app-modal-footer">
                 <Button
                   onClick={() => createUserM.mutate()}
                   disabled={createUserM.isPending || !name.trim() || !email.trim() || !password || roles.length === 0}
@@ -253,32 +257,36 @@ export default function UsersPage() {
       </Card>
 
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent>
+        <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
           <DialogHeader>
-            <DialogTitle>{t("users.editUser")}</DialogTitle>
+            <div className="app-modal-header">
+              <DialogTitle className="panel-title">{t("users.editUser")}</DialogTitle>
+            </div>
           </DialogHeader>
-          <div className="grid gap-4">
+          <div className="app-modal-body">
+          <div className="app-modal-main">
             <div className="grid gap-2">
-              <Label>{t("auth.name")}</Label>
-              <Input value={editName} onChange={(event) => setEditName(event.target.value)} />
+              <Label className="field-label">{t("auth.name")}</Label>
+              <Input value={editName} onChange={(event) => setEditName(event.target.value)} className="input-shell" />
             </div>
             <div className="grid gap-2">
-              <Label>{t("auth.email")}</Label>
-              <Input value={editEmail} onChange={(event) => setEditEmail(event.target.value)} />
+              <Label className="field-label">{t("auth.email")}</Label>
+              <Input value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="input-shell" />
             </div>
             <div className="grid gap-2">
-              <Label>{t("users.newPasswordOptional")}</Label>
-              <Input type="password" value={editPassword} onChange={(event) => setEditPassword(event.target.value)} />
+              <Label className="field-label">{t("users.newPasswordOptional")}</Label>
+              <Input type="password" value={editPassword} onChange={(event) => setEditPassword(event.target.value)} className="input-shell" />
             </div>
             <div className="grid gap-2">
-              <Label>{t("users.roles")}</Label>
+              <Label className="field-label">{t("users.roles")}</Label>
               <RolePicker value={editRoles} onChange={setEditRoles} />
             </div>
             {getErrorMessage(updateUserM.error) && (
               <div className="text-sm text-red-700">{getErrorMessage(updateUserM.error)}</div>
             )}
           </div>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="app-modal-footer">
             <Button
               onClick={() => updateUserM.mutate()}
               disabled={!editingUser || updateUserM.isPending || !editName.trim() || !editEmail.trim() || editRoles.length === 0}

@@ -9,6 +9,8 @@ use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\OrderItem;
 use App\Models\PromoCode;
+use App\Models\WorkflowApproval;
+use App\Services\AppNotificationService;
 use App\Services\OrderDispatchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -18,7 +20,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class OrderController extends Controller
 {
-    public function __construct(private OrderDispatchService $dispatchService)
+    public function __construct(
+        private OrderDispatchService $dispatchService,
+        private AppNotificationService $notifications,
+    )
     {
     }
 
@@ -165,6 +170,8 @@ class OrderController extends Controller
                 'status' => $market ? 'MARKET_PENDING' : 'READY_FOR_PICKUP',
                 'promised_at' => now()->addMinutes($market ? 75 : 45),
                 'estimated_delivery_at' => now()->addMinutes($market ? 60 : 35),
+                'receipt_number' => 'RCT-' . now()->format('Ymd') . '-' . str_pad((string) $nextId, 6, '0', STR_PAD_LEFT),
+                'delivery_slot_label' => $this->buildDeliverySlotLabel($data),
             ]);
 
             if ($promo) {
@@ -199,6 +206,16 @@ class OrderController extends Controller
 
         if (!$market) {
             $this->dispatchService->offerOrder($order);
+        }
+
+        if ($market) {
+            $this->notifications->notifyMarketTeam(
+                $market,
+                'order.created',
+                'New market order',
+                "{$order->code} is waiting for market acceptance.",
+                ['order_id' => $order->id],
+            );
         }
 
         return response()->json(
@@ -293,6 +310,8 @@ class OrderController extends Controller
             'estimated_delivery_at' => now()->addMinutes(50),
         ]);
 
+        $this->notifications->notifyOrderUpdate($order->fresh('market'), 'Order accepted', "{$order->code} was accepted by the market.", 'order.market_accepted');
+
         OrderEvent::create([
             'order_id' => $order->id,
             'type' => 'MARKET_ACCEPTED',
@@ -330,6 +349,8 @@ class OrderController extends Controller
 
         $this->dispatchService->offerOrder($order->fresh());
 
+        $this->notifications->notifyOrderUpdate($order->fresh('market'), 'Order ready', "{$order->code} is ready for pickup.", 'order.ready');
+
         return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
     }
 
@@ -351,6 +372,8 @@ class OrderController extends Controller
             'cancellation_reason' => $data['reason'] ?? 'Customer request',
         ]);
 
+        $this->notifications->notifyOrderUpdate($order->fresh('market'), 'Order cancelled', "{$order->code} was cancelled.", 'order.cancelled');
+
         OrderEvent::create([
             'order_id' => $order->id,
             'type' => 'CANCELLATION_REQUESTED',
@@ -359,6 +382,43 @@ class OrderController extends Controller
                 'requested_by' => $request->user()?->id,
             ],
         ]);
+
+        return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
+    }
+
+    public function requestRefund(Request $request, Order $order)
+    {
+        abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
+
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:255'],
+        ]);
+
+        if ($order->status !== 'DELIVERED') {
+            return response()->json(['message' => 'Refunds can only be requested for delivered orders'], 422);
+        }
+
+        $order->update([
+            'refund_requested_at' => now(),
+            'refund_status' => 'pending',
+            'refund_reason' => $data['reason'],
+        ]);
+
+        WorkflowApproval::create([
+            'type' => 'refund',
+            'status' => 'pending',
+            'requested_by' => $request->user()->id,
+            'market_id' => $order->market_id,
+            'order_id' => $order->id,
+            'notes' => $data['reason'],
+        ]);
+
+        $this->notifications->notifyAdmins(
+            'approval.created',
+            'Refund approval requested',
+            "Refund requested for {$order->code}.",
+            ['order_id' => $order->id],
+        );
 
         return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing', 'offeredDriver.user', 'items'])));
     }
@@ -537,6 +597,7 @@ class OrderController extends Controller
         $order->setAttribute('delivery_proof', [
             'note' => $order->proof_of_delivery_note,
             'photo_url' => $order->proof_of_delivery_photo_url,
+            'signature_name' => $order->proof_of_delivery_signature_name,
         ]);
         $order->setAttribute('driver_compensation', [
             'distance_km' => $order->driver_distance_km,
@@ -552,6 +613,25 @@ class OrderController extends Controller
             'can_cancel' => in_array($order->status, ['MARKET_PENDING', 'MARKET_ACCEPTED', 'READY_FOR_PICKUP'], true),
             'can_rate' => $order->status === 'DELIVERED',
             'can_reorder' => $order->relationLoaded('items') ? $order->items->isNotEmpty() : $order->items()->exists(),
+            'can_request_refund' => $order->status === 'DELIVERED' && $order->refund_status !== 'pending',
+        ]);
+        $order->setAttribute('receipt', [
+            'number' => $order->receipt_number,
+            'issued_at' => $order->created_at?->toDateTimeString(),
+            'subtotal' => $order->subtotal,
+            'discount_total' => $order->discount_total,
+            'total' => $order->total,
+            'items' => $order->items->map(fn ($item) => [
+                'name' => $item->name,
+                'qty' => $item->qty,
+                'unit_price' => $item->unit_price,
+                'line_total' => $item->line_total,
+            ])->values(),
+        ]);
+        $order->setAttribute('refund_summary', [
+            'status' => $order->refund_status,
+            'reason' => $order->refund_reason,
+            'requested_at' => $order->refund_requested_at?->toDateTimeString(),
         ]);
 
         return $order;
@@ -638,5 +718,14 @@ class OrderController extends Controller
         }
 
         return min($subtotal, round($value, 2));
+    }
+
+    private function buildDeliverySlotLabel(array $data): ?string
+    {
+        if (empty($data['time_window_start']) || empty($data['time_window_end'])) {
+            return null;
+        }
+
+        return now()->parse($data['time_window_start'])->format('H:i') . ' - ' . now()->parse($data['time_window_end'])->format('H:i');
     }
 }

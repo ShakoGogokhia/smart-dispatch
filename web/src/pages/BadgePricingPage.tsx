@@ -163,8 +163,8 @@ export default function BadgePricingPage() {
           {(requestsQ.data ?? []).map((request) => (
             <div key={request.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="theme-ink font-semibold">{request.market?.name ?? "Market"} • {request.badge}</div>
-                <div className="theme-copy text-sm">{request.duration_days} days • {request.notes || "No note"}</div>
+                <div className="theme-ink font-semibold">{request.market?.name ?? "Market"} - {request.badge}</div>
+                <div className="theme-copy text-sm">{request.duration_days} days - {request.notes || "No note"}</div>
               </div>
               <div className="status-chip">{request.status}</div>
             </div>

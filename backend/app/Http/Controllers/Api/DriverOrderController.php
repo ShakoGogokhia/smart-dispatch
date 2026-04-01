@@ -8,6 +8,7 @@ use App\Models\OrderDriverDecline;
 use App\Models\OrderEvent;
 use App\Models\RoutePlan;
 use App\Models\RouteStop;
+use App\Services\AppNotificationService;
 use App\Services\DriverEarningsService;
 use App\Services\OrderDispatchService;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class DriverOrderController extends Controller
     public function __construct(
         private OrderDispatchService $dispatchService,
         private DriverEarningsService $driverEarningsService,
+        private AppNotificationService $notifications,
     )
     {
     }
@@ -69,6 +71,13 @@ class DriverOrderController extends Controller
             'accepted_at' => now(),
             'status' => 'ASSIGNED',
         ]);
+
+        $this->notifications->notifyOrderUpdate(
+            $order->fresh('market'),
+            'Driver assigned',
+            "{$driver->user?->name} accepted {$order->code}.",
+            'driver.assigned',
+        );
 
         $driver->update(['status' => 'ON_ROUTE']);
 
@@ -177,6 +186,7 @@ class DriverOrderController extends Controller
         $data = $request->validate([
             'proof_note' => ['nullable', 'string'],
             'proof_photo_url' => ['nullable', 'url'],
+            'proof_signature_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $order->loadMissing('market');
@@ -186,6 +196,7 @@ class DriverOrderController extends Controller
             'status' => 'DELIVERED',
             'proof_of_delivery_note' => $data['proof_note'] ?? $order->proof_of_delivery_note,
             'proof_of_delivery_photo_url' => $data['proof_photo_url'] ?? $order->proof_of_delivery_photo_url,
+            'proof_of_delivery_signature_name' => $data['proof_signature_name'] ?? $order->proof_of_delivery_signature_name,
         ]);
 
         OrderEvent::create([
@@ -195,8 +206,16 @@ class DriverOrderController extends Controller
                 'driver_id' => $driver->id,
                 'proof_note' => $data['proof_note'] ?? null,
                 'proof_photo_url' => $data['proof_photo_url'] ?? null,
+                'proof_signature_name' => $data['proof_signature_name'] ?? null,
             ],
         ]);
+
+        $this->notifications->notifyOrderUpdate(
+            $order->fresh('market'),
+            'Order delivered',
+            "{$order->code} was delivered with proof of delivery attached.",
+            'order.delivered',
+        );
 
         $earningTransaction = $this->driverEarningsService->creditDeliveredOrder($order->fresh('market'), $driver->fresh());
 

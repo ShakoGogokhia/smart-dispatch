@@ -171,7 +171,7 @@ export default function LiveMapPage() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-3">
-          <AlertColumn title={text.lateOrders} items={lateOrders.map((order) => `${order.code} • ${order.dropoff_address || "-"}`)} emptyLabel={text.noAlerts} />
+            <AlertColumn title={text.lateOrders} items={lateOrders.map((order) => `${order.code} - ${order.dropoff_address || "-"}`)} emptyLabel={text.noAlerts} />
           <AlertColumn title={text.idleDrivers} items={idleDrivers.map((driver) => driver.user?.name || text.driver.replace("{id}", String(driver.id)))} emptyLabel={text.noAlerts} />
           <AlertColumn title={text.staleDrivers} items={staleDrivers.map((driver) => driver.user?.name || text.driver.replace("{id}", String(driver.id)))} emptyLabel={text.noAlerts} />
         </div>

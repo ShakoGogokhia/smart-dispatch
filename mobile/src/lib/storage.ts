@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
 export const STORAGE_KEYS = {
   token: "smart-dispatch-token",
@@ -14,65 +15,119 @@ export type CartItem = {
   qty: number;
 };
 
+type StorageLike = {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
+};
+
+const memoryStorage = new Map<string, string>();
+
+function hasNativeAsyncStorage(): boolean {
+  return !!AsyncStorage && typeof AsyncStorage.getItem === "function" && typeof AsyncStorage.setItem === "function";
+}
+
+const fallbackStorage: StorageLike = {
+  async getItem(key) {
+    if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+      return localStorage.getItem(key);
+    }
+
+    return memoryStorage.get(key) ?? null;
+  },
+  async setItem(key, value) {
+    if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+      localStorage.setItem(key, value);
+      return;
+    }
+
+    memoryStorage.set(key, value);
+  },
+  async removeItem(key) {
+    if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+      localStorage.removeItem(key);
+      return;
+    }
+
+    memoryStorage.delete(key);
+  },
+};
+
+function getStorage(): StorageLike {
+  if (hasNativeAsyncStorage()) {
+    return {
+      async getItem(key) {
+        try {
+          return await AsyncStorage.getItem(key);
+        } catch {
+          return fallbackStorage.getItem(key);
+        }
+      },
+      async setItem(key, value) {
+        try {
+          await AsyncStorage.setItem(key, value);
+        } catch {
+          await fallbackStorage.setItem(key, value);
+        }
+      },
+      async removeItem(key) {
+        try {
+          await AsyncStorage.removeItem(key);
+        } catch {
+          await fallbackStorage.removeItem(key);
+        }
+      },
+    };
+  }
+
+  return fallbackStorage;
+}
+
+const storage = getStorage();
+
 export function getCartKey(marketId: string) {
   return `smart-dispatch-cart-market-${marketId}`;
 }
 
 export async function getStoredToken() {
-  try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.token);
-  } catch {
-    return null;
-  }
+  return storage.getItem(STORAGE_KEYS.token);
 }
 
 export async function setStoredToken(token: string) {
-  await AsyncStorage.setItem(STORAGE_KEYS.token, token);
+  await storage.setItem(STORAGE_KEYS.token, token);
 }
 
 export async function clearStoredToken() {
-  await AsyncStorage.removeItem(STORAGE_KEYS.token);
+  await storage.removeItem(STORAGE_KEYS.token);
 }
 
 export async function getStoredLanguage() {
-  try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.language);
-  } catch {
-    return null;
-  }
+  return storage.getItem(STORAGE_KEYS.language);
 }
 
 export async function setStoredLanguage(language: string) {
-  await AsyncStorage.setItem(STORAGE_KEYS.language, language);
+  await storage.setItem(STORAGE_KEYS.language, language);
 }
 
 export async function getStoredTheme() {
-  try {
-    return await AsyncStorage.getItem(STORAGE_KEYS.theme);
-  } catch {
-    return null;
-  }
+  return storage.getItem(STORAGE_KEYS.theme);
 }
 
 export async function setStoredTheme(theme: string) {
-  await AsyncStorage.setItem(STORAGE_KEYS.theme, theme);
+  await storage.setItem(STORAGE_KEYS.theme, theme);
 }
 
 export async function getActiveMarketId() {
-  try {
-    return (await AsyncStorage.getItem(STORAGE_KEYS.activeMarketId)) ?? "";
-  } catch {
-    return "";
-  }
+  return (await storage.getItem(STORAGE_KEYS.activeMarketId)) ?? "";
 }
 
 export async function setActiveMarketId(marketId: string) {
-  await AsyncStorage.setItem(STORAGE_KEYS.activeMarketId, marketId);
+  await storage.setItem(STORAGE_KEYS.activeMarketId, marketId);
 }
 
 export async function loadCart(marketId: string): Promise<CartItem[]> {
   try {
-    const raw = await AsyncStorage.getItem(getCartKey(marketId));
+    const raw = await storage.getItem(getCartKey(marketId));
     if (!raw) {
       return [];
     }
@@ -111,7 +166,7 @@ export async function loadCart(marketId: string): Promise<CartItem[]> {
 }
 
 export async function saveCart(marketId: string, cart: CartItem[]) {
-  await AsyncStorage.setItem(getCartKey(marketId), JSON.stringify(cart));
+  await storage.setItem(getCartKey(marketId), JSON.stringify(cart));
   await setActiveMarketId(marketId);
 }
 

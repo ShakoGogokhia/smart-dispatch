@@ -162,6 +162,7 @@ export default function OrdersPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [rating, setRating] = useState("5");
   const [feedback, setFeedback] = useState("");
+  const [refundReason, setRefundReason] = useState("");
 
   const roles = meQ.data?.roles ?? [];
   const isCustomerOnly =
@@ -221,6 +222,15 @@ export default function OrdersPage() {
     },
   });
 
+  const refundM = useMutation({
+    mutationFn: async (orderId: number) => (await api.post(`/api/orders/${orderId}/request-refund`, { reason: refundReason || "Requested by customer" })).data,
+    onSuccess: async () => {
+      setRefundReason("");
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["order-detail"] });
+    },
+  });
+
   const rateM = useMutation({
     mutationFn: async (orderId: number) =>
       (await api.post(`/api/orders/${orderId}/rate`, { rating: Number(rating), feedback: feedback || null })).data,
@@ -255,7 +265,8 @@ export default function OrdersPage() {
     getErrorMessage(marketActionM.error) ||
     getErrorMessage(cancelM.error) ||
     getErrorMessage(reorderM.error) ||
-    getErrorMessage(rateM.error);
+    getErrorMessage(rateM.error) ||
+    getErrorMessage(refundM.error);
 
   return (
     <div className="grid gap-6">
@@ -436,8 +447,8 @@ export default function OrdersPage() {
       )}
 
       <Dialog open={selectedOrderId != null} onOpenChange={(open) => !open && setSelectedOrderId(null)}>
-        <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] gap-0 rounded-[30px] border border-slate-200/80 bg-[#f8f6f0] p-0 dark:border-white/10 dark:bg-[#0d1420]">
-          <DialogHeader className="shrink-0 border-b border-slate-200 bg-white/92 px-6 py-5 text-left dark:border-white/10 dark:bg-[#131d2b]">
+        <DialogContent className="app-modal-shell">
+          <DialogHeader className="app-modal-header">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="section-kicker">{detailOrder?.market?.code || "ORD"}</div>
@@ -480,6 +491,10 @@ export default function OrdersPage() {
                           <Label className="field-label">{text.reason}</Label>
                           <Input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="input-shell" />
                         </div>
+                        <div className="field-group">
+                          <Label className="field-label">Refund reason</Label>
+                          <Input value={refundReason} onChange={(event) => setRefundReason(event.target.value)} className="input-shell" />
+                        </div>
                         <div className="grid gap-2">
                           <Button onClick={() => rateM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_rate || rateM.isPending}>
                             <Star className="h-4 w-4" />
@@ -492,6 +507,9 @@ export default function OrdersPage() {
                           <Button variant="secondary" onClick={() => cancelM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_cancel || cancelM.isPending}>
                             <XCircle className="h-4 w-4" />
                             {text.cancel}
+                          </Button>
+                          <Button variant="secondary" onClick={() => refundM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_request_refund || refundM.isPending}>
+                            Request refund
                           </Button>
                         </div>
                       </div>
@@ -544,13 +562,30 @@ export default function OrdersPage() {
                             {text.proofMissing}
                           </div>
                         )}
-                        <div className="rounded-[20px] border border-slate-200 bg-[#f7f4ec] px-4 py-4 text-sm leading-7 text-slate-700 dark:border-white/10 dark:bg-[#0f1825] dark:text-slate-200">
+                      <div className="rounded-[20px] border border-slate-200 bg-[#f7f4ec] px-4 py-4 text-sm leading-7 text-slate-700 dark:border-white/10 dark:bg-[#0f1825] dark:text-slate-200">
                           {detailOrder.delivery_proof?.note || text.proofMissing}
+                          {detailOrder.delivery_proof?.signature_name ? ` | Signature: ${detailOrder.delivery_proof.signature_name}` : ""}
                         </div>
                       </div>
                     </div>
 
                     <div className="grid gap-5">
+                      <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
+                        <div className="section-kicker">Receipt</div>
+                        <div className="theme-muted mt-2 text-sm">{detailOrder.receipt?.number || "Pending receipt"}</div>
+                        <div className="mt-4 grid gap-2 text-sm">
+                          {(detailOrder.receipt?.items ?? []).map((item, index) => (
+                            <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3">
+                              <span>{item.name} x{item.qty}</span>
+                              <span>{formatMoney(item.line_total ?? 0)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 text-sm font-semibold">
+                          Total: {formatMoney(detailOrder.receipt?.total ?? detailOrder.total ?? 0)}
+                        </div>
+                        <div className="theme-muted mt-2 text-xs">Refund: {detailOrder.refund_summary?.status || "none"}</div>
+                      </div>
                       {detailOrder.assigned_driver?.latest_ping && detailOrder.status === "PICKED_UP" && (
                         <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
                           <div className="section-kicker">{text.tracking}</div>
@@ -589,7 +624,7 @@ export default function OrdersPage() {
               </div>
             )}
           </div>
-          <DialogFooter className="shrink-0 border-t border-slate-200 bg-slate-50/90 px-6 py-4 dark:border-white/10 dark:bg-white/4">
+          <DialogFooter className="app-modal-footer">
             <Button variant="secondary" onClick={() => setSelectedOrderId(null)}>{text.close}</Button>
           </DialogFooter>
         </DialogContent>

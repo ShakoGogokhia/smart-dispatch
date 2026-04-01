@@ -147,6 +147,9 @@ function DetailModal({
   setFeedback,
   reason,
   setReason,
+  refundReason,
+  setRefundReason,
+  onRefund,
 }: {
   visible: boolean;
   order?: Order | null;
@@ -162,6 +165,9 @@ function DetailModal({
   setFeedback: (value: string) => void;
   reason: string;
   setReason: (value: string) => void;
+  refundReason: string;
+  setRefundReason: (value: string) => void;
+  onRefund: () => void;
 }) {
   return (
     <AppModal visible={visible} title={order?.code || text.detailTitle} onClose={onClose}>
@@ -174,18 +180,30 @@ function DetailModal({
       <SectionCard title={text.proof}>
         <HelperText>{order?.delivery_proof?.note || text.proofMissing}</HelperText>
         {order?.delivery_proof?.photo_url ? <HelperText>{order.delivery_proof.photo_url}</HelperText> : null}
+        {order?.delivery_proof?.signature_name ? <HelperText>Signature: {order.delivery_proof.signature_name}</HelperText> : null}
         <HelperText>{text.eta}: {formatDateTime(order?.eta_summary?.estimated_delivery_at, language)}</HelperText>
         <HelperText>{text.promised}: {formatDateTime(order?.eta_summary?.promised_at, language)}</HelperText>
+      </SectionCard>
+
+      <SectionCard title="Receipt">
+        <HelperText>{order?.receipt?.number || "Pending receipt"}</HelperText>
+        {(order?.receipt?.items ?? []).map((item, index) => (
+          <HelperText key={`${item.name}-${index}`}>{item.name} x{item.qty} - {formatMoney(item.line_total ?? 0, language)}</HelperText>
+        ))}
+        <HelperText>Total: {formatMoney(order?.receipt?.total ?? order?.total ?? 0, language)}</HelperText>
+        <HelperText>Refund: {order?.refund_summary?.status || "none"}</HelperText>
       </SectionCard>
 
       <SectionCard title={text.rateDelivery}>
         <InputField label={text.rating} value={rating} onChangeText={setRating} keyboardType="numeric" />
         <InputField label={text.feedback} value={feedback} onChangeText={setFeedback} />
         <InputField label={text.reason} value={reason} onChangeText={setReason} />
+        <InputField label="Refund reason" value={refundReason} onChangeText={setRefundReason} />
         <View style={styles.actionRow}>
           <AppButton onPress={onRate} disabled={!order?.actions?.can_rate}>{text.submit}</AppButton>
           <AppButton variant="secondary" onPress={onReorder} disabled={!order?.actions?.can_reorder}>{text.reorder}</AppButton>
           <AppButton variant="secondary" onPress={onCancel} disabled={!order?.actions?.can_cancel}>{text.cancel}</AppButton>
+          <AppButton variant="secondary" onPress={onRefund} disabled={!order?.actions?.can_request_refund}>Request refund</AppButton>
         </View>
       </SectionCard>
     </AppModal>
@@ -205,6 +223,7 @@ export function OrdersScreen({ navigation }: OrdersProps) {
   const [rating, setRating] = useState("5");
   const [feedback, setFeedback] = useState("");
   const [reason, setReason] = useState("");
+  const [refundReason, setRefundReason] = useState("");
 
   const roles = access.me?.roles ?? [];
   const isCustomerOnly =
@@ -263,6 +282,15 @@ export function OrdersScreen({ navigation }: OrdersProps) {
     mutationFn: async (orderId: number) => (await api.post(`/api/orders/${orderId}/reorder`)).data,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+
+  const refundM = useMutation({
+    mutationFn: async (orderId: number) => (await api.post(`/api/orders/${orderId}/request-refund`, { reason: refundReason || "Requested by customer" })).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["orders"] });
+      await queryClient.invalidateQueries({ queryKey: ["order-detail"] });
+      setRefundReason("");
     },
   });
 
@@ -374,6 +402,9 @@ export function OrdersScreen({ navigation }: OrdersProps) {
         setFeedback={setFeedback}
         reason={reason}
         setReason={setReason}
+        refundReason={refundReason}
+        setRefundReason={setRefundReason}
+        onRefund={() => detailQ.data && refundM.mutate(detailQ.data.id)}
       />
     </AppShell>
   );
