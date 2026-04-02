@@ -14,7 +14,9 @@ import {
   Truck,
   Users,
   Warehouse,
-  Zap,
+  Bell,
+  ChevronRight,
+  PanelTop,
 } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -46,7 +48,15 @@ const ROLE_LABELS: Record<string, string> = {
   driver: "Driver",
 };
 
-function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () => void }) {
+function AppNavLink({
+  entry,
+  onNavigate,
+  badge,
+}: {
+  entry: NavEntry;
+  onNavigate?: () => void;
+  badge?: string | number;
+}) {
   const Icon = entry.icon;
 
   return (
@@ -56,18 +66,53 @@ function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () =>
       onClick={onNavigate}
       className={({ isActive }) =>
         [
-          "rail-link group",
+          "group relative flex items-center gap-3 rounded-[20px] border px-3 py-3 transition-all duration-200",
           isActive
-            ? "rail-link-active"
-            : "hover:border-slate-200/80 hover:bg-white/80 hover:text-slate-950 dark:hover:border-white/10 dark:hover:bg-white/5 dark:hover:text-white",
+            ? "border-cyan-200 bg-gradient-to-r from-cyan-50 via-sky-50 to-white text-slate-950 shadow-[0_10px_30px_rgba(8,145,178,0.10)] dark:border-cyan-500/30 dark:bg-gradient-to-r dark:from-cyan-500/12 dark:via-slate-900 dark:to-slate-900 dark:text-white dark:shadow-[0_8px_30px_rgba(6,182,212,0.12)]"
+            : "border-transparent bg-white/70 text-slate-700 hover:-translate-y-[1px] hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:bg-transparent dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/70 dark:hover:text-white dark:hover:shadow-none",
         ].join(" ")
       }
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-slate-200/80 bg-white text-slate-600 dark:border-white/10 dark:bg-white/6 dark:text-slate-200">
-        <Icon className="h-4 w-4" />
-      </span>
-      <span className="truncate">{entry.label}</span>
+      {({ isActive }) => (
+        <>
+          <span
+            className={[
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border transition-all",
+              isActive
+                ? "border-cyan-200 bg-white text-cyan-700 shadow-sm dark:border-cyan-500/30 dark:bg-cyan-500/12 dark:text-cyan-200 dark:shadow-none"
+                : "border-slate-200/80 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+            ].join(" ")}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{entry.label}</div>
+          </div>
+
+          {badge !== undefined ? (
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              {badge}
+            </span>
+          ) : null}
+
+          <ChevronRight
+            className={[
+              "h-4 w-4 shrink-0 transition-all",
+              isActive ? "translate-x-0 text-cyan-600 dark:text-cyan-300" : "text-slate-400 group-hover:translate-x-0.5 dark:text-slate-500",
+            ].join(" ")}
+          />
+        </>
+      )}
     </NavLink>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+      {children}
+    </div>
   );
 }
 
@@ -98,6 +143,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     enabled: !!meQ.data,
     refetchInterval: 15000,
   });
+
+  const unreadCount = notificationsQ.data?.filter((item) => !item.read_at).length ?? 0;
 
   const storedMarketId = getActiveMarketId() || undefined;
   const autoMarketId = myMarketsQ.data?.length === 1 ? String(myMarketsQ.data[0].id) : undefined;
@@ -195,63 +242,99 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [currentPath]);
 
   const sidebar = (
-    <div className="rail-panel page-enter flex h-full flex-col gap-4">
-      <div className="control-card p-4">
-        <Link to="/" onClick={() => setMobileOpen(false)} className="relative flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border border-cyan-200/40 bg-cyan-50 text-cyan-700 dark:border-cyan-300/14 dark:bg-cyan-300/10 dark:text-cyan-50">
-            <Zap className="h-5 w-5" />
+    <div className="flex h-full flex-col gap-4">
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-gradient-to-br from-white via-slate-50 to-cyan-50/50 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-cyan-400/10 blur-3xl dark:bg-cyan-400/8" />
+        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-400/8" />
+
+        <Link to="/" onClick={() => setMobileOpen(false)} className="relative flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-[0_18px_40px_rgba(8,145,178,0.30)]">
+            <Sparkles className="h-5 w-5" />
           </div>
-          <div>
-            <div className="font-display theme-ink text-xl font-semibold tracking-[-0.04em]">Smart Dispatch</div>
-            <div className="theme-muted text-sm">Markets, deliveries, and dispatch in one workspace</div>
+          <div className="min-w-0">
+            <div className="truncate text-[22px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
+              Smart Dispatch
+            </div>
+            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Markets, deliveries, and dispatch in one workspace
+            </div>
           </div>
         </Link>
       </div>
 
-      <div className="paper-panel-muted p-4">
-        <div className="section-kicker">Signed in as</div>
-        <div className="font-display theme-ink mt-3 text-xl font-semibold tracking-[-0.04em]">
+      <div className="rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+          Signed in as
+        </div>
+
+        <div className="mt-3 text-xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
           {meQ.data?.name || "Loading user..."}
         </div>
-        <div className="theme-muted mt-1 text-sm">
+
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
         </div>
+
         <div className="mt-4 flex flex-wrap gap-2">
           {roles.map((role: string) => (
-            <span key={role} className="data-pill">
+            <span
+              key={role}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+            >
               {ROLE_LABELS[role] ?? role}
             </span>
           ))}
           {(meQ.data?.permissions ?? []).slice(0, 3).map((permission: string) => (
-            <span key={permission} className="data-pill">
+            <span
+              key={permission}
+              className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700 dark:border-cyan-500/25 dark:bg-cyan-500/10 dark:text-cyan-200"
+            >
               {permission}
             </span>
           ))}
         </div>
+
         {currentMarket && (
-          <div className="subpanel mt-4 p-4">
-            <div className="section-kicker">Active market</div>
-            <div className="theme-ink mt-2 text-base font-semibold">{currentMarket.name}</div>
-            <div className="theme-muted text-sm">{currentMarket.code}</div>
+          <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-gradient-to-r from-slate-50 to-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              Active market
+            </div>
+            <div className="mt-2 text-base font-semibold text-slate-950 dark:text-white">{currentMarket.name}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400">{currentMarket.code}</div>
           </div>
         )}
-        <div className="subpanel mt-4 p-4">
-          <div className="section-kicker">Notifications</div>
-          <div className="theme-ink mt-2 text-base font-semibold">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</div>
+
+        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-gradient-to-r from-slate-50 to-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              Notifications
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-200">
+              <Bell className="h-4 w-4" />
+            </div>
+          </div>
+
+          <div className="mt-3 text-lg font-semibold text-slate-950 dark:text-white">{unreadCount} unread</div>
+
           <div className="mt-3 grid gap-2">
             {(notificationsQ.data ?? []).slice(0, 3).map((notification) => (
-              <div key={notification.id} className="rounded-[16px] border border-slate-200/80 bg-white/80 px-3 py-3 text-sm dark:border-white/10 dark:bg-white/5">
-                <div className="font-semibold">{notification.title}</div>
-                <div className="theme-muted mt-1 text-xs">{notification.message}</div>
+              <div
+                key={notification.id}
+                className="rounded-[18px] border border-slate-200/70 bg-white px-3 py-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
+              >
+                <div className="font-semibold text-slate-900 dark:text-white">{notification.title}</div>
+                <div className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                  {notification.message}
+                </div>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="space-y-3">
-        <div className="section-kicker px-2">Operations</div>
-        <div className="space-y-1">
+      <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+        <SectionLabel>Operations</SectionLabel>
+        <div className="space-y-2">
           {primaryNav.map((entry) => (
             <AppNavLink key={entry.to} entry={entry} onNavigate={() => setMobileOpen(false)} />
           ))}
@@ -259,9 +342,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {!isCustomerOnly && (
-        <div className="space-y-3">
-          <div className="section-kicker px-2">Markets</div>
-          <div className="space-y-1">
+        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+          <SectionLabel>Markets</SectionLabel>
+          <div className="space-y-2">
             <AppNavLink
               entry={{
                 label: isAdmin ? "Markets" : "My markets",
@@ -279,21 +362,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {isAdmin && (
-        <div className="space-y-3">
-          <div className="section-kicker px-2">Admin</div>
-          <div className="space-y-1">
+        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+          <SectionLabel>Admin</SectionLabel>
+          <div className="space-y-2">
             <AppNavLink
               entry={{ label: "Drivers", to: "/drivers", icon: Warehouse, end: true }}
               onNavigate={() => setMobileOpen(false)}
             />
-            <AppNavLink entry={{ label: "Global promos", to: "/promo-codes", icon: Activity, end: true }} onNavigate={() => setMobileOpen(false)} />
-            <AppNavLink entry={{ label: "Users", to: "/users", icon: Users, end: true }} onNavigate={() => setMobileOpen(false)} />
+            <AppNavLink
+              entry={{ label: "Global promos", to: "/promo-codes", icon: Activity, end: true }}
+              onNavigate={() => setMobileOpen(false)}
+            />
+            <AppNavLink
+              entry={{ label: "Users", to: "/users", icon: Users, end: true }}
+              onNavigate={() => setMobileOpen(false)}
+            />
           </div>
         </div>
       )}
 
-      <div className="mt-auto pt-2">
-        <Button variant="secondary" className="h-12 justify-start rounded-[18px]" onClick={logout}>
+      <div className="mt-auto">
+        <Button
+          variant="secondary"
+          className="h-14 w-full justify-start rounded-[22px] border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+          onClick={logout}
+        >
           <LogOut className="mr-2 h-4 w-4" />
           Log out
         </Button>
@@ -302,81 +395,106 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="app-shell app-shell-mobile-safe">
-      <div className="editorial-shell editorial-shell-mobile">
-        <aside className="hidden xl:block">{sidebar}</aside>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.10),transparent_30%)] bg-slate-100 text-slate-900 dark:bg-[#020617] dark:text-white">
+      <div className="mx-auto flex min-h-screen max-w-[1700px] gap-5 px-3 py-3 md:px-5 md:py-5">
+        <aside className="hidden w-[340px] shrink-0 xl:block">{sidebar}</aside>
 
-        <div className="grid min-w-0 gap-4 md:gap-5">
-          <div className="mobile-device-shell page-enter page-enter-delay-1">
-            <div className="mobile-device-shell__topbar xl:hidden">
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="secondary"
-                  className="mobile-app-icon p-0"
-                  onClick={() => setMobileOpen(true)}
-                  aria-label="Open navigation"
-                >
-                  <PanelLeftOpen className="h-4 w-4" />
-                </Button>
-                <div className="min-w-0">
-                  <div className="section-kicker">{activeBottomEntry?.mobileLabel || "Workspace"}</div>
-                  <div className="truncate font-display text-lg font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
-                    {currentSectionTitle}
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <div className="xl:hidden">
+            <div className="rounded-[28px] border border-slate-200/70 bg-white/85 p-3 shadow-[0_16px_40px_rgba(15,23,42,0.07)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.30)]">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    className="h-11 w-11 rounded-[16px] border border-slate-200 bg-white p-0 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                    onClick={() => setMobileOpen(true)}
+                    aria-label="Open navigation"
+                  >
+                    <PanelLeftOpen className="h-4 w-4" />
+                  </Button>
+
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                      {activeBottomEntry?.mobileLabel || "Workspace"}
+                    </div>
+                    <div className="truncate text-lg font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
+                      {currentSectionTitle}
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="mobile-status-pill">
-                  {notificationsQ.data?.filter((item) => !item.read_at).length ?? 0}
+
+                <div className="flex items-center gap-2">
+                  <div className="flex h-10 min-w-[40px] items-center justify-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white dark:bg-cyan-500/15 dark:text-cyan-200">
+                    {unreadCount}
+                  </div>
+                  <ThemeToggle className="h-11 w-11 rounded-[16px] border border-slate-200 bg-white p-0 shadow-sm dark:border-slate-700 dark:bg-slate-800" />
                 </div>
-                <ThemeToggle className="mobile-app-icon" />
               </div>
             </div>
-
-            <div className="paper-panel hidden xl:flex xl:flex-wrap xl:items-start xl:justify-between xl:gap-4 xl:px-5 xl:py-4 2xl:px-6">
-              <div>
-                <div className="command-chip">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Workspace
-                </div>
-                <div className="font-display theme-ink mt-4 text-2xl font-semibold tracking-[-0.05em] md:text-3xl">
-                  Smart Dispatch workspace
-                </div>
-                <div className="theme-copy mt-2 max-w-2xl text-sm">
-                  Orders, routes, live operations, and market tools in one place.
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="data-pill">{roleLabels.length ? roleLabels.join(", ") : "Workspace member"}</span>
-                  <span className="data-pill">{currentMarket?.code || "Global workspace"}</span>
-                  <span className="data-pill">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</span>
-                </div>
-              </div>
-
-              <div className="ml-auto flex items-center gap-3">
-                <div className="hidden text-right md:block">
-                  <div className="section-kicker">Signed in as</div>
-                  <div className="theme-ink mt-2 text-sm font-semibold">{meQ.data?.name || "Loading user..."}</div>
-                </div>
-                <ThemeToggle />
-              </div>
-            </div>
-
-            <main className="paper-panel mobile-main-panel page-enter page-enter-delay-2 overflow-hidden p-4 md:p-6">
-              {children}
-            </main>
           </div>
 
-          <nav className="mobile-bottom-nav xl:hidden" aria-label="Primary">
+          <div className="hidden overflow-hidden rounded-[34px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-6 py-6 shadow-[0_25px_80px_rgba(0,0,0,0.22)] xl:flex xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/85">
+                <PanelTop className="h-3.5 w-3.5" />
+                Workspace
+              </div>
+
+              <div className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-white">
+                Smart Dispatch control center
+              </div>
+
+              <div className="mt-2 text-sm leading-6 text-white/70">
+                Orders, routes, live operations, users, analytics, and market tools in one high-end workspace.
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/85">
+                  {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/85">
+                  {currentMarket?.code || "Global workspace"}
+                </span>
+                <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100">
+                  {unreadCount} unread notifications
+                </span>
+              </div>
+            </div>
+
+            <div className="ml-6 flex items-center gap-3">
+              <div className="hidden text-right md:block">
+                <div className="text-xs uppercase tracking-[0.22em] text-white/50">Signed in as</div>
+                <div className="mt-2 text-sm font-semibold text-white">{meQ.data?.name || "Loading user..."}</div>
+              </div>
+              <ThemeToggle />
+            </div>
+          </div>
+
+          <main className="min-w-0 flex-1 overflow-hidden rounded-[34px] border border-slate-200/70 bg-white/88 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm md:p-6 dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-[0_18px_50px_rgba(0,0,0,0.32)]">
+            {children}
+          </main>
+
+          <nav
+            className="fixed bottom-3 left-3 right-3 z-40 grid grid-cols-5 gap-2 rounded-[24px] border border-slate-200/70 bg-white/92 p-2 shadow-[0_20px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl xl:hidden dark:border-slate-800 dark:bg-[#0b1220]/95 dark:shadow-[0_20px_40px_rgba(0,0,0,0.35)]"
+            aria-label="Primary"
+          >
             {bottomNav.map((entry) => {
               const Icon = entry.icon;
-              const isActive = entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`);
+              const isActive = entry.end
+                ? currentPath === entry.to
+                : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`);
 
               return (
                 <NavLink
                   key={entry.to}
                   to={entry.to}
                   end={entry.end}
-                  className={() => ["mobile-bottom-nav__item", isActive ? "mobile-bottom-nav__item-active" : ""].join(" ").trim()}
+                  className={[
+                    "flex flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2.5 text-[11px] font-semibold transition-all",
+                    isActive
+                      ? "bg-slate-950 text-white shadow-sm dark:bg-cyan-500/14 dark:text-cyan-200 dark:shadow-none"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
+                  ].join(" ")}
                 >
                   <Icon className="h-4 w-4" />
                   <span>{entry.mobileLabel ?? entry.label}</span>
@@ -390,15 +508,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="mobile-drawer border-0 p-0 shadow-none sm:max-w-md"
+          className="border-0 bg-transparent p-0 shadow-none sm:max-w-md"
           showCloseButton={false}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Smart Dispatch workspace</SheetTitle>
             <SheetDescription>Orders, routes, live operations, and market tools in one place.</SheetDescription>
           </SheetHeader>
-          <div className="h-full overflow-y-auto p-4">
-            {sidebar}
+          <div className="h-full overflow-y-auto p-3">
+            <div className="h-full rounded-[30px] border border-slate-200/70 bg-slate-100/95 p-3 shadow-[0_25px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-800 dark:bg-[#020817]/98 dark:shadow-[0_25px_80px_rgba(0,0,0,0.45)]">
+              {sidebar}
+            </div>
           </div>
         </SheetContent>
       </Sheet>

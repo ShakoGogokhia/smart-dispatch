@@ -50,6 +50,7 @@ Route::prefix('public')->group(function () {
     Route::get('/markets/{market}', [PublicMarketController::class, 'market']);
     Route::get('/markets/{market}/items', [PublicMarketController::class, 'items']);
     Route::get('/markets/{market}/active-promo', [PublicMarketController::class, 'activePromo']); // optional
+    Route::get('/markets/{market}/reviews', [ReviewController::class, 'marketIndex']);
     Route::get('/markets/{market}/validate-promo', [PublicMarketController::class, 'validatePromo']);
     Route::get('/items/{item}/reviews', [ReviewController::class, 'index']);
 });
@@ -79,6 +80,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
     Route::get('/favorites', [FavoriteController::class, 'index']);
     Route::post('/favorites/toggle', [FavoriteController::class, 'toggle']);
+    Route::post('/markets/{market}/reviews', [ReviewController::class, 'storeMarket']);
     Route::post('/items/{item}/reviews', [ReviewController::class, 'store']);
     Route::get('/workflow-approvals', [WorkflowApprovalController::class, 'index']);
     Route::post('/workflow-approvals', [WorkflowApprovalController::class, 'store']);

@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { AxiosError } from "axios";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +24,11 @@ import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { clearCart, loadCart, saveCart, setActiveMarketId, type CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
-import { calcStorefrontPrice, type MarketPromo, type StorefrontMarket } from "@/lib/storefront";
+import {
+  calcStorefrontPrice,
+  type MarketPromo,
+  type StorefrontMarket,
+} from "@/lib/storefront";
 import type { FavoritePayload, ReviewRecord } from "@/types/api";
 
 type Item = {
@@ -54,6 +59,15 @@ type MarketReviewRecord = {
     name?: string | null;
   } | null;
 };
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== "object") {
+    return fallback;
+  }
+
+  const axiosError = error as AxiosError<{ message?: string }>;
+  return axiosError.response?.data?.message ?? fallback;
+}
 
 function StarPicker({
   value,
@@ -276,14 +290,26 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
   const marketReviewSummary = useMemo(() => {
     const marketReviews = marketReviewsQ.data ?? [];
-    if (!marketReviews.length) return { average: 0, count: 0 };
+    if (!marketReviews.length) {
+      return {
+        average: market?.review_summary?.average ?? 0,
+        count: market?.review_summary?.count ?? 0,
+      };
+    }
 
     const total = marketReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0);
     return {
       average: total / marketReviews.length,
       count: marketReviews.length,
     };
-  }, [marketReviewsQ.data]);
+  }, [market?.review_summary, marketReviewsQ.data]);
+
+  const itemReviewError = reviewM.isError
+    ? getErrorMessage(reviewM.error, "Unable to post your item review right now.")
+    : null;
+  const marketReviewError = marketReviewM.isError
+    ? getErrorMessage(marketReviewM.error, "Unable to post your market review right now.")
+    : null;
 
   const updateCart = (newCart: CartItem[]) => {
     setCart(newCart);
@@ -404,7 +430,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 </span>
 
                 {market?.featured_badge?.toLowerCase().includes("vip") ? (
-                  <span className="px-5 py-2 bg-gradient-to-r from-amber-300 via-yellow-300 to-amber-400 text-black font-bold rounded-2xl shadow-lg text-xs sm:text-sm">
+                  <span className="px-5 py-2 bg-amber-300 text-black font-bold rounded-2xl shadow-lg text-xs sm:text-sm">
                     ✨ VIP EXCLUSIVE
                   </span>
                 ) : market?.featured_badge ? (
@@ -432,11 +458,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                     <div className="rounded-2xl bg-white/10 backdrop-blur px-4 py-2 border border-white/10">
                       <div className="text-xs text-white/70 mb-1">Market Rating</div>
                       <div className="flex items-center gap-2">
-                        <RatingDisplay
-                          value={marketReviewSummary.average}
-                          count={marketReviewSummary.count}
-                          size="md"
-                        />
+                        <RatingDisplay value={marketReviewSummary.average} count={marketReviewSummary.count} size="md" />
                       </div>
                     </div>
                   </div>
@@ -815,13 +837,19 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 <Input
                   value={reviewComment}
                   onChange={(e) => setReviewComment(e.target.value)}
-                  placeholder="Write your review..."
+                  placeholder="Add an optional comment..."
                   className="rounded-2xl h-12"
                 />
 
+                {itemReviewError ? (
+                  <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
+                    {itemReviewError}
+                  </div>
+                ) : null}
+
                 <Button
                   onClick={() => reviewM.mutate()}
-                  disabled={reviewM.isPending || !reviewComment.trim()}
+                  disabled={reviewM.isPending}
                   className="mt-4 w-full h-12 rounded-2xl text-base"
                 >
                   {reviewM.isPending ? "Posting Review..." : `Post ${reviewRating}-Star Review`}
@@ -913,13 +941,19 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 <Input
                   value={marketReviewComment}
                   onChange={(e) => setMarketReviewComment(e.target.value)}
-                  placeholder="Write your market review..."
+                  placeholder="Add an optional market comment..."
                   className="rounded-2xl h-12"
                 />
 
+                {marketReviewError ? (
+                  <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
+                    {marketReviewError}
+                  </div>
+                ) : null}
+
                 <Button
                   onClick={() => marketReviewM.mutate()}
-                  disabled={marketReviewM.isPending || !marketReviewComment.trim()}
+                  disabled={marketReviewM.isPending}
                   className="mt-4 w-full h-12 rounded-2xl text-base"
                 >
                   {marketReviewM.isPending

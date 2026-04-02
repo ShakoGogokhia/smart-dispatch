@@ -413,7 +413,7 @@ export default function OrdersPage() {
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={text.search} className="input-shell pl-11" />
             </div>
-            {errorMessage && <div className="mt-4 rounded-[18px] border border-rose-300/20 bg-rose-50 px-4 py-3 text-sm text-rose-700">{errorMessage}</div>}
+            {errorMessage && <div className="status-bad mt-4 rounded-[18px] border px-4 py-3 text-sm">{errorMessage}</div>}
           </div>
         </div>
       </section>

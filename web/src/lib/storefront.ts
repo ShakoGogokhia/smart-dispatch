@@ -8,6 +8,11 @@ export type MarketPromo = {
   is_active: boolean;
 };
 
+export type ReviewSummary = {
+  count?: number;
+  average?: number | null;
+};
+
 export type StorefrontItemPreview = {
   id: number;
   name: string;
@@ -33,6 +38,7 @@ export type StorefrontMarket = {
   name: string;
   code: string;
   address?: string | null;
+  image_url?: string | null;
   lat?: number | string | null;
   lng?: number | string | null;
   is_active: boolean;
@@ -45,6 +51,7 @@ export type StorefrontMarket = {
   active_items_count?: number;
   item_preview?: StorefrontItemPreview[];
   active_promo?: MarketPromo | null;
+  review_summary?: ReviewSummary;
 };
 
 export function calcStorefrontPrice(item: Pick<StorefrontItemPreview, "price" | "discount_type" | "discount_value">) {

@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { useTheme } from "@/lib/theme";
 import type { LiveAlertPayload, LiveHistoryPayload, LivePayload } from "@/types/api";
 
 const copy = {
@@ -63,9 +64,16 @@ const copy = {
 
 export default function LiveMapPage() {
   const text = copy.en;
+  const { theme } = useTheme();
   const pollInterval = Number(import.meta.env.VITE_POLL_INTERVAL ?? 4000);
   const centerLat = Number(import.meta.env.VITE_MAP_DEFAULT_LAT ?? 41.7151);
   const centerLng = Number(import.meta.env.VITE_MAP_DEFAULT_LNG ?? 44.8271);
+  const tileUrl =
+    theme === "dark"
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const tileAttribution =
+    theme === "dark" ? "&copy; OpenStreetMap &copy; CARTO" : "&copy; OpenStreetMap";
 
   const liveQ = useQuery({
     queryKey: ["live-locations"],
@@ -121,7 +129,7 @@ export default function LiveMapPage() {
 
           <div className="h-[66vh] min-h-[440px]">
             <MapContainer center={[centerLat, centerLng]} zoom={12} style={{ height: "100%", width: "100%" }}>
-              <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <TileLayer attribution={tileAttribution} url={tileUrl} />
 
               {tracks.map((track) =>
                 track.points.length > 1 ? (
@@ -153,7 +161,7 @@ export default function LiveMapPage() {
           <InfoCard title={text.playbackWindow} copy={text.playbackWindowText} icon={Clock3} />
 
           {(liveQ.isError || alertsQ.isError || historyQ.isError) && (
-            <div className="dashboard-card border-rose-200 bg-rose-50 text-sm text-rose-700 dark:border-rose-300/20 dark:bg-rose-300/10 dark:text-rose-100">
+            <div className="dashboard-card status-bad text-sm">
               {text.failed}
             </div>
           )}

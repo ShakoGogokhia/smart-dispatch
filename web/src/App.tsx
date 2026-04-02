@@ -32,11 +32,19 @@ function ProtectedLayout() {
   );
 }
 
+function AuthedLayout() {
+  return (
+    <RequireAuth>
+      <Outlet />
+    </RequireAuth>
+  );
+}
+
 function PageLoader() {
   return (
     <div className="app-shell">
       <div className="mx-auto max-w-7xl">
-        <div className="dashboard-card p-8 text-sm text-slate-600 dark:text-slate-300">Loading page...</div>
+        <div className="intro-panel p-8 text-sm text-white/80">Loading page...</div>
       </div>
     </div>
   );
@@ -53,8 +61,11 @@ export default function App() {
       <Route path="/m/:marketId" element={withSuspense(<PublicMarketPage />)} />
       <Route path="/login" element={withSuspense(<LoginPage />)} />
 
-      <Route element={<ProtectedLayout />}>
+      <Route element={<AuthedLayout />}>
         <Route path="/checkout" element={withSuspense(<CheckoutPage />)} />
+      </Route>
+
+      <Route element={<ProtectedLayout />}>
         <Route path="/orders" element={withSuspense(<OrdersPage />)} />
         <Route path="/routes" element={withSuspense(<RoutesPage />)} />
         <Route path="/live-map" element={withSuspense(<LiveMapPage />)} />

@@ -7,8 +7,6 @@ use Illuminate\Support\Facades\Schema;
 
 class ProductReview extends Model
 {
-    protected static ?bool $tableExists = null;
-
     protected $fillable = [
         'item_id',
         'market_id',
@@ -40,10 +38,6 @@ class ProductReview extends Model
 
     public static function tableExists(): bool
     {
-        if (static::$tableExists !== null) {
-            return static::$tableExists;
-        }
-
-        return static::$tableExists = Schema::hasTable((new static())->getTable());
+        return Schema::hasTable((new static())->getTable());
     }
 }

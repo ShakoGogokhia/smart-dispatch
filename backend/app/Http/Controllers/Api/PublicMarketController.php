@@ -22,7 +22,7 @@ class PublicMarketController extends Controller
     // GET /api/public/markets
     public function markets()
     {
-        $markets = $this->applyFeaturedOrdering(Market::query())
+        $marketsQuery = $this->applyFeaturedOrdering(Market::query())
             ->where('is_active', true)
             ->withCount(['items as active_items_count' => function ($query) {
                 $query->where('is_active', true);
@@ -51,11 +51,22 @@ class PublicMarketController extends Controller
                         ->limit(1);
                 },
             ])
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        if (ProductReview::tableExists()) {
+            $marketsQuery
+                ->withCount('reviews')
+                ->withAvg('reviews', 'rating');
+        }
+
+        $markets = $marketsQuery->get();
 
         return $markets->map(function (Market $market) {
             $activePromo = $market->promoCodes->first();
+            $reviewCount = ProductReview::tableExists() ? (int) ($market->reviews_count ?? 0) : 0;
+            $reviewAverage = ProductReview::tableExists() && $market->reviews_avg_rating !== null
+                ? round((float) $market->reviews_avg_rating, 1)
+                : null;
 
             return [
                 'id' => $market->id,
@@ -72,6 +83,10 @@ class PublicMarketController extends Controller
                 'logo_url' => $market->logo_url,
                 'delivery_slots' => $market->delivery_slots ?? [],
                 'active_items_count' => (int) ($market->active_items_count ?? 0),
+                'review_summary' => [
+                    'count' => $reviewCount,
+                    'average' => $reviewAverage,
+                ],
                 'active_promo' => $activePromo ? [
                     'id' => $activePromo->id,
                     'code' => $activePromo->code,
@@ -103,6 +118,15 @@ class PublicMarketController extends Controller
             $query->where('is_active', true);
         }]);
 
+        if (ProductReview::tableExists()) {
+            $market->loadCount('reviews')->loadAvg('reviews', 'rating');
+        }
+
+        $reviewCount = ProductReview::tableExists() ? (int) ($market->reviews_count ?? 0) : 0;
+        $reviewAverage = ProductReview::tableExists() && $market->reviews_avg_rating !== null
+            ? round((float) $market->reviews_avg_rating, 1)
+            : null;
+
         return [
             'id' => $market->id,
             'name' => $market->name,
@@ -118,6 +142,10 @@ class PublicMarketController extends Controller
             'logo_url' => $market->logo_url,
             'delivery_slots' => $market->delivery_slots ?? [],
             'active_items_count' => (int) ($market->active_items_count ?? 0),
+            'review_summary' => [
+                'count' => $reviewCount,
+                'average' => $reviewAverage,
+            ],
         ];
     }
 

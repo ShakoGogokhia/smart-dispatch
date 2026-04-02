@@ -44,53 +44,53 @@ export default function RoutesPage() {
 
       {routesQ.isLoading ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600">Loading routes...</CardContent>
+          <CardContent className="p-8 text-sm theme-copy">Loading routes...</CardContent>
         </Card>
       ) : routesQ.isError ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-red-700">Failed to load routes.</CardContent>
+          <CardContent className="status-bad m-6 rounded-[20px] border p-8 text-sm">Failed to load routes.</CardContent>
         </Card>
       ) : routes.length === 0 ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600">No routes are planned yet.</CardContent>
+          <CardContent className="p-8 text-sm theme-copy">No routes are planned yet.</CardContent>
         </Card>
       ) : (
         routes.map((route) => (
           <Card key={route.id} className="rounded-[30px]">
-            <CardHeader className="border-b border-slate-100">
+            <CardHeader className="border-b border-zinc-200/80 dark:border-zinc-800">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <CardTitle className="font-display text-3xl">Route #{route.id}</CardTitle>
-                  <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-600">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                  <div className="theme-copy mt-3 flex flex-wrap gap-3 text-sm">
+                    <div className="status-chip status-neutral">
                       <Truck className="h-4 w-4" />
                       {route.driver?.user?.name || `Driver #${route.driver_id}`}
                     </div>
-                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                    <div className="status-chip status-neutral">
                       <CalendarDays className="h-4 w-4" />
                       {route.route_date}
                     </div>
                     {route.planned_distance_km != null && (
-                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                      <div className="status-chip status-neutral">
                         <Route className="h-4 w-4" />
                         {route.planned_distance_km} km
                       </div>
                     )}
                     {route.planned_duration_min != null && (
-                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
+                      <div className="status-chip status-neutral">
                         <Timer className="h-4 w-4" />
                         {route.planned_duration_min} min
                       </div>
                     )}
                   </div>
                 </div>
-                <Badge className="rounded-full border-0 bg-slate-950 px-4 py-2 text-white shadow-none">
+                <Badge className="status-chip rounded-full border-0 bg-cyan-600 px-4 py-2 text-white shadow-[0_14px_30px_rgba(8,145,178,0.2)]">
                   {route.status}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="overflow-hidden rounded-[24px] border border-slate-200/80">
+              <div className="table-shell">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -115,7 +115,7 @@ export default function RoutesPage() {
                     ))}
                     {(route.stops ?? []).length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} className="py-8 text-center text-sm text-slate-500">
+                        <TableCell colSpan={6} className="py-8 text-center text-sm theme-copy">
                           No stops on this route yet.
                         </TableCell>
                       </TableRow>

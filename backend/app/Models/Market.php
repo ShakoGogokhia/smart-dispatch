@@ -66,7 +66,7 @@ class Market extends Model
 
     public function reviews()
     {
-        return $this->hasMany(ProductReview::class);
+        return $this->hasMany(ProductReview::class)->whereNull('item_id');
     }
 
     public function getLogoUrlAttribute(): ?string

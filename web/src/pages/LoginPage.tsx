@@ -98,10 +98,10 @@ export default function LoginPage() {
           <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div>
               <div className="section-kicker">Commerce, routes, and live operations</div>
-              <h1 className="font-display mt-4 max-w-4xl text-5xl font-semibold tracking-[-0.06em] text-slate-950 dark:text-white md:text-7xl">
+              <h1 className="font-display mt-4 max-w-4xl text-5xl font-semibold tracking-[-0.06em] text-white md:text-7xl">
                 Order like a customer, work like staff, manage like an admin.
               </h1>
-              <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-300 md:text-lg">
+              <p className="mt-5 max-w-3xl text-base leading-8 text-white/78 md:text-lg">
                 Customers place orders, owners manage their market, and admins oversee users, roles, and operations from one app.
               </p>
 
@@ -149,7 +149,7 @@ export default function LoginPage() {
                   className={[
                     "rounded-[12px] px-4 py-2 text-sm font-semibold transition",
                     mode === "login"
-                      ? "bg-white text-slate-950 dark:bg-white/10 dark:text-white"
+                      ? "bg-background/95 text-foreground shadow-sm"
                       : "text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white",
                   ].join(" ")}
                   onClick={() => setMode("login")}
@@ -161,7 +161,7 @@ export default function LoginPage() {
                   className={[
                     "rounded-[12px] px-4 py-2 text-sm font-semibold transition",
                     mode === "register"
-                      ? "bg-white text-slate-950 dark:bg-white/10 dark:text-white"
+                      ? "bg-background/95 text-foreground shadow-sm"
                       : "text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white",
                   ].join(" ")}
                   onClick={() => setMode("register")}
@@ -227,7 +227,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              {error && <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+              {error && <div className="status-bad rounded-[18px] border px-4 py-3 text-sm">{error}</div>}
 
               <Button className="h-12 text-base" disabled={loading}>
                 {loading

@@ -116,12 +116,12 @@ function OrderCard({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-sm">
+    <div className="paper-panel-muted rounded-[26px] p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{order.market?.code || text.ordersTitle}</div>
-          <div className="font-display mt-2 text-2xl font-semibold text-slate-950">{order.code}</div>
-          <div className="mt-2 text-sm text-slate-600">{order.dropoff_address || text.noAddress}</div>
+          <div className="theme-muted text-xs uppercase tracking-[0.2em]">{order.market?.code || text.ordersTitle}</div>
+          <div className="font-display theme-ink mt-2 text-2xl font-semibold">{order.code}</div>
+          <div className="theme-copy mt-2 text-sm">{order.dropoff_address || text.noAddress}</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="rounded-full">{formatOrderStatus(order.status)}</Badge>
@@ -129,7 +129,7 @@ function OrderCard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 text-sm text-slate-600">
+      <div className="theme-copy mt-4 grid gap-2 text-sm">
         <div>{text.customer}: {order.customer_name || order.customer?.name || text.unknown}</div>
         <div>{text.phone}: {order.customer_phone || text.notProvided}</div>
         {order.notes && <div>{text.deliveryNotes}: {order.notes}</div>}
@@ -221,7 +221,7 @@ export default function DriverHubPage() {
   if (!(meQ.data?.roles ?? []).includes("driver")) {
     return (
       <Card className="rounded-[30px]">
-        <CardContent className="p-8 text-sm text-slate-600">
+        <CardContent className="theme-copy p-8 text-sm">
           {text.onlyDrivers}
         </CardContent>
       </Card>
@@ -249,13 +249,13 @@ export default function DriverHubPage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[24px] bg-emerald-50 p-5 dark:bg-emerald-300/10">
+              <div className="rounded-[24px] border border-emerald-200/80 bg-emerald-50/90 p-5 dark:border-emerald-300/15 dark:bg-emerald-300/10">
                 <div className="text-sm text-emerald-700 dark:text-emerald-100">{text.currentBalance}</div>
                 <div className="mt-2 text-3xl font-semibold text-emerald-900 dark:text-white">
                   {formatMoney(feedQ.data?.driver?.balance ?? 0)}
                 </div>
               </div>
-              <div className="rounded-[24px] bg-cyan-50 p-5 dark:bg-cyan-300/10">
+              <div className="rounded-[24px] border border-cyan-200/80 bg-cyan-50/90 p-5 dark:border-cyan-300/15 dark:bg-cyan-300/10">
                 <div className="text-sm text-cyan-700 dark:text-cyan-100">{text.totalEarned}</div>
                 <div className="mt-2 text-3xl font-semibold text-cyan-900 dark:text-white">
                   {formatMoney(feedQ.data?.driver?.total_earned ?? 0)}
@@ -273,8 +273,8 @@ export default function DriverHubPage() {
               </Button>
             </div>
 
-            <div className="grid gap-3 rounded-[24px] border border-slate-200/80 p-4">
-              <div className="font-semibold text-slate-950">{text.sendLocation}</div>
+            <div className="subpanel grid gap-3 p-4">
+              <div className="theme-ink font-semibold">{text.sendLocation}</div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>{text.latitude}</Label>
@@ -292,7 +292,7 @@ export default function DriverHubPage() {
             </div>
 
             {mutationError && (
-              <div className="rounded-[20px] bg-red-50 px-4 py-3 text-sm text-red-700">
+              <div className="status-bad rounded-[20px] border px-4 py-3 text-sm">
                 {mutationError}
               </div>
             )}
@@ -306,19 +306,19 @@ export default function DriverHubPage() {
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">{text.delivered}: {feedQ.data?.driver?.transactions?.length ?? 0}</div>
-                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">{text.offersLive}: {offeredOrders.length}</div>
-                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">{text.activeDrops}: {assignedOrders.length}</div>
+                <div className="paper-panel-muted rounded-[24px] p-4 text-sm theme-copy">{text.delivered}: {feedQ.data?.driver?.transactions?.length ?? 0}</div>
+                <div className="paper-panel-muted rounded-[24px] p-4 text-sm theme-copy">{text.offersLive}: {offeredOrders.length}</div>
+                <div className="paper-panel-muted rounded-[24px] p-4 text-sm theme-copy">{text.activeDrops}: {assignedOrders.length}</div>
               </div>
               {(feedQ.data?.driver?.transactions ?? []).length === 0 ? (
-                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">{text.noEarnings}</div>
+                <div className="paper-panel-muted rounded-[24px] p-5 text-sm theme-copy">{text.noEarnings}</div>
               ) : (
                 (feedQ.data?.driver?.transactions ?? []).map((transaction) => (
-                  <div key={transaction.id} className="rounded-[24px] border border-slate-200/80 bg-white p-4">
+                  <div key={transaction.id} className="paper-panel-muted rounded-[24px] p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-slate-950">{transaction.description || text.deliveryEarning}</div>
-                        <div className="mt-1 text-sm text-slate-500">
+                        <div className="theme-ink font-semibold">{transaction.description || text.deliveryEarning}</div>
+                        <div className="theme-muted mt-1 text-sm">
                           {transaction.distance_km ?? 0} km - {transaction.weather_condition || "clear"} - {formatDateTime(transaction.created_at)}
                         </div>
                       </div>
@@ -336,7 +336,7 @@ export default function DriverHubPage() {
             </CardHeader>
             <CardContent className="grid gap-4">
               {offeredOrders.length === 0 ? (
-                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
+                <div className="paper-panel-muted rounded-[24px] p-5 text-sm theme-copy">
                   {text.noOffers}
                 </div>
               ) : (
@@ -350,7 +350,7 @@ export default function DriverHubPage() {
                         key={order.id}
                         order={order}
                         meta={
-                          <div className={`rounded-[20px] border px-4 py-3 text-sm ${isExpired ? "border-rose-200 bg-rose-50 text-rose-700" : secondsRemaining <= 60 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>
+                          <div className={`rounded-[20px] border px-4 py-3 text-sm ${isExpired ? "status-bad" : secondsRemaining <= 60 ? "status-warn" : "border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-300/15 dark:bg-cyan-300/10 dark:text-cyan-100"}`}>
                             <div className="flex items-center justify-between gap-3">
                               <span className="font-semibold">
                                 {text.timeLeftToAccept}
@@ -391,14 +391,14 @@ export default function DriverHubPage() {
               <CardTitle className="font-display text-2xl">{text.assignedDeliveries}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <div className="grid gap-3 rounded-[24px] border border-slate-200/80 p-4">
+              <div className="subpanel grid gap-3 p-4">
                 <div className="grid gap-2">
                   <Label>{text.proofSignature}</Label>
                   <Input value={proofSignature} onChange={(event) => setProofSignature(event.target.value)} className="rounded-2xl" />
                 </div>
               </div>
               {assignedOrders.length === 0 ? (
-                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
+                <div className="paper-panel-muted rounded-[24px] p-5 text-sm theme-copy">
                   {text.noAssigned}
                 </div>
               ) : (
