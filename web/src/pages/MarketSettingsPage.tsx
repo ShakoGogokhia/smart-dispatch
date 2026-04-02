@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ImagePlus, Settings2, Sparkles, Users } from "lucide-react";
+import { ImagePlus, Sparkles, Users } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -198,14 +198,7 @@ export default function MarketSettingsPage() {
       <section className="intro-panel">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="command-chip">
-              <Settings2 className="h-3.5 w-3.5" />
-              Market settings
-            </div>
-            <h1 className="intro-title">{market?.name || `Market #${id}`}</h1>
-            <p className="intro-copy">
-              Tune the public storefront details, upload branding, and manage who can operate inside this market.
-            </p>
+            <h1 className="intro-title">Market settings</h1>
           </div>
 
           <div className="flex flex-wrap gap-2">

@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
 import type { AnalyticsSummary } from "@/types/api";
 
 const copy = {
@@ -60,8 +59,7 @@ const copy = {
 } as const;
 
 export default function AnalyticsPage() {
-  const { language } = useI18n();
-  const text = copy[language];
+  const text = copy.en;
   const summaryQ = useQuery({
     queryKey: ["analytics-summary"],
     queryFn: async () => (await api.get("/api/analytics/summary")).data as AnalyticsSummary,
@@ -75,9 +73,7 @@ export default function AnalyticsPage() {
     <div className="grid gap-6">
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="dashboard-card">
-          <div className="command-chip">{text.board}</div>
-          <h1 className="section-title mt-4">{text.title}</h1>
-          <p className="section-copy mt-3 max-w-3xl">{text.intro}</p>
+          <h1 className="section-title">Analytics</h1>
           <div className="mt-5">
             <Button variant="secondary" className="h-11" onClick={() => summaryQ.refetch()}>
               {text.refresh}

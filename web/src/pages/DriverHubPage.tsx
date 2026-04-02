@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Clock3, MapPinned, Navigation, PackageCheck, XCircle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import type { Order } from "@/types/api";
 import { Badge } from "@/components/ui/badge";
@@ -35,28 +34,94 @@ type DriverFeed = {
   assigned_orders: Order[];
 };
 
+const OFFER_TIMEOUT_SECONDS = 300;
+
+const text = {
+  ordersTitle: "Orders",
+  noAddress: "No address set",
+  customer: "Customer",
+  unknown: "Unknown",
+  phone: "Phone",
+  notProvided: "Not provided",
+  deliveryNotes: "Delivery notes",
+  items: "Items",
+  onlyDrivers: "Only drivers can view this page.",
+  title: "Driver hub",
+  statusTitle: "Driver status",
+  currentState: "Current state",
+  noActiveShift: "No active shift",
+  startShift: "Start shift",
+  starting: "Starting...",
+  endShift: "End shift",
+  ending: "Ending...",
+  sendLocation: "Send location",
+  latitude: "Latitude",
+  longitude: "Longitude",
+  sendPing: "Send ping",
+  sending: "Sending...",
+  currentBalance: "Current balance",
+  totalEarned: "Total earned",
+  recentEarnings: "Recent earnings",
+  delivered: "Delivered",
+  offersLive: "Offers live",
+  activeDrops: "Active drops",
+  noEarnings: "No earnings yet.",
+  deliveryEarning: "Delivery earning",
+  incomingOffers: "Incoming offers",
+  noOffers: "No offers right now.",
+  timeLeftToAccept: "Time left to accept",
+  offerExpired: "Time expired. This offer is being reassigned.",
+  offerExpiresSoon: "If the timer runs out, the order is automatically offered to another driver.",
+  accept: "Accept",
+  decline: "Decline",
+  assignedDeliveries: "Assigned deliveries",
+  proofSignature: "Proof signature",
+  noAssigned: "No assigned deliveries yet.",
+  markPickedUp: "Mark picked up",
+  markDelivered: "Mark delivered",
+} as const;
+
 function getErrorMessage(error: unknown) {
   if (!error) return null;
   const axiosError = error as AxiosError<{ message?: string }>;
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
+function getOfferSecondsRemaining(offerSentAt: string | null | undefined, nowMs: number) {
+  if (!offerSentAt) {
+    return OFFER_TIMEOUT_SECONDS;
+  }
+
+  const sentAtMs = new Date(offerSentAt).getTime();
+  if (Number.isNaN(sentAtMs)) {
+    return OFFER_TIMEOUT_SECONDS;
+  }
+
+  return Math.max(0, OFFER_TIMEOUT_SECONDS - Math.floor((nowMs - sentAtMs) / 1000));
+}
+
+function formatCountdown(secondsRemaining: number) {
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function OrderCard({
   order,
+  meta,
   actions,
 }: {
   order: Order;
+  meta?: React.ReactNode;
   actions?: React.ReactNode;
 }) {
-  const { t } = useI18n();
-
   return (
     <div className="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{order.market?.code || t("orders.title")}</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-500">{order.market?.code || text.ordersTitle}</div>
           <div className="font-display mt-2 text-2xl font-semibold text-slate-950">{order.code}</div>
-          <div className="mt-2 text-sm text-slate-600">{order.dropoff_address || t("orders.noAddress")}</div>
+          <div className="mt-2 text-sm text-slate-600">{order.dropoff_address || text.noAddress}</div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="rounded-full">{formatOrderStatus(order.status)}</Badge>
@@ -65,16 +130,17 @@ function OrderCard({
       </div>
 
       <div className="mt-4 grid gap-2 text-sm text-slate-600">
-        <div>{t("common.customer")}: {order.customer_name || order.customer?.name || t("common.unknown")}</div>
-        <div>{t("checkout.phone")}: {order.customer_phone || t("common.notProvided")}</div>
-        {order.notes && <div>{t("checkout.deliveryNotes")}: {order.notes}</div>}
+        <div>{text.customer}: {order.customer_name || order.customer?.name || text.unknown}</div>
+        <div>{text.phone}: {order.customer_phone || text.notProvided}</div>
+        {order.notes && <div>{text.deliveryNotes}: {order.notes}</div>}
         {order.items?.length ? (
           <div>
-            {t("common.items")}: {order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}
+            {text.items}: {order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}
           </div>
         ) : null}
       </div>
 
+      {meta ? <div className="mt-4">{meta}</div> : null}
       {actions ? <div className="mt-5 flex flex-wrap gap-3">{actions}</div> : null}
     </div>
   );
@@ -82,11 +148,21 @@ function OrderCard({
 
 export default function DriverHubPage() {
   const meQ = useMe();
-  const { t } = useI18n();
   const queryClient = useQueryClient();
   const [lat, setLat] = useState("41.7151");
   const [lng, setLng] = useState("44.8271");
   const [proofSignature, setProofSignature] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, []);
 
   const feedQ = useQuery({
     queryKey: ["driver-feed"],
@@ -146,7 +222,7 @@ export default function DriverHubPage() {
     return (
       <Card className="rounded-[30px]">
         <CardContent className="p-8 text-sm text-slate-600">
-          {t("driverHub.onlyDrivers")}
+          {text.onlyDrivers}
         </CardContent>
       </Card>
     );
@@ -155,34 +231,32 @@ export default function DriverHubPage() {
   return (
     <div className="grid gap-6">
       <div className="intro-panel">
-        <div className="section-kicker">{t("driverHub.kicker")}</div>
-        <h1 className="intro-title">{t("driverHub.title")}</h1>
-        <p className="intro-copy">{t("driverHub.copy")}</p>
+        <h1 className="intro-title">{text.title}</h1>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <Card className="rounded-[30px]">
           <CardHeader>
-            <CardTitle className="font-display text-2xl">{t("driverHub.statusTitle")}</CardTitle>
+            <CardTitle className="font-display text-2xl">{text.statusTitle}</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="rounded-[24px] bg-slate-950 p-5 text-white">
-              <div className="text-sm text-slate-300">{t("driverHub.currentState")}</div>
+              <div className="text-sm text-slate-300">{text.currentState}</div>
               <div className="mt-2 text-3xl font-semibold">{driverStatus}</div>
               <div className="mt-2 text-sm text-slate-300">
-                {activeShift ? t("driverHub.shiftStarted", { time: formatDateTime(activeShift.started_at) }) : t("driverHub.noActiveShift")}
+                {activeShift ? `Shift started ${formatDateTime(activeShift.started_at)}` : text.noActiveShift}
               </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-[24px] bg-emerald-50 p-5 dark:bg-emerald-300/10">
-                <div className="text-sm text-emerald-700 dark:text-emerald-100">Current balance</div>
+                <div className="text-sm text-emerald-700 dark:text-emerald-100">{text.currentBalance}</div>
                 <div className="mt-2 text-3xl font-semibold text-emerald-900 dark:text-white">
                   {formatMoney(feedQ.data?.driver?.balance ?? 0)}
                 </div>
               </div>
               <div className="rounded-[24px] bg-cyan-50 p-5 dark:bg-cyan-300/10">
-                <div className="text-sm text-cyan-700 dark:text-cyan-100">Total earned</div>
+                <div className="text-sm text-cyan-700 dark:text-cyan-100">{text.totalEarned}</div>
                 <div className="mt-2 text-3xl font-semibold text-cyan-900 dark:text-white">
                   {formatMoney(feedQ.data?.driver?.total_earned ?? 0)}
                 </div>
@@ -192,28 +266,28 @@ export default function DriverHubPage() {
             <div className="flex flex-wrap gap-3">
               <Button onClick={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
                 <Clock3 className="mr-2 h-4 w-4" />
-                {startShiftM.isPending ? t("driverHub.starting") : t("driverHub.startShift")}
+                {startShiftM.isPending ? text.starting : text.startShift}
               </Button>
               <Button variant="secondary" onClick={() => endShiftM.mutate()} disabled={!activeShift || endShiftM.isPending}>
-                {endShiftM.isPending ? t("driverHub.ending") : t("driverHub.endShift")}
+                {endShiftM.isPending ? text.ending : text.endShift}
               </Button>
             </div>
 
             <div className="grid gap-3 rounded-[24px] border border-slate-200/80 p-4">
-              <div className="font-semibold text-slate-950">{t("driverHub.sendLocation")}</div>
+              <div className="font-semibold text-slate-950">{text.sendLocation}</div>
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>{t("orders.latitude")}</Label>
+                  <Label>{text.latitude}</Label>
                   <Input value={lat} onChange={(event) => setLat(event.target.value)} className="rounded-2xl" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{t("orders.longitude")}</Label>
+                  <Label>{text.longitude}</Label>
                   <Input value={lng} onChange={(event) => setLng(event.target.value)} className="rounded-2xl" />
                 </div>
               </div>
               <Button variant="secondary" onClick={() => pingM.mutate()} disabled={pingM.isPending}>
                 <Navigation className="mr-2 h-4 w-4" />
-                {pingM.isPending ? t("driverHub.sending") : t("driverHub.sendPing")}
+                {pingM.isPending ? text.sending : text.sendPing}
               </Button>
             </div>
 
@@ -228,22 +302,22 @@ export default function DriverHubPage() {
         <div className="grid gap-6">
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">Recent earnings</CardTitle>
+              <CardTitle className="font-display text-2xl">{text.recentEarnings}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">Delivered: {feedQ.data?.driver?.transactions?.length ?? 0}</div>
-                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">Offers live: {offeredOrders.length}</div>
-                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">Active drops: {assignedOrders.length}</div>
+                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">{text.delivered}: {feedQ.data?.driver?.transactions?.length ?? 0}</div>
+                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">{text.offersLive}: {offeredOrders.length}</div>
+                <div className="rounded-[24px] bg-slate-50 p-4 text-sm">{text.activeDrops}: {assignedOrders.length}</div>
               </div>
               {(feedQ.data?.driver?.transactions ?? []).length === 0 ? (
-                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">No earnings yet.</div>
+                <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">{text.noEarnings}</div>
               ) : (
                 (feedQ.data?.driver?.transactions ?? []).map((transaction) => (
                   <div key={transaction.id} className="rounded-[24px] border border-slate-200/80 bg-white p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <div className="font-semibold text-slate-950">{transaction.description || "Delivery earning"}</div>
+                        <div className="font-semibold text-slate-950">{transaction.description || text.deliveryEarning}</div>
                         <div className="mt-1 text-sm text-slate-500">
                           {transaction.distance_km ?? 0} km - {transaction.weather_condition || "clear"} - {formatDateTime(transaction.created_at)}
                         </div>
@@ -258,35 +332,55 @@ export default function DriverHubPage() {
 
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">{t("driverHub.incomingOffers")}</CardTitle>
+              <CardTitle className="font-display text-2xl">{text.incomingOffers}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               {offeredOrders.length === 0 ? (
                 <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
-                  {t("driverHub.noOffers")}
+                  {text.noOffers}
                 </div>
               ) : (
                 offeredOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    actions={
-                      <>
-                        <Button onClick={() => actionM.mutate({ orderId: order.id, action: "accept" })} disabled={actionM.isPending}>
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          {t("orders.accept")}
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          onClick={() => actionM.mutate({ orderId: order.id, action: "decline" })}
-                          disabled={actionM.isPending}
-                        >
-                          <XCircle className="mr-2 h-4 w-4" />
-                          {t("orders.decline")}
-                        </Button>
-                      </>
-                    }
-                  />
+                  (() => {
+                    const secondsRemaining = getOfferSecondsRemaining(order.offer_sent_at, nowMs);
+                    const isExpired = secondsRemaining === 0;
+
+                    return (
+                      <OrderCard
+                        key={order.id}
+                        order={order}
+                        meta={
+                          <div className={`rounded-[20px] border px-4 py-3 text-sm ${isExpired ? "border-rose-200 bg-rose-50 text-rose-700" : secondsRemaining <= 60 ? "border-amber-200 bg-amber-50 text-amber-800" : "border-cyan-200 bg-cyan-50 text-cyan-800"}`}>
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="font-semibold">
+                                {text.timeLeftToAccept}
+                              </span>
+                              <span className="font-mono text-base font-semibold">{formatCountdown(secondsRemaining)}</span>
+                            </div>
+                            <div className="mt-1">
+                              {isExpired ? text.offerExpired : text.offerExpiresSoon}
+                            </div>
+                          </div>
+                        }
+                        actions={
+                          <>
+                            <Button onClick={() => actionM.mutate({ orderId: order.id, action: "accept" })} disabled={actionM.isPending || isExpired}>
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              {text.accept}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              onClick={() => actionM.mutate({ orderId: order.id, action: "decline" })}
+                              disabled={actionM.isPending || isExpired}
+                            >
+                              <XCircle className="mr-2 h-4 w-4" />
+                              {text.decline}
+                            </Button>
+                          </>
+                        }
+                      />
+                    );
+                  })()
                 ))
               )}
             </CardContent>
@@ -294,18 +388,18 @@ export default function DriverHubPage() {
 
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">{t("driverHub.assignedDeliveries")}</CardTitle>
+              <CardTitle className="font-display text-2xl">{text.assignedDeliveries}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-3 rounded-[24px] border border-slate-200/80 p-4">
                 <div className="grid gap-2">
-                  <Label>Proof signature</Label>
+                  <Label>{text.proofSignature}</Label>
                   <Input value={proofSignature} onChange={(event) => setProofSignature(event.target.value)} className="rounded-2xl" />
                 </div>
               </div>
               {assignedOrders.length === 0 ? (
                 <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
-                  {t("driverHub.noAssigned")}
+                  {text.noAssigned}
                 </div>
               ) : (
                 assignedOrders.map((order) => (
@@ -317,13 +411,13 @@ export default function DriverHubPage() {
                         {order.status === "ASSIGNED" && (
                           <Button onClick={() => actionM.mutate({ orderId: order.id, action: "picked-up" })} disabled={actionM.isPending}>
                             <PackageCheck className="mr-2 h-4 w-4" />
-                            {t("driverHub.markPickedUp")}
+                            {text.markPickedUp}
                           </Button>
                         )}
                         {order.status === "PICKED_UP" && (
                           <Button onClick={() => actionM.mutate({ orderId: order.id, action: "delivered" })} disabled={actionM.isPending}>
                             <MapPinned className="mr-2 h-4 w-4" />
-                            {t("driverHub.markDelivered")}
+                            {text.markDelivered}
                           </Button>
                         )}
                       </>

@@ -11,6 +11,8 @@ use Illuminate\Support\Collection;
 
 class OrderDispatchService
 {
+    public const OFFER_TIMEOUT_SECONDS = 300;
+
     public function offerOrder(Order $order, ?int $excludeDriverId = null): ?Order
     {
         if ($order->assigned_driver_id || $order->status !== 'READY_FOR_PICKUP') {
@@ -54,13 +56,22 @@ class OrderDispatchService
             ->whereIn('status', ['READY_FOR_PICKUP', 'OFFERED'])
             ->get()
             ->each(function (Order $order) {
+                $currentOfferedDriverId = $order->offered_driver_id;
                 $shouldReplaceOffer = !$order->offered_driver_id
                     || !$order->offer_sent_at
-                    || $order->offer_sent_at->lt(now()->subMinutes(5))
+                    || $order->offer_sent_at->lt(now()->subSeconds(self::OFFER_TIMEOUT_SECONDS))
                     || !$this->isDriverAvailable($order->offered_driver_id);
 
                 if ($shouldReplaceOffer) {
-                    $this->offerOrder($order, $shouldReplaceOffer ? $order->offered_driver_id : null);
+                    if ($order->status === 'OFFERED') {
+                        $order->update([
+                            'offered_driver_id' => null,
+                            'offer_sent_at' => null,
+                            'status' => 'READY_FOR_PICKUP',
+                        ]);
+                    }
+
+                    $this->offerOrder($order->fresh(), $currentOfferedDriverId);
                 }
             });
     }

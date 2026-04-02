@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { ArrowRight, Megaphone, Search, Sparkles, TicketPercent, UserRound } from "lucide-react";
+import { ArrowRight, Search, Sparkles, TicketPercent, UserRound } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -276,15 +276,7 @@ export default function MarketsPage() {
       <section className="intro-panel">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="command-chip">
-              <Megaphone className="h-3.5 w-3.5" />
-              Market promotion control
-            </div>
-            <h1 className="intro-title">Spotlight, assign, and tune every storefront from one board.</h1>
-            <p className="intro-copy max-w-3xl">
-              Promoted markets surface first on the public landing page. Admins can switch spotlight status, adjust the
-              featured message, and keep owner assignment close to the same workflow.
-            </p>
+            <h1 className="intro-title">Markets</h1>
           </div>
 
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>

@@ -29,6 +29,8 @@ class OrderController extends Controller
 
     public function index(Request $request)
     {
+        $this->dispatchService->refreshPendingOrders();
+
         $user = $request->user();
         $query = Order::query()
             ->with([
@@ -226,6 +228,8 @@ class OrderController extends Controller
 
     public function show(Request $request, Order $order)
     {
+        $this->dispatchService->refreshPendingOrders();
+
         abort_unless($this->canAccessOrder($request, $order), Response::HTTP_FORBIDDEN);
 
         return response()->json($this->decorateOrder($order->load([

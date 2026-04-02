@@ -3,7 +3,6 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import AppLayout from "@/components/AppLayout";
 import RequireAuth from "@/components/RequireAuth";
-import { useI18n } from "@/lib/i18n";
 
 const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
 const BadgePricingPage = lazy(() => import("@/pages/BadgePricingPage"));
@@ -34,12 +33,10 @@ function ProtectedLayout() {
 }
 
 function PageLoader() {
-  const { t } = useI18n();
-
   return (
     <div className="app-shell">
       <div className="mx-auto max-w-7xl">
-        <div className="dashboard-card p-8 text-sm text-slate-600 dark:text-slate-300">{t("common.loadingPage")}</div>
+        <div className="dashboard-card p-8 text-sm text-slate-600 dark:text-slate-300">Loading page...</div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Clock3, MapPin, MessageSquareMore, PackagePlus, Search, Sparkles, Star, Truck, Undo2, UserRound, Wallet, XCircle, Zap } from "lucide-react";
+import { Clock3, MapPin, MessageSquareMore, PackagePlus, Search, Star, Truck, Undo2, UserRound, Wallet, XCircle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 import { MapContainer, Marker, TileLayer } from "react-leaflet";
@@ -21,7 +21,6 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus, getOrderStatusTone } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
 import { repairMojibake } from "@/lib/text";
 import { useMe } from "@/lib/useMe";
 import type { Order, Paginated } from "@/types/api";
@@ -140,7 +139,7 @@ const copy = {
 
 type PageCopy = Record<keyof (typeof copy)["en"], string>;
 
-function getPageCopy(language: "en" | "ka"): PageCopy {
+export function getPageCopy(language: "en" | "ka"): PageCopy {
   const source = copy[language];
   if (language !== "ka") {
     return source;
@@ -149,10 +148,105 @@ function getPageCopy(language: "en" | "ka"): PageCopy {
   return Object.fromEntries(Object.entries(source).map(([key, value]) => [key, repairMojibake(value)])) as PageCopy;
 }
 
+export function getCleanPageCopy(language: "en" | "ka") {
+  if (language === "ka") {
+    return {
+      customerDesk: "მომხმარებლის შეკვეთები",
+      customerHeroTitle: "ETA, მიწოდების დადასტურება და ხელახლა შეკვეთა ერთ სუფთა ქრონოლოგიაში.",
+      customerHeroText: "ნახე შეკვეთის სტატუსი, მიწოდების მტკიცებულება, გააუქმე ადრეულ ეტაპზე და შეაფასე დასრულებული მიწოდება სიის დატოვების გარეშე.",
+      commandBoard: "შეკვეთების დაფა",
+      opsHeroTitle: "სუფთა სადისპეტჩერო დაფა მიღებისთვის, შესრულებისთვის და შემდგომი რეაგირებისთვის.",
+      opsHeroText: "ოპერაციები ახლა უკეთ ხედავს ETA-ს, დეტალურ შეკვეთას და მომხმარებლის მიწოდების სრულ გზას.",
+      createOpsOrder: "ოპერაციული შეკვეთის შექმნა",
+      createOpsText: "შეკვეთის ხელით მიღება ქოლ ცენტრის ან დისპეტჩერის სცენარებისთვის.",
+      detail: "დეტალების ნახვა",
+      noAddress: "მისამართი მითითებული არ არის",
+      noOrders: "თქვენ ჯერ შეკვეთა არ გაგიკეთებიათ.",
+      noResults: "თქვენს ძებნაზე შედეგი ვერ მოიძებნა.",
+      loading: "შეკვეთები იტვირთება...",
+      failed: "შეკვეთების ჩატვირთვა ვერ მოხერხდა.",
+      search: "შეკვეთების ძებნა",
+      eta: "ETA",
+      promised: "დაპირებული დრო",
+      timeline: "ქრონოლოგია",
+      proof: "მიწოდების დადასტურება",
+      rate: "მიწოდების შეფასება",
+      cancel: "შეკვეთის გაუქმება",
+      reorder: "ხელახლა შეკვეთა",
+      reason: "გაუქმების მიზეზი",
+      feedback: "კომენტარი",
+      rating: "შეფასება (1-5)",
+      submit: "გაგზავნა",
+      close: "დახურვა",
+      created: "შექმნილი",
+      waitingForDriver: "მძღოლს ელოდება",
+      inDeliveryFlow: "მიწოდების პროცესში",
+      marketPending: "მარკეტს ელოდება",
+      visibleOrders: "ხილული შეკვეთები",
+      delivered: "მიტანილი",
+      inDriverFlow: "მძღოლის პროცესში",
+      late: "იგვიანებს",
+      proofMissing: "მიწოდების დადასტურება ჯერ დამატებული არ არის.",
+      tracking: "მძღოლის ცოცხალი თვალთვალი",
+      trackingCopy: "თვალთვალი გამოჩნდება აყვანის შემდეგ, რომ ეკრანი სიგნალებზე იყოს ორიენტირებული.",
+      createdLabel: "შექმნილი",
+      customer: "მომხმარებელი",
+      driver: "მძღოლი",
+      market: "მარკეტი",
+      total: "ჯამი",
+    };
+  }
+
+  return {
+    customerDesk: "Customer order desk",
+    customerHeroTitle: "Your ETA, proof of delivery, and reorder flow in one calm timeline.",
+    customerHeroText: "Track the order state, inspect delivery proof, cancel early-stage orders, and rate completed deliveries without leaving the list.",
+    commandBoard: "Orders command board",
+    opsHeroTitle: "A cleaner dispatch board for intake, fulfillment, and customer follow-up.",
+    opsHeroText: "Dispatch can now see ETA signals, open richer order detail, and hand customers a cleaner delivery experience.",
+    createOpsOrder: "Create ops order",
+    createOpsText: "Manual order intake for call center or dispatch scenarios.",
+    detail: "Open detail",
+    noAddress: "No address set",
+    noOrders: "You have not placed any orders yet.",
+    noResults: "No orders matched your search.",
+    loading: "Loading orders...",
+    failed: "Failed to load orders.",
+    search: "Search orders",
+    eta: "ETA",
+    promised: "Promised",
+    timeline: "Timeline",
+    proof: "Delivery proof",
+    rate: "Rate delivery",
+    cancel: "Cancel order",
+    reorder: "Reorder",
+    reason: "Cancellation reason",
+    feedback: "Feedback",
+    rating: "Rating (1-5)",
+    submit: "Submit",
+    close: "Close",
+    created: "Created",
+    waitingForDriver: "Waiting for driver",
+    inDeliveryFlow: "In delivery flow",
+    marketPending: "Market pending",
+    visibleOrders: "Visible orders",
+    delivered: "Delivered",
+    inDriverFlow: "In driver flow",
+    late: "Late",
+    proofMissing: "No delivery proof has been attached yet.",
+    tracking: "Live driver tracking",
+    trackingCopy: "Tracking appears after pickup so the timeline stays signal-first.",
+    createdLabel: "Created",
+    customer: "Customer",
+    driver: "Driver",
+    market: "Market",
+    total: "Total",
+  };
+}
+
 export default function OrdersPage() {
   const meQ = useMe();
-  const { language } = useI18n();
-  const text = getPageCopy(language);
+  const text = copy.en;
   const queryClient = useQueryClient();
   const [dropoffAddress, setDropoffAddress] = useState("Tbilisi Center");
   const [dropoffLat, setDropoffLat] = useState("41.7151");
@@ -272,16 +366,9 @@ export default function OrdersPage() {
     <div className="grid gap-6">
       <section className="hero-grid">
         <div className="hero-panel">
-          <div className="command-chip">
-            {isCustomerOnly ? <Sparkles className="h-3.5 w-3.5" /> : <Zap className="h-3.5 w-3.5" />}
-            {isCustomerOnly ? text.customerDesk : text.commandBoard}
-          </div>
           <h1 className="font-display mt-5 text-5xl font-semibold tracking-[-0.06em] text-white md:text-6xl">
-            {isCustomerOnly ? text.customerHeroTitle : text.opsHeroTitle}
+            Orders
           </h1>
-          <p className="mt-4 max-w-3xl text-base leading-8 text-slate-300">
-            {isCustomerOnly ? text.customerHeroText : text.opsHeroText}
-          </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric title={text.visibleOrders} value={filteredOrders.length} helper={isCustomerOnly ? text.timeline : text.search} />
@@ -296,7 +383,6 @@ export default function OrdersPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="panel-title">{text.createOpsOrder}</CardTitle>
-                <p className="panel-copy">{text.createOpsText}</p>
               </CardHeader>
               <CardContent className="grid gap-4">
                 <div className="field-group">

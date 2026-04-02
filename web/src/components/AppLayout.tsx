@@ -25,7 +25,6 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { getActiveMarketId, setActiveMarketId } from "@/lib/cart";
-import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import type { NotificationRecord } from "@/types/api";
 
@@ -37,6 +36,14 @@ type NavEntry = {
   icon: typeof Package;
   end?: boolean;
   mobileLabel?: string;
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  owner: "Owner",
+  staff: "Staff",
+  customer: "Customer",
+  driver: "Driver",
 };
 
 function AppNavLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () => void }) {
@@ -70,10 +77,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { marketId: routeMarketId } = useParams();
   const meQ = useMe();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { t } = useI18n();
 
   const roles = meQ.data?.roles ?? [];
-  const roleLabels = roles.map((role: string) => t(`role.${role}`));
+  const roleLabels = roles.map((role: string) => ROLE_LABELS[role] ?? role);
   const isAdmin = roles.includes("admin");
   const isDriver = roles.includes("driver");
   const isCustomerOnly =
@@ -120,27 +126,27 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const primaryNav: NavEntry[] = isCustomerOnly
-    ? [{ label: t("nav.orders"), to: "/orders", icon: Package }]
+    ? [{ label: "Orders", to: "/orders", icon: Package }]
     : [
-        ...(isDriver ? [{ label: t("nav.driverHub"), to: "/driver-hub", icon: Truck, mobileLabel: "Driver" }] : []),
-        { label: t("nav.orders"), to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
-        { label: t("nav.routes"), to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
-        { label: t("nav.liveMap"), to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
-        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
+        ...(isDriver ? [{ label: "Driver hub", to: "/driver-hub", icon: Truck, mobileLabel: "Driver" }] : []),
+        { label: "Orders", to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
+        { label: "Routes", to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
+        { label: "Live map", to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
+        { label: "Analytics", to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
       ];
 
   const marketNav: NavEntry[] = currentMarketId
     ? [
-        { label: t("nav.settings"), to: `/markets/${currentMarketId}`, icon: Compass, end: true },
-        { label: t("nav.items"), to: `/markets/${currentMarketId}/items`, icon: ShoppingBag, end: true },
-        { label: t("nav.promos"), to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
+        { label: "Settings", to: `/markets/${currentMarketId}`, icon: Compass, end: true },
+        { label: "Items", to: `/markets/${currentMarketId}/items`, icon: ShoppingBag, end: true },
+        { label: "Promo codes", to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
       ]
     : [];
 
   const marketHubEntry: NavEntry | null = isCustomerOnly
     ? null
     : {
-        label: isAdmin ? t("nav.allMarkets") : t("nav.myMarkets"),
+        label: isAdmin ? "Markets" : "My markets",
         to: isAdmin ? "/markets" : "/my-markets",
         icon: Store,
         end: true,
@@ -148,15 +154,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       };
 
   const bottomNav = isCustomerOnly
-    ? [{ label: t("nav.orders"), to: "/orders", icon: Home, end: true, mobileLabel: "Orders" }]
+    ? [{ label: "Orders", to: "/orders", icon: Home, end: true, mobileLabel: "Orders" }]
     : [
-        { label: t("nav.orders"), to: "/orders", icon: Home, end: true, mobileLabel: "Home" },
+        { label: "Orders", to: "/orders", icon: Home, end: true, mobileLabel: "Home" },
         isDriver
-          ? { label: t("nav.driverHub"), to: "/driver-hub", icon: Truck, end: true, mobileLabel: "Driver" }
-          : { label: t("nav.routes"), to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
-        { label: t("nav.liveMap"), to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
-        marketHubEntry ?? { label: t("nav.orders"), to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
-        { label: t("nav.analytics"), to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
+          ? { label: "Driver hub", to: "/driver-hub", icon: Truck, end: true, mobileLabel: "Driver" }
+          : { label: "Routes", to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
+        { label: "Live map", to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
+        marketHubEntry ?? { label: "Orders", to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
+        { label: "Analytics", to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
       ];
 
   const activeBottomEntry = bottomNav.find((entry) =>
@@ -170,9 +176,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       ...marketNav,
       ...(isAdmin
         ? [
-            { label: t("nav.drivers"), to: "/drivers", icon: Warehouse, end: true },
+            { label: "Drivers", to: "/drivers", icon: Warehouse, end: true },
             { label: "Global promos", to: "/promo-codes", icon: Activity, end: true },
-            { label: t("nav.users"), to: "/users", icon: Users, end: true },
+            { label: "Users", to: "/users", icon: Users, end: true },
           ]
         : []),
     ];
@@ -181,8 +187,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`),
     );
 
-    return matchingEntry?.label ?? t("layout.workspaceTitle");
-  }, [currentPath, isAdmin, marketHubEntry, marketNav, primaryNav, t]);
+    return matchingEntry?.label ?? "Smart Dispatch workspace";
+  }, [currentPath, isAdmin, marketHubEntry, marketNav, primaryNav]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -196,24 +202,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Zap className="h-5 w-5" />
           </div>
           <div>
-            <div className="font-display theme-ink text-xl font-semibold tracking-[-0.04em]">{t("app.name")}</div>
-            <div className="theme-muted text-sm">{t("app.tagline")}</div>
+            <div className="font-display theme-ink text-xl font-semibold tracking-[-0.04em]">Smart Dispatch</div>
+            <div className="theme-muted text-sm">Markets, deliveries, and dispatch in one workspace</div>
           </div>
         </Link>
       </div>
 
       <div className="paper-panel-muted p-4">
-        <div className="section-kicker">{t("layout.signedInAs")}</div>
+        <div className="section-kicker">Signed in as</div>
         <div className="font-display theme-ink mt-3 text-xl font-semibold tracking-[-0.04em]">
-          {meQ.data?.name || t("common.loadingUser")}
+          {meQ.data?.name || "Loading user..."}
         </div>
         <div className="theme-muted mt-1 text-sm">
-          {roleLabels.length ? roleLabels.join(", ") : t("layout.workspaceMember")}
+          {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {roles.map((role: string) => (
             <span key={role} className="data-pill">
-              {t(`role.${role}`)}
+              {ROLE_LABELS[role] ?? role}
             </span>
           ))}
           {(meQ.data?.permissions ?? []).slice(0, 3).map((permission: string) => (
@@ -224,7 +230,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
         {currentMarket && (
           <div className="subpanel mt-4 p-4">
-            <div className="section-kicker">{t("layout.activeMarket")}</div>
+            <div className="section-kicker">Active market</div>
             <div className="theme-ink mt-2 text-base font-semibold">{currentMarket.name}</div>
             <div className="theme-muted text-sm">{currentMarket.code}</div>
           </div>
@@ -244,7 +250,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="space-y-3">
-        <div className="section-kicker px-2">{t("nav.operations")}</div>
+        <div className="section-kicker px-2">Operations</div>
         <div className="space-y-1">
           {primaryNav.map((entry) => (
             <AppNavLink key={entry.to} entry={entry} onNavigate={() => setMobileOpen(false)} />
@@ -254,11 +260,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {!isCustomerOnly && (
         <div className="space-y-3">
-          <div className="section-kicker px-2">{t("nav.markets")}</div>
+          <div className="section-kicker px-2">Markets</div>
           <div className="space-y-1">
             <AppNavLink
               entry={{
-                label: isAdmin ? t("nav.allMarkets") : t("nav.myMarkets"),
+                label: isAdmin ? "Markets" : "My markets",
                 to: isAdmin ? "/markets" : "/my-markets",
                 icon: Store,
                 end: true,
@@ -274,14 +280,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {isAdmin && (
         <div className="space-y-3">
-          <div className="section-kicker px-2">{t("nav.admin")}</div>
+          <div className="section-kicker px-2">Admin</div>
           <div className="space-y-1">
             <AppNavLink
-              entry={{ label: t("nav.drivers"), to: "/drivers", icon: Warehouse, end: true }}
+              entry={{ label: "Drivers", to: "/drivers", icon: Warehouse, end: true }}
               onNavigate={() => setMobileOpen(false)}
             />
             <AppNavLink entry={{ label: "Global promos", to: "/promo-codes", icon: Activity, end: true }} onNavigate={() => setMobileOpen(false)} />
-            <AppNavLink entry={{ label: t("nav.users"), to: "/users", icon: Users, end: true }} onNavigate={() => setMobileOpen(false)} />
+            <AppNavLink entry={{ label: "Users", to: "/users", icon: Users, end: true }} onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
       )}
@@ -289,7 +295,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="mt-auto pt-2">
         <Button variant="secondary" className="h-12 justify-start rounded-[18px]" onClick={logout}>
           <LogOut className="mr-2 h-4 w-4" />
-          {t("nav.logout")}
+          Log out
         </Button>
       </div>
     </div>
@@ -313,7 +319,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <PanelLeftOpen className="h-4 w-4" />
                 </Button>
                 <div className="min-w-0">
-                  <div className="section-kicker">{activeBottomEntry?.mobileLabel || t("layout.workspaceLabel")}</div>
+                  <div className="section-kicker">{activeBottomEntry?.mobileLabel || "Workspace"}</div>
                   <div className="truncate font-display text-lg font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
                     {currentSectionTitle}
                   </div>
@@ -331,25 +337,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div>
                 <div className="command-chip">
                   <Sparkles className="h-3.5 w-3.5" />
-                  {t("layout.workspaceLabel")}
+                  Workspace
                 </div>
                 <div className="font-display theme-ink mt-4 text-2xl font-semibold tracking-[-0.05em] md:text-3xl">
-                  {t("layout.workspaceTitle")}
+                  Smart Dispatch workspace
                 </div>
                 <div className="theme-copy mt-2 max-w-2xl text-sm">
-                  {t("layout.workspaceCopy")}
+                  Orders, routes, live operations, and market tools in one place.
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="data-pill">{roleLabels.length ? roleLabels.join(", ") : t("layout.workspaceMember")}</span>
-                  <span className="data-pill">{currentMarket?.code || t("layout.globalWorkspace")}</span>
+                  <span className="data-pill">{roleLabels.length ? roleLabels.join(", ") : "Workspace member"}</span>
+                  <span className="data-pill">{currentMarket?.code || "Global workspace"}</span>
                   <span className="data-pill">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</span>
                 </div>
               </div>
 
               <div className="ml-auto flex items-center gap-3">
                 <div className="hidden text-right md:block">
-                  <div className="section-kicker">{t("layout.signedInAs")}</div>
-                  <div className="theme-ink mt-2 text-sm font-semibold">{meQ.data?.name || t("common.loadingUser")}</div>
+                  <div className="section-kicker">Signed in as</div>
+                  <div className="theme-ink mt-2 text-sm font-semibold">{meQ.data?.name || "Loading user..."}</div>
                 </div>
                 <ThemeToggle />
               </div>
@@ -388,8 +394,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           showCloseButton={false}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>{t("layout.workspaceTitle")}</SheetTitle>
-            <SheetDescription>{t("layout.workspaceCopy")}</SheetDescription>
+            <SheetTitle>Smart Dispatch workspace</SheetTitle>
+            <SheetDescription>Orders, routes, live operations, and market tools in one place.</SheetDescription>
           </SheetHeader>
           <div className="h-full overflow-y-auto p-4">
             {sidebar}

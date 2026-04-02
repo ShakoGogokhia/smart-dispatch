@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -70,12 +71,26 @@ class AuthController extends Controller
 
     public function me(Request $request)
     {
-        $u = $request->user()->load([
+        $hasDriverTransactions = Schema::hasTable('driver_transactions');
+        $hasAppNotifications = Schema::hasTable('app_notifications');
+
+        $driverRelations = [
             'driver.vehicle',
             'driver.activeShift',
             'driver.latestPing',
-            'driver.transactions' => fn ($query) => $query->latest()->limit(10),
-        ]);
+        ];
+
+        if ($hasDriverTransactions) {
+            $driverRelations['driver.transactions'] = fn ($query) => $query->latest()->limit(10);
+        }
+
+        $u = $request->user()->load($driverRelations);
+
+        $unreadNotifications = 0;
+
+        if ($hasAppNotifications) {
+            $unreadNotifications = $u->appNotifications()->whereNull('read_at')->count();
+        }
 
         return response()->json([
             'id' => $u->id,
@@ -85,7 +100,7 @@ class AuthController extends Controller
             'roles' => $u->getRoleNames()->values(),
             'permissions' => $this->permissionsForRoles($u->getRoleNames()->values()->all()),
             'notification_summary' => [
-                'unread' => $u->appNotifications()->whereNull('read_at')->count(),
+                'unread' => $unreadNotifications,
             ],
             'driver' => $u->driver ? [
                 'id' => $u->driver->id,
@@ -95,7 +110,7 @@ class AuthController extends Controller
                 'vehicle' => $u->driver->vehicle,
                 'active_shift' => $u->driver->activeShift,
                 'latest_ping' => $u->driver->latestPing,
-                'transactions' => $u->driver->transactions,
+                'transactions' => $hasDriverTransactions ? $u->driver->transactions : [],
             ] : null,
         ]);
     }

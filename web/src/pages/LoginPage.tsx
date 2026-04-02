@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import ThemeToggle from "@/components/ThemeToggle";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { useI18n } from "@/lib/i18n";
 import { getDefaultAuthedPath, normalizeRoles } from "@/lib/session";
 
 function getErrorMessage(error: unknown, fallback: string) {
@@ -25,7 +24,6 @@ function getErrorMessage(error: unknown, fallback: string) {
 type AuthMode = "login" | "register";
 
 export default function LoginPage() {
-  const { language, setLanguage, t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<AuthMode>("login");
@@ -54,7 +52,7 @@ export default function LoginPage() {
       const res = await api.post("/api/login", { email, password });
       finishAuth(res.data.token, res.data?.user?.roles);
     } catch (nextError: unknown) {
-      setError(getErrorMessage(nextError, t("auth.loginFailed")));
+      setError(getErrorMessage(nextError, "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -69,22 +67,21 @@ export default function LoginPage() {
       const res = await api.post("/api/register", {
         name,
         email,
-        language,
         password,
         password_confirmation: passwordConfirmation,
       });
       finishAuth(res.data.token, res.data?.user?.roles ?? ["customer"]);
     } catch (nextError: unknown) {
-      setError(getErrorMessage(nextError, t("auth.registerFailed")));
+      setError(getErrorMessage(nextError, "Registration failed"));
     } finally {
       setLoading(false);
     }
   }
 
   const highlights = [
-    { icon: Store, title: t("auth.customer"), text: t("auth.customerDesc") },
-    { icon: Truck, title: t("auth.owner"), text: t("auth.ownerDesc") },
-    { icon: ShieldCheck, title: t("auth.admin"), text: t("auth.adminDesc") },
+    { icon: Store, title: "Customer", text: "Browse markets and place orders." },
+    { icon: Truck, title: "Owner", text: "Manage your market and catalog." },
+    { icon: ShieldCheck, title: "Admin", text: "Manage users, roles, and markets." },
   ];
 
   return (
@@ -92,45 +89,31 @@ export default function LoginPage() {
       <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[minmax(0,1.12fr)_420px]">
         <section className="hero-panel page-enter overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="command-chip">{t("app.name")}</div>
+            <div className="command-chip">Smart Dispatch</div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <ThemeToggle />
-              <Button
-                variant={language === "ka" ? "default" : "secondary"}
-                className="h-10 rounded-[16px] border-white/10"
-                onClick={() => setLanguage("ka")}
-              >
-                {t("lang.ka")}
-              </Button>
-              <Button
-                variant={language === "en" ? "default" : "secondary"}
-                className="h-10 rounded-[16px] border-white/10"
-                onClick={() => setLanguage("en")}
-              >
-                {t("lang.en")}
-              </Button>
             </div>
           </div>
 
           <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div>
-              <div className="section-kicker">{t("login.kicker")}</div>
+              <div className="section-kicker">Commerce, routes, and live operations</div>
               <h1 className="font-display mt-4 max-w-4xl text-5xl font-semibold tracking-[-0.06em] text-slate-950 dark:text-white md:text-7xl">
-                {t("auth.heroTitle")}
+                Order like a customer, work like staff, manage like an admin.
               </h1>
               <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600 dark:text-slate-300 md:text-lg">
-                {t("auth.heroText")}
+                Customers place orders, owners manage their market, and admins oversee users, roles, and operations from one app.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-2">
-                <span className="data-pill">{t("login.pillUnified")}</span>
-                <span className="data-pill">{t("login.pillHandoffs")}</span>
-                <span className="data-pill">{t("login.pillMobile")}</span>
+                <span className="data-pill">Unified orders</span>
+                <span className="data-pill">Clear handoffs</span>
+                <span className="data-pill">Mobile-friendly</span>
               </div>
             </div>
 
             <div className="hero-mesh flex h-full flex-col justify-center">
-              <div className="section-kicker text-white/70">{t("login.whySimple")}</div>
+              <div className="section-kicker text-white/70">Why it stays simple</div>
               <div className="mt-4 grid gap-3">
                 {highlights.map((item) => {
                   const Icon = item.icon;
@@ -155,9 +138,9 @@ export default function LoginPage() {
           <CardHeader className="pb-0">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <div className="section-kicker">{t("login.accessNode")}</div>
+                <div className="section-kicker">Access</div>
                 <CardTitle className="font-display mt-2 text-4xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
-                  {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
+                  {mode === "login" ? "Sign in" : "Create account"}
                 </CardTitle>
               </div>
               <div className="rounded-[16px] border border-border bg-secondary p-1">
@@ -171,7 +154,7 @@ export default function LoginPage() {
                   ].join(" ")}
                   onClick={() => setMode("login")}
                 >
-                  {t("auth.login")}
+                  Login
                 </button>
                 <button
                   type="button"
@@ -183,7 +166,7 @@ export default function LoginPage() {
                   ].join(" ")}
                   onClick={() => setMode("register")}
                 >
-                  {t("auth.register")}
+                  Register
                 </button>
               </div>
             </div>
@@ -196,7 +179,9 @@ export default function LoginPage() {
                   {mode === "login" ? <LockKeyhole className="h-5 w-5" /> : <UserRoundPlus className="h-5 w-5" />}
                 </div>
                 <div className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  {mode === "login" ? t("auth.loginText") : t("auth.registerText")}
+                  {mode === "login"
+                    ? "Use your existing account to continue."
+                    : "New accounts are created as customer accounts by default."}
                 </div>
               </div>
             </div>
@@ -204,13 +189,13 @@ export default function LoginPage() {
             <form onSubmit={mode === "login" ? onLogin : onRegister} className="grid gap-4">
               {mode === "register" && (
                 <div className="field-group">
-                  <Label className="field-label">{t("auth.name")}</Label>
+                  <Label className="field-label">Name</Label>
                   <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
                 </div>
               )}
 
               <div className="field-group">
-                <Label className="field-label">{t("auth.email")}</Label>
+                <Label className="field-label">Email</Label>
                 <Input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -220,7 +205,7 @@ export default function LoginPage() {
               </div>
 
               <div className="field-group">
-                <Label className="field-label">{t("auth.password")}</Label>
+                <Label className="field-label">Password</Label>
                 <Input
                   type="password"
                   value={password}
@@ -232,7 +217,7 @@ export default function LoginPage() {
 
               {mode === "register" && (
                 <div className="field-group">
-                  <Label className="field-label">{t("auth.confirmPassword")}</Label>
+                  <Label className="field-label">Confirm password</Label>
                   <Input
                     type="password"
                     value={passwordConfirmation}
@@ -247,11 +232,11 @@ export default function LoginPage() {
               <Button className="h-12 text-base" disabled={loading}>
                 {loading
                   ? mode === "login"
-                    ? t("auth.signingIn")
-                    : t("auth.creatingAccount")
+                    ? "Signing in..."
+                    : "Creating account..."
                   : mode === "login"
-                    ? t("auth.continue")
-                    : t("auth.create")}
+                    ? "Continue"
+                    : "Create account"}
                 {!loading && <ArrowRight className="h-4 w-4" />}
               </Button>
             </form>

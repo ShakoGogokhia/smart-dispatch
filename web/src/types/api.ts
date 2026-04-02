@@ -92,6 +92,7 @@ export type Order = {
   created_at: string;
   market_accepted_at?: string | null;
   ready_for_pickup_at?: string | null;
+  offer_sent_at?: string | null;
   accepted_at?: string | null;
   picked_up_at?: string | null;
   delivered_at?: string | null;

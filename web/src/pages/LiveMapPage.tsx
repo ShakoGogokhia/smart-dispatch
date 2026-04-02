@@ -6,7 +6,6 @@ import "leaflet/dist/leaflet.css";
 
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
 import type { LiveAlertPayload, LiveHistoryPayload, LivePayload } from "@/types/api";
 
 const copy = {
@@ -63,8 +62,7 @@ const copy = {
 } as const;
 
 export default function LiveMapPage() {
-  const { language } = useI18n();
-  const text = copy[language];
+  const text = copy.en;
   const pollInterval = Number(import.meta.env.VITE_POLL_INTERVAL ?? 4000);
   const centerLat = Number(import.meta.env.VITE_MAP_DEFAULT_LAT ?? 41.7151);
   const centerLng = Number(import.meta.env.VITE_MAP_DEFAULT_LNG ?? 44.8271);
@@ -98,9 +96,7 @@ export default function LiveMapPage() {
     <div className="grid gap-6">
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="dashboard-card">
-          <div className="command-chip">{text.board}</div>
-          <h1 className="section-title mt-4">{text.title}</h1>
-          <p className="section-copy mt-3 max-w-3xl">{text.intro}</p>
+          <h1 className="section-title">Live map</h1>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

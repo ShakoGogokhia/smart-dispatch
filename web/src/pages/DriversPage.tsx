@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,8 +38,32 @@ function getErrorMessage(error: unknown) {
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
+const text = {
+  onlyAdmin: "Only admins can view this page.",
+  title: "Drivers",
+  vehicles: "Vehicles",
+  addVehicle: "Add vehicle",
+  name: "Name",
+  type: "Type",
+  capacity: "Capacity",
+  maxStops: "Max stops",
+  notAvailable: "N/A",
+  status: "Status",
+  vehicle: "Vehicle",
+  shift: "Shift",
+  addDriver: "Add driver",
+  unassigned: "Unassigned",
+  active: "Active",
+  offShift: "Off shift",
+  createVehicle: "Create vehicle",
+  creating: "Creating...",
+  createDriver: "Create driver",
+  optionalVehicle: "Optional vehicle",
+  email: "Email",
+  password: "Password",
+} as const;
+
 export default function DriversPage() {
-  const { t } = useI18n();
   const queryClient = useQueryClient();
   const meQ = useMe();
   const isAdmin = (meQ.data?.roles ?? []).includes("admin");
@@ -116,7 +139,7 @@ export default function DriversPage() {
     return (
       <Card className="rounded-[30px]">
         <CardContent className="p-8 text-sm text-slate-600">
-          {t("drivers.onlyAdmin")}
+          {text.onlyAdmin}
         </CardContent>
       </Card>
     );
@@ -128,18 +151,16 @@ export default function DriversPage() {
   return (
     <div className="grid gap-6">
       <div className="intro-panel">
-        <div className="section-kicker">{t("drivers.kicker")}</div>
-        <h1 className="intro-title">{t("drivers.title")}</h1>
-        <p className="intro-copy">{t("drivers.copy")}</p>
+        <h1 className="intro-title">{text.title}</h1>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="rounded-[30px] border-slate-200/80 dark:border-white/10">
           <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-slate-200/80 dark:border-white/10">
-            <CardTitle className="font-display text-3xl">{t("drivers.vehicles")}</CardTitle>
+            <CardTitle className="font-display text-3xl">{text.vehicles}</CardTitle>
             <Button className="rounded-2xl" onClick={() => setCreateVehicleOpen(true)}>
               <CarFront className="mr-2 h-4 w-4" />
-              {t("drivers.addVehicle")}
+              {text.addVehicle}
             </Button>
           </CardHeader>
           <CardContent className="pt-6">
@@ -147,19 +168,19 @@ export default function DriversPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("auth.name")}</TableHead>
-                    <TableHead>{t("drivers.type")}</TableHead>
-                    <TableHead>{t("drivers.capacity")}</TableHead>
-                    <TableHead>{t("drivers.maxStops")}</TableHead>
+                    <TableHead>{text.name}</TableHead>
+                    <TableHead>{text.type}</TableHead>
+                    <TableHead>{text.capacity}</TableHead>
+                    <TableHead>{text.maxStops}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {(vehiclesQ.data ?? []).map((vehicle) => (
                     <TableRow key={vehicle.id}>
                       <TableCell className="font-semibold">{vehicle.name}</TableCell>
-                      <TableCell>{vehicle.type || t("drivers.nA")}</TableCell>
-                      <TableCell>{vehicle.capacity || t("drivers.nA")}</TableCell>
-                      <TableCell>{vehicle.max_stops || t("drivers.nA")}</TableCell>
+                      <TableCell>{vehicle.type || text.notAvailable}</TableCell>
+                      <TableCell>{vehicle.capacity || text.notAvailable}</TableCell>
+                      <TableCell>{vehicle.max_stops || text.notAvailable}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -170,10 +191,10 @@ export default function DriversPage() {
 
         <Card className="rounded-[30px] border-slate-200/80 dark:border-white/10">
           <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-slate-200/80 dark:border-white/10">
-            <CardTitle className="font-display text-3xl">{t("nav.drivers")}</CardTitle>
+            <CardTitle className="font-display text-3xl">{text.title}</CardTitle>
             <Button className="rounded-2xl" onClick={() => setCreateDriverOpen(true)}>
               <UserRoundPlus className="mr-2 h-4 w-4" />
-              {t("drivers.addDriver")}
+              {text.addDriver}
             </Button>
           </CardHeader>
           <CardContent className="pt-6">
@@ -181,10 +202,10 @@ export default function DriversPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("auth.name")}</TableHead>
-                    <TableHead>{t("common.status")}</TableHead>
-                    <TableHead>{t("drivers.vehicle")}</TableHead>
-                    <TableHead>{t("drivers.shift")}</TableHead>
+                    <TableHead>{text.name}</TableHead>
+                    <TableHead>{text.status}</TableHead>
+                    <TableHead>{text.vehicle}</TableHead>
+                    <TableHead>{text.shift}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -195,8 +216,8 @@ export default function DriversPage() {
                         <div className="text-xs text-slate-500">{driver.user?.email}</div>
                       </TableCell>
                       <TableCell>{driver.status}</TableCell>
-                      <TableCell>{driver.vehicle?.name || t("common.unassigned")}</TableCell>
-                      <TableCell>{driver.active_shift ? t("drivers.active") : t("drivers.offShift")}</TableCell>
+                      <TableCell>{driver.vehicle?.name || text.unassigned}</TableCell>
+                      <TableCell>{driver.active_shift ? text.active : text.offShift}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -210,8 +231,8 @@ export default function DriversPage() {
         <DialogContent className="app-modal-shell sm:max-w-[min(980px,calc(100%-2rem))]">
           <DialogHeader>
             <div className="app-modal-header">
-              <div className="section-kicker">{t("drivers.vehicles")}</div>
-              <DialogTitle className="panel-title mt-2">{t("drivers.createVehicle")}</DialogTitle>
+              <div className="section-kicker">{text.vehicles}</div>
+              <DialogTitle className="panel-title mt-2">{text.createVehicle}</DialogTitle>
               <p className="theme-copy mt-2 text-sm leading-6">Give dispatch a clear vehicle profile with capacity and stop limits in one readable form.</p>
             </div>
           </DialogHeader>
@@ -221,26 +242,26 @@ export default function DriversPage() {
               <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#131d2b]">
                 <div className="grid gap-4 lg:sticky lg:top-0">
                   <ModalPreviewCard
-                    kicker={t("drivers.vehicles")}
+                    kicker={text.vehicles}
                     title={vehicleName || "New vehicle"}
                     subtitle={vehicleType || "Vehicle type"}
-                    statusLabel={`${vehicleCapacity || "0"} ${t("drivers.capacity")}`}
-                    metaLabel={`${vehicleStops || "0"} ${t("drivers.maxStops")}`}
+                    statusLabel={`${vehicleCapacity || "0"} ${text.capacity}`}
+                    metaLabel={`${vehicleStops || "0"} ${text.maxStops}`}
                   />
                 </div>
               </aside>
 
               <main className="grid gap-4 p-5 sm:p-6 md:grid-cols-2">
-                <ModalFieldCard label={t("auth.name")} icon={CarFront}>
+                <ModalFieldCard label={text.name} icon={CarFront}>
                   <Input value={vehicleName} onChange={(event) => setVehicleName(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
-                <ModalFieldCard label={t("drivers.type")} icon={CarFront}>
+                <ModalFieldCard label={text.type} icon={CarFront}>
                   <Input value={vehicleType} onChange={(event) => setVehicleType(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
-                <ModalFieldCard label={t("drivers.capacity")} icon={Gauge}>
+                <ModalFieldCard label={text.capacity} icon={Gauge}>
                   <Input value={vehicleCapacity} onChange={(event) => setVehicleCapacity(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
-                <ModalFieldCard label={t("drivers.maxStops")} icon={Hash}>
+                <ModalFieldCard label={text.maxStops} icon={Hash}>
                   <Input value={vehicleStops} onChange={(event) => setVehicleStops(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
               </main>
@@ -251,7 +272,7 @@ export default function DriversPage() {
 
           <DialogFooter className="app-modal-footer">
             <Button onClick={() => createVehicleM.mutate()} disabled={createVehicleM.isPending || !vehicleName.trim()}>
-              {createVehicleM.isPending ? t("users.creating") : t("drivers.createVehicle")}
+              {createVehicleM.isPending ? text.creating : text.createVehicle}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -261,8 +282,8 @@ export default function DriversPage() {
         <DialogContent className="app-modal-shell sm:max-w-[min(980px,calc(100%-2rem))]">
           <DialogHeader>
             <div className="app-modal-header">
-              <div className="section-kicker">{t("nav.drivers")}</div>
-              <DialogTitle className="panel-title mt-2">{t("drivers.createDriver")}</DialogTitle>
+              <div className="section-kicker">{text.title}</div>
+              <DialogTitle className="panel-title mt-2">{text.createDriver}</DialogTitle>
               <p className="theme-copy mt-2 text-sm leading-6">Create the driver account and optional vehicle assignment in a layout that is actually easy to read.</p>
             </div>
           </DialogHeader>
@@ -272,29 +293,29 @@ export default function DriversPage() {
               <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#131d2b]">
                 <div className="grid gap-4 lg:sticky lg:top-0">
                   <ModalPreviewCard
-                    kicker={t("nav.drivers")}
+                    kicker={text.title}
                     title={driverName || "New driver"}
                     subtitle={driverEmail || "driver@email.com"}
-                    statusLabel={(vehiclesQ.data ?? []).find((vehicle) => String(vehicle.id) === driverVehicleId)?.name || t("drivers.optionalVehicle")}
+                    statusLabel={(vehiclesQ.data ?? []).find((vehicle) => String(vehicle.id) === driverVehicleId)?.name || text.optionalVehicle}
                     metaLabel={driverPassword ? "Password ready" : "Set password"}
                   />
                 </div>
               </aside>
 
               <main className="grid gap-4 p-5 sm:p-6 md:grid-cols-2">
-                <ModalFieldCard label={t("auth.name")} icon={UserRound}>
+                <ModalFieldCard label={text.name} icon={UserRound}>
                   <Input value={driverName} onChange={(event) => setDriverName(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
-                <ModalFieldCard label={t("auth.email")} icon={Mail}>
+                <ModalFieldCard label={text.email} icon={Mail}>
                   <Input value={driverEmail} onChange={(event) => setDriverEmail(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
-                <ModalFieldCard label={t("auth.password")} icon={KeyRound}>
+                <ModalFieldCard label={text.password} icon={KeyRound}>
                   <Input type="password" value={driverPassword} onChange={(event) => setDriverPassword(event.target.value)} className="input-shell" />
                 </ModalFieldCard>
-                <ModalFieldCard label={t("drivers.vehicle")} icon={CarFront}>
+                <ModalFieldCard label={text.vehicle} icon={CarFront}>
                   <Select value={driverVehicleId} onValueChange={setDriverVehicleId}>
                     <SelectTrigger className="input-shell w-full">
-                      <SelectValue placeholder={t("drivers.optionalVehicle")} />
+                      <SelectValue placeholder={text.optionalVehicle} />
                     </SelectTrigger>
                     <SelectContent>
                       {(vehiclesQ.data ?? []).map((vehicle) => (
@@ -316,7 +337,7 @@ export default function DriversPage() {
               onClick={() => createDriverM.mutate()}
               disabled={createDriverM.isPending || !driverName.trim() || !driverEmail.trim() || !driverPassword}
             >
-              {createDriverM.isPending ? t("users.creating") : t("drivers.createDriver")}
+              {createDriverM.isPending ? text.creating : text.createDriver}
             </Button>
           </DialogFooter>
         </DialogContent>

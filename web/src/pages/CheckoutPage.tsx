@@ -8,7 +8,6 @@ import { api } from "@/lib/api";
 import { clearCart, getActiveMarketId, loadCart, saveCart } from "@/lib/cart";
 import type { CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
-import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,10 +47,37 @@ function getErrorMessage(error: unknown) {
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
+const text = {
+  title: "Checkout",
+  back: "Back",
+  emptyCart: "Your cart is empty. Add items before placing an order.",
+  noMarketSelected: "No market selected",
+  customerDetails: "Customer details",
+  name: "Name",
+  phone: "Phone",
+  priority: "Priority",
+  address: "Address",
+  lat: "Latitude",
+  lng: "Longitude",
+  deliveryNotes: "Delivery notes",
+  cartReview: "Cart review",
+  clear: "Clear",
+  each: "each",
+  summary: "Summary",
+  activeMarket: "Active market",
+  items: "Items",
+  subtotal: "Subtotal",
+  promo: "Promo code",
+  optional: "Optional",
+  placingOrder: "Placing order...",
+  placeOrder: "Place order",
+  liveDispatch: "Live dispatch",
+  liveDispatchText: "This order goes straight into the live dispatch workflow after it is created.",
+} as const;
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const meQ = useMe();
-  const { t } = useI18n();
   const [marketId] = useState(() => getActiveMarketId());
   const [cart, setCart] = useState<CartItem[]>(() => (marketId ? loadCart(marketId) : []));
   const [customerName, setCustomerName] = useState("");
@@ -100,8 +126,8 @@ export default function CheckoutPage() {
 
   const createOrderM = useMutation({
     mutationFn: async () => {
-      if (!cart.length) throw new Error(t("checkout.emptyCart"));
-      if (!marketId) throw new Error(t("checkout.noMarketSelected"));
+      if (!cart.length) throw new Error(text.emptyCart);
+      if (!marketId) throw new Error(text.noMarketSelected);
 
       const payload = {
         market_id: Number(marketId),
@@ -174,13 +200,11 @@ export default function CheckoutPage() {
       <div className="intro-panel">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="section-kicker">{t("checkout.title")}</div>
-            <h1 className="intro-title">{t("checkout.introTitle")}</h1>
-            <p className="intro-copy">{t("checkout.introCopy")}</p>
+            <h1 className="intro-title">{text.title}</h1>
           </div>
           <Button variant="secondary" className="rounded-[16px]" onClick={() => navigate(-1)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            {t("checkout.back")}
+            {text.back}
           </Button>
         </div>
       </div>
@@ -189,43 +213,43 @@ export default function CheckoutPage() {
         <div className="grid gap-6">
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">{t("checkout.customerDetails")}</CardTitle>
+              <CardTitle className="font-display text-2xl">{text.customerDetails}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="grid gap-2">
-                <Label>{t("auth.name")}</Label>
+                <Label>{text.name}</Label>
                 <Input value={effectiveCustomerName} onChange={(event) => setCustomerName(event.target.value)} className="h-11 rounded-2xl" />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>{t("checkout.phone")}</Label>
+                  <Label>{text.phone}</Label>
                   <Input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{t("checkout.priority")}</Label>
+                  <Label>{text.priority}</Label>
                   <Input value={priority} onChange={(event) => setPriority(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label>{t("checkout.address")}</Label>
+                <Label>{text.address}</Label>
                 <Input value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} className="h-11 rounded-2xl" />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="grid gap-2">
-                  <Label>{t("checkout.lat")}</Label>
+                  <Label>{text.lat}</Label>
                   <Input value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
                 <div className="grid gap-2">
-                  <Label>{t("checkout.lng")}</Label>
+                  <Label>{text.lng}</Label>
                   <Input value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} className="h-11 rounded-2xl" />
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label>{t("checkout.deliveryNotes")}</Label>
+                <Label>{text.deliveryNotes}</Label>
                 <Input value={notes} onChange={(event) => setNotes(event.target.value)} className="h-11 rounded-2xl" />
               </div>
               {(marketQ.data?.delivery_slots ?? []).length > 0 && (
@@ -254,7 +278,7 @@ export default function CheckoutPage() {
 
           <Card className="rounded-[30px]">
             <CardHeader className="flex flex-row items-center justify-between gap-4">
-              <CardTitle className="font-display text-2xl">{t("checkout.cartReview")}</CardTitle>
+              <CardTitle className="font-display text-2xl">{text.cartReview}</CardTitle>
               <Button
                 variant="secondary"
                 className="rounded-2xl"
@@ -265,13 +289,13 @@ export default function CheckoutPage() {
                 }}
                 disabled={!cart.length}
               >
-                {t("checkout.clear")}
+                {text.clear}
               </Button>
             </CardHeader>
             <CardContent className="grid gap-3">
               {cart.length === 0 ? (
                 <div className="rounded-[24px] bg-slate-50 p-5 text-sm text-slate-600">
-                  {t("checkout.emptyCart")}
+                  {text.emptyCart}
                 </div>
               ) : (
                 cart.map((item) => (
@@ -281,7 +305,7 @@ export default function CheckoutPage() {
                   >
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-slate-950">{item.name}</div>
-                      <div className="text-sm text-slate-500">{formatMoney(item.price)} {t("checkout.each")}</div>
+                      <div className="text-sm text-slate-500">{formatMoney(item.price)} {text.each}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="secondary" className="rounded-xl" onClick={() => decrement(item.item_id)}>
@@ -302,7 +326,7 @@ export default function CheckoutPage() {
         <div className="grid gap-6">
           <Card className="rounded-[30px]">
             <CardHeader>
-              <CardTitle className="font-display text-2xl">{t("checkout.summary")}</CardTitle>
+              <CardTitle className="font-display text-2xl">{text.summary}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4">
               <div className="rounded-[24px] bg-slate-950 p-5 text-white">
@@ -311,9 +335,9 @@ export default function CheckoutPage() {
                     <ShoppingBag className="h-5 w-5 text-amber-300" />
                   </div>
                   <div>
-                    <div className="text-sm text-slate-300">{t("checkout.activeMarket")}</div>
+                    <div className="text-sm text-slate-300">{text.activeMarket}</div>
                     <div className="font-semibold text-white">
-                      {marketQ.data?.name || (marketId ? `#${marketId}` : t("checkout.noMarketSelected"))}
+                      {marketQ.data?.name || (marketId ? `#${marketId}` : text.noMarketSelected)}
                     </div>
                   </div>
                 </div>
@@ -326,22 +350,22 @@ export default function CheckoutPage() {
               </div>
 
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">{t("common.items")}</span>
+                <span className="text-slate-500">{text.items}</span>
                 <span className="font-semibold">{totals.items}</span>
               </div>
               <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-500">{t("market.subtotal")}</span>
+                <span className="text-slate-500">{text.subtotal}</span>
                 <span className="font-semibold">{formatMoney(totals.subtotal)}</span>
               </div>
 
               <Separator />
 
               <div className="grid gap-2">
-                <Label>{t("checkout.promo")}</Label>
+                <Label>{text.promo}</Label>
                 <Input
                   value={promoCode}
                   onChange={(event) => setPromoCode(event.target.value)}
-                  placeholder={t("checkout.optional")}
+                  placeholder={text.optional}
                   className="h-11 rounded-2xl"
                 />
               </div>
@@ -393,12 +417,12 @@ export default function CheckoutPage() {
                 onClick={() => createOrderM.mutate()}
                 disabled={!canSubmit || createOrderM.isPending}
               >
-                {createOrderM.isPending ? t("checkout.placingOrder") : t("checkout.placeOrder")}
+                {createOrderM.isPending ? text.placingOrder : text.placeOrder}
               </Button>
 
               <div className="rounded-[24px] border border-teal-200 bg-teal-50/70 p-4 text-sm text-teal-900">
-                <Badge variant="secondary" className="mr-2 rounded-full">{t("checkout.liveDispatch")}</Badge>
-                {t("checkout.liveDispatchText")}
+                <Badge variant="secondary" className="mr-2 rounded-full">{text.liveDispatch}</Badge>
+                {text.liveDispatchText}
               </div>
             </CardContent>
           </Card>

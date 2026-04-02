@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\Market;
+use App\Models\ProductReview;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -11,10 +12,15 @@ class ItemController extends Controller
 {
     public function index(Market $market)
     {
-        return $market->items()
-            ->withCount('reviews')
-            ->withAvg('reviews', 'rating')
-            ->latest()
+        $query = $market->items()->latest();
+
+        if (ProductReview::tableExists()) {
+            $query
+                ->withCount('reviews')
+                ->withAvg('reviews', 'rating');
+        }
+
+        return $query
             ->get()
             ->map(fn (Item $item) => $this->serializeItem($item));
     }
@@ -168,8 +174,13 @@ class ItemController extends Controller
 
     private function serializeItem(Item $item): array
     {
-        $avg = $item->reviews_avg_rating ?? $item->reviews()->avg('rating');
-        $count = $item->reviews_count ?? $item->reviews()->count();
+        if (ProductReview::tableExists()) {
+            $avg = $item->reviews_avg_rating ?? $item->reviews()->avg('rating');
+            $count = $item->reviews_count ?? $item->reviews()->count();
+        } else {
+            $avg = null;
+            $count = 0;
+        }
 
         return [
             'id' => $item->id,

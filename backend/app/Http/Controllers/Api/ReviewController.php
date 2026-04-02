@@ -11,6 +11,10 @@ class ReviewController extends Controller
 {
     public function index(Item $item)
     {
+        if (!ProductReview::tableExists()) {
+            return collect();
+        }
+
         return $item->reviews()
             ->with('user:id,name')
             ->latest()
@@ -31,6 +35,12 @@ class ReviewController extends Controller
 
     public function store(Request $request, Item $item)
     {
+        if (!ProductReview::tableExists()) {
+            return response()->json([
+                'message' => 'Reviews are unavailable until product review migrations are run.',
+            ], 503);
+        }
+
         $data = $request->validate([
             'rating' => ['required', 'integer', 'min:1', 'max:5'],
             'comment' => ['nullable', 'string', 'max:1000'],

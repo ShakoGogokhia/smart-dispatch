@@ -31,6 +31,8 @@ class DriverOrderController extends Controller
             return response()->json(['message' => 'User is not a driver'], 422);
         }
 
+        $this->dispatchService->refreshPendingOrders();
+
         $offered = Order::query()
             ->with(['market', 'items', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing'])
             ->where('offered_driver_id', $driver->id)
@@ -62,6 +64,18 @@ class DriverOrderController extends Controller
 
         if ((int) $order->offered_driver_id !== (int) $driver->id) {
             return response()->json(['message' => 'This order is not currently offered to you'], 422);
+        }
+
+        if (!$order->offer_sent_at || $order->offer_sent_at->lt(now()->subSeconds(OrderDispatchService::OFFER_TIMEOUT_SECONDS))) {
+            $order->update([
+                'offered_driver_id' => null,
+                'offer_sent_at' => null,
+                'status' => 'READY_FOR_PICKUP',
+            ]);
+
+            $this->dispatchService->offerOrder($order->fresh(), $driver->id);
+
+            return response()->json(['message' => 'This offer expired and was reassigned'], 422);
         }
 
         $order->update([

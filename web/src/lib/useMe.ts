@@ -10,7 +10,6 @@ export function useMe(options?: { enabled?: boolean }) {
       return {
         ...data,
         roles: normalizeRoles(data?.roles),
-        language: data?.language === "ka" ? "ka" : "en",
       };
     },
     enabled: options?.enabled ?? true,

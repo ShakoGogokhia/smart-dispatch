@@ -1,10 +1,9 @@
-import { ArrowRight, Megaphone, Package, Settings, Sparkles, TicketPercent } from "lucide-react";
+import { ArrowRight, Megaphone, Package, Settings, TicketPercent } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { api } from "@/lib/api";
 import { setActiveMarketId } from "@/lib/cart";
-import { useI18n } from "@/lib/i18n";
 import { formatMoney, toNumber } from "@/lib/format";
 import type { StorefrontMarket } from "@/lib/storefront";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 type Market = StorefrontMarket;
 
 export default function MyMarketsPage() {
-  const { t } = useI18n();
   const marketsQ = useQuery({
     queryKey: ["my-markets"],
     queryFn: async () => (await api.get("/api/my/markets")).data as Market[],
@@ -28,12 +26,7 @@ export default function MyMarketsPage() {
       <section className="intro-panel">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="command-chip">
-              <Sparkles className="h-3.5 w-3.5" />
-              {t("nav.markets")}
-            </div>
-            <h1 className="intro-title">{t("markets.myTitle")}</h1>
-            <p className="intro-copy">{t("markets.myText")}</p>
+            <h1 className="intro-title">My markets</h1>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="status-chip">{markets.length} markets</span>
@@ -51,11 +44,11 @@ export default function MyMarketsPage() {
 
       {marketsQ.isLoading ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600">{t("public.loadingMarkets")}</CardContent>
+          <CardContent className="p-8 text-sm text-slate-600">Loading markets...</CardContent>
         </Card>
       ) : marketsQ.isError ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-red-700">{t("public.failedMarkets")}</CardContent>
+          <CardContent className="p-8 text-sm text-red-700">Failed to load markets.</CardContent>
         </Card>
       ) : (
         <div className="grid gap-5 xl:grid-cols-2">
@@ -68,7 +61,7 @@ export default function MyMarketsPage() {
                   {market.active_promo && <span className="status-chip status-warn">{market.active_promo.code}</span>}
                 </div>
                 <CardTitle className="font-display text-3xl">{market.name}</CardTitle>
-                <p className="text-sm text-slate-600">{market.featured_headline || market.address || t("market.noAddress")}</p>
+                <p className="text-sm text-slate-600">{market.featured_headline || market.address || "No address added yet."}</p>
               </CardHeader>
               <CardContent className="grid gap-4">
                 <div className="grid gap-3 md:grid-cols-3">
@@ -100,7 +93,7 @@ export default function MyMarketsPage() {
                   <Link to={`/markets/${market.id}`}>
                     <span className="inline-flex items-center gap-2">
                       <Settings className="h-4 w-4" />
-                      {t("markets.openSettings")}
+                      Open settings
                     </span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -115,7 +108,7 @@ export default function MyMarketsPage() {
                   >
                     <Link to={`/markets/${market.id}/items`}>
                       <Package className="mr-2 h-4 w-4" />
-                      {t("markets.manageItems")}
+                      Manage items
                     </Link>
                   </Button>
                   <Button
@@ -126,7 +119,7 @@ export default function MyMarketsPage() {
                   >
                     <Link to={`/markets/${market.id}/promo-codes`}>
                       <TicketPercent className="mr-2 h-4 w-4" />
-                      {t("markets.managePromos")}
+                      Manage promos
                     </Link>
                   </Button>
                 </div>
@@ -135,7 +128,7 @@ export default function MyMarketsPage() {
           ))}
           {markets.length === 0 && (
             <Card className="rounded-[30px]">
-              <CardContent className="p-8 text-sm text-slate-600">{t("markets.noAssigned")}</CardContent>
+              <CardContent className="p-8 text-sm text-slate-600">No markets are assigned to your account yet.</CardContent>
             </Card>
           )}
         </div>

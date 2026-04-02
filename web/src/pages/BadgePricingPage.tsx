@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Megaphone, Send, Sparkles, Star, Users } from "lucide-react";
+import { Send, Sparkles, Star, Users } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
@@ -76,12 +76,7 @@ export default function BadgePricingPage() {
   return (
     <div className="grid gap-6">
       <section className="intro-panel">
-        <div className="command-chip">
-          <Megaphone className="h-3.5 w-3.5" />
-          Badge pricing
-        </div>
-        <h1 className="intro-title mt-3">Badge plans for promoted markets</h1>
-        <p className="intro-copy">Owners can send badge requests to admins from here. Admins still control final badge assignment on each market.</p>
+        <h1 className="intro-title">Badge pricing</h1>
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">

@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
 import { useMe } from "@/lib/useMe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +22,14 @@ type UserRecord = {
 
 const ROLE_OPTIONS = ["admin", "owner", "staff", "customer", "driver"] as const;
 
+const ROLE_LABELS: Record<(typeof ROLE_OPTIONS)[number], string> = {
+  admin: "Admin",
+  owner: "Owner",
+  staff: "Staff",
+  customer: "Customer",
+  driver: "Driver",
+};
+
 function getErrorMessage(error: unknown) {
   if (!error || typeof error !== "object") {
     return null;
@@ -39,8 +46,6 @@ function RolePicker({
   value: string[];
   onChange: (roles: string[]) => void;
 }) {
-  const { t } = useI18n();
-
   return (
     <div className="flex flex-wrap gap-2">
       {ROLE_OPTIONS.map((role) => {
@@ -57,7 +62,7 @@ function RolePicker({
               active ? "bg-slate-950 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200",
             ].join(" ")}
           >
-            {t(`role.${role}`)}
+            {ROLE_LABELS[role]}
           </button>
         );
       })}
@@ -66,7 +71,6 @@ function RolePicker({
 }
 
 export default function UsersPage() {
-  const { t } = useI18n();
   const queryClient = useQueryClient();
   const meQ = useMe();
   const isAdmin = (meQ.data?.roles ?? []).includes("admin");
@@ -137,7 +141,7 @@ export default function UsersPage() {
     return (
       <Card className="rounded-[30px]">
         <CardContent className="p-8 text-sm text-slate-600">
-          {t("users.onlyAdmin")}
+          Only admins can manage users.
         </CardContent>
       </Card>
     );
@@ -146,56 +150,54 @@ export default function UsersPage() {
   return (
     <div className="grid gap-6">
       <div className="intro-panel">
-        <div className="section-kicker">{t("users.adminTitle")}</div>
-        <h1 className="intro-title">{t("users.adminTitle")}</h1>
-        <p className="intro-copy">{t("users.adminText")}</p>
+        <h1 className="intro-title">Users</h1>
       </div>
 
       <Card className="rounded-[30px]">
         <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle className="font-display text-3xl">{t("users.users")}</CardTitle>
+          <CardTitle className="font-display text-3xl">Users</CardTitle>
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button className="rounded-2xl">
                 <UserPlus className="mr-2 h-4 w-4" />
-                {t("users.addUser")}
+                Add user
               </Button>
             </DialogTrigger>
             <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
               <DialogHeader>
                 <div className="app-modal-header">
-                  <DialogTitle className="panel-title">{t("users.createUser")}</DialogTitle>
+                  <DialogTitle className="panel-title">Create user</DialogTitle>
                 </div>
               </DialogHeader>
               <div className="app-modal-body">
-              <div className="app-modal-main">
-                <div className="grid gap-2">
-                  <Label className="field-label">{t("auth.name")}</Label>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
+                <div className="app-modal-main">
+                  <div className="grid gap-2">
+                    <Label className="field-label">Name</Label>
+                    <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="field-label">Email</Label>
+                    <Input value={email} onChange={(event) => setEmail(event.target.value)} className="input-shell" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="field-label">Password</Label>
+                    <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="input-shell" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="field-label">Roles</Label>
+                    <RolePicker value={roles} onChange={setRoles} />
+                  </div>
+                  {getErrorMessage(createUserM.error) && (
+                    <div className="text-sm text-red-700">{getErrorMessage(createUserM.error)}</div>
+                  )}
                 </div>
-                <div className="grid gap-2">
-                  <Label className="field-label">{t("auth.email")}</Label>
-                  <Input value={email} onChange={(event) => setEmail(event.target.value)} className="input-shell" />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="field-label">{t("auth.password")}</Label>
-                  <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="input-shell" />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="field-label">{t("users.roles")}</Label>
-                  <RolePicker value={roles} onChange={setRoles} />
-                </div>
-                {getErrorMessage(createUserM.error) && (
-                  <div className="text-sm text-red-700">{getErrorMessage(createUserM.error)}</div>
-                )}
-              </div>
               </div>
               <DialogFooter className="app-modal-footer">
                 <Button
                   onClick={() => createUserM.mutate()}
                   disabled={createUserM.isPending || !name.trim() || !email.trim() || !password || roles.length === 0}
                 >
-                  {createUserM.isPending ? t("users.creating") : t("users.createUser")}
+                  {createUserM.isPending ? "Creating..." : "Create user"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -203,18 +205,18 @@ export default function UsersPage() {
         </CardHeader>
         <CardContent>
           {usersQ.isLoading ? (
-            <div className="text-sm text-slate-600">{t("users.loading")}</div>
+            <div className="text-sm text-slate-600">Loading users...</div>
           ) : usersQ.isError ? (
-            <div className="text-sm text-red-700">{t("users.failed")}</div>
+            <div className="text-sm text-red-700">Failed to load users.</div>
           ) : (
             <div className="overflow-hidden rounded-[24px] border border-slate-200/80">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("auth.name")}</TableHead>
-                    <TableHead>{t("auth.email")}</TableHead>
-                    <TableHead>{t("users.roles")}</TableHead>
-                    <TableHead className="text-right">{t("users.action")}</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Roles</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -226,7 +228,7 @@ export default function UsersPage() {
                         <div className="flex flex-wrap gap-2">
                           {user.roles.map((role) => (
                             <Badge key={role} variant="secondary" className="rounded-full">
-                              {t(`role.${role}`)}
+                              {ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}
                             </Badge>
                           ))}
                         </div>
@@ -244,7 +246,7 @@ export default function UsersPage() {
                           }}
                         >
                           <Shield className="mr-2 h-4 w-4" />
-                          {t("users.edit")}
+                          Edit
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -260,38 +262,38 @@ export default function UsersPage() {
         <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
           <DialogHeader>
             <div className="app-modal-header">
-              <DialogTitle className="panel-title">{t("users.editUser")}</DialogTitle>
+              <DialogTitle className="panel-title">Edit user</DialogTitle>
             </div>
           </DialogHeader>
           <div className="app-modal-body">
-          <div className="app-modal-main">
-            <div className="grid gap-2">
-              <Label className="field-label">{t("auth.name")}</Label>
-              <Input value={editName} onChange={(event) => setEditName(event.target.value)} className="input-shell" />
+            <div className="app-modal-main">
+              <div className="grid gap-2">
+                <Label className="field-label">Name</Label>
+                <Input value={editName} onChange={(event) => setEditName(event.target.value)} className="input-shell" />
+              </div>
+              <div className="grid gap-2">
+                <Label className="field-label">Email</Label>
+                <Input value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="input-shell" />
+              </div>
+              <div className="grid gap-2">
+                <Label className="field-label">New password (optional)</Label>
+                <Input type="password" value={editPassword} onChange={(event) => setEditPassword(event.target.value)} className="input-shell" />
+              </div>
+              <div className="grid gap-2">
+                <Label className="field-label">Roles</Label>
+                <RolePicker value={editRoles} onChange={setEditRoles} />
+              </div>
+              {getErrorMessage(updateUserM.error) && (
+                <div className="text-sm text-red-700">{getErrorMessage(updateUserM.error)}</div>
+              )}
             </div>
-            <div className="grid gap-2">
-              <Label className="field-label">{t("auth.email")}</Label>
-              <Input value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="input-shell" />
-            </div>
-            <div className="grid gap-2">
-              <Label className="field-label">{t("users.newPasswordOptional")}</Label>
-              <Input type="password" value={editPassword} onChange={(event) => setEditPassword(event.target.value)} className="input-shell" />
-            </div>
-            <div className="grid gap-2">
-              <Label className="field-label">{t("users.roles")}</Label>
-              <RolePicker value={editRoles} onChange={setEditRoles} />
-            </div>
-            {getErrorMessage(updateUserM.error) && (
-              <div className="text-sm text-red-700">{getErrorMessage(updateUserM.error)}</div>
-            )}
-          </div>
           </div>
           <DialogFooter className="app-modal-footer">
             <Button
               onClick={() => updateUserM.mutate()}
               disabled={!editingUser || updateUserM.isPending || !editName.trim() || !editEmail.trim() || editRoles.length === 0}
             >
-              {updateUserM.isPending ? t("users.saving") : t("users.saveChanges")}
+              {updateUserM.isPending ? "Saving..." : "Save changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

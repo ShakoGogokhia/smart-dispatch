@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Market;
-use App\Models\ProductReview;
 use App\Models\PromoCode;
+use App\Models\ProductReview;
 use Illuminate\Http\Request;
 
 class PublicMarketController extends Controller
@@ -126,8 +126,7 @@ class PublicMarketController extends Controller
     {
         abort_unless($market->is_active, 404);
 
-        // Assuming you have Item model + items table with market_id
-        return $market->items()
+        $query = $market->items()
             ->where('is_active', true)
             ->select([
                 'id',
@@ -145,11 +144,22 @@ class PublicMarketController extends Controller
                 'availability_schedule',
                 'low_stock_threshold',
             ])
-            ->withCount('reviews')
-            ->withAvg('reviews', 'rating')
-            ->orderBy('name')
+            ->orderBy('name');
+
+        if (ProductReview::tableExists()) {
+            $query
+                ->withCount('reviews')
+                ->withAvg('reviews', 'rating');
+        }
+
+        return $query
             ->get()
             ->map(function ($item) {
+                $reviewCount = ProductReview::tableExists() ? (int) ($item->reviews_count ?? 0) : 0;
+                $reviewAverage = ProductReview::tableExists() && $item->reviews_avg_rating !== null
+                    ? round((float) $item->reviews_avg_rating, 1)
+                    : null;
+
                 return [
                     'id' => $item->id,
                     'market_id' => $item->market_id,
@@ -167,8 +177,8 @@ class PublicMarketController extends Controller
                     'low_stock_threshold' => $item->low_stock_threshold,
                     'is_low_stock' => $item->stock_qty <= $item->low_stock_threshold,
                     'review_summary' => [
-                        'count' => (int) ($item->reviews_count ?? 0),
-                        'average' => $item->reviews_avg_rating !== null ? round((float) $item->reviews_avg_rating, 1) : null,
+                        'count' => $reviewCount,
+                        'average' => $reviewAverage,
                     ],
                 ];
             });

@@ -160,16 +160,7 @@ export default function MarketPromoCodesPage() {
       <section className="intro-panel">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="command-chip">
-              <TicketPercent className="h-3.5 w-3.5" />
-              {isGlobalMode ? "Global promotion workspace" : "Promotion workspace"}
-            </div>
-            <h1 className="intro-title">{isGlobalMode ? "Global promo codes" : `Market #${id} promo codes`}</h1>
-            <p className="intro-copy">
-              {isGlobalMode
-                ? "Create platform-wide promo codes that can be used across markets when no market-specific code overrides them."
-                : "Create and refine the discount layer while admins control which storefront gets the public spotlight."}
-            </p>
+            <h1 className="intro-title">Promo codes</h1>
           </div>
 
           <Button size="lg" onClick={() => setCreateOpen(true)}>
