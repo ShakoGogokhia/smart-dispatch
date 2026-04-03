@@ -135,6 +135,9 @@ export default function CheckoutPage() {
           name: item.name,
           qty: item.qty,
           price: item.price,
+          ingredients: item.ingredients ?? [],
+          removed_ingredients: item.removed_ingredients ?? [],
+          combo_offer: item.combo_offer ?? null,
         })),
       };
 
@@ -157,14 +160,14 @@ export default function CheckoutPage() {
     }
   }
 
-  function increment(itemId: number) {
-    persistCart(cart.map((item) => (item.item_id === itemId ? { ...item, qty: item.qty + 1 } : item)));
+  function increment(cartId: string) {
+    persistCart(cart.map((item) => (item.cart_id === cartId ? { ...item, qty: item.qty + 1 } : item)));
   }
 
-  function decrement(itemId: number) {
+  function decrement(cartId: string) {
     persistCart(
       cart
-        .map((item) => (item.item_id === itemId ? { ...item, qty: item.qty - 1 } : item))
+        .map((item) => (item.cart_id === cartId ? { ...item, qty: item.qty - 1 } : item))
         .filter((item) => item.qty > 0),
     );
   }
@@ -453,7 +456,7 @@ export default function CheckoutPage() {
                   <div className="space-y-4">
                     {cart.map((item) => (
                       <div
-                        key={item.item_id}
+                        key={item.cart_id}
                         className="rounded-[1.75rem] border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/70 sm:p-5"
                       >
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -462,6 +465,16 @@ export default function CheckoutPage() {
                             <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                               {formatMoney(item.price)} each
                             </div>
+                            {item.combo_offer ? (
+                              <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                                Combo: {item.combo_offer.name}
+                              </div>
+                            ) : null}
+                            {(item.removed_ingredients ?? []).length > 0 ? (
+                              <div className="mt-2 text-sm text-violet-600 dark:text-violet-300">
+                                Without: {item.removed_ingredients?.join(", ")}
+                              </div>
+                            ) : null}
                           </div>
 
                           <div className="flex items-center gap-3 self-start sm:self-center">
@@ -473,7 +486,7 @@ export default function CheckoutPage() {
                               <Button
                                 variant="outline"
                                 className="h-10 w-10 rounded-xl px-0"
-                                onClick={() => decrement(item.item_id)}
+                                onClick={() => decrement(item.cart_id)}
                               >
                                 -
                               </Button>
@@ -481,7 +494,7 @@ export default function CheckoutPage() {
                               <Button
                                 variant="outline"
                                 className="h-10 w-10 rounded-xl px-0"
-                                onClick={() => increment(item.item_id)}
+                                onClick={() => increment(item.cart_id)}
                               >
                                 +
                               </Button>

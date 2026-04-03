@@ -21,6 +21,8 @@ export type StorefrontItemPreview = {
   image_url?: string | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
+  ingredients?: Array<{ name: string; removable: boolean }> | null;
+  combo_offers?: Array<{ name: string; description?: string | null; combo_price: number | string }> | null;
   price: number | string;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: number | string;

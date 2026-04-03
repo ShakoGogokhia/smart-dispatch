@@ -6,6 +6,7 @@ use App\Models\Item;
 use App\Models\Market;
 use App\Models\ProductReview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ItemController extends Controller
@@ -36,9 +37,16 @@ class ItemController extends Controller
             'stock_qty' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
             'category' => ['nullable', 'string', 'max:120'],
-            'image_url' => ['nullable', 'url'],
+            'image_url' => ['nullable', 'string', 'max:2048'],
             'variants' => ['nullable', 'array'],
             'availability_schedule' => ['nullable', 'array'],
+            'ingredients' => ['nullable', 'array'],
+            'ingredients.*.name' => ['required_with:ingredients', 'string', 'max:120'],
+            'ingredients.*.removable' => ['nullable', 'boolean'],
+            'combo_offers' => ['nullable', 'array'],
+            'combo_offers.*.name' => ['required_with:combo_offers', 'string', 'max:120'],
+            'combo_offers.*.description' => ['nullable', 'string', 'max:255'],
+            'combo_offers.*.combo_price' => ['required_with:combo_offers', 'numeric', 'min:0'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
         ]);
 
@@ -55,6 +63,8 @@ class ItemController extends Controller
             'image_url' => $data['image_url'] ?? null,
             'variants' => $data['variants'] ?? null,
             'availability_schedule' => $data['availability_schedule'] ?? null,
+            'ingredients' => $this->normalizeIngredients($data['ingredients'] ?? null),
+            'combo_offers' => $this->normalizeComboOffers($data['combo_offers'] ?? null),
             'low_stock_threshold' => $data['low_stock_threshold'] ?? 5,
         ]);
 
@@ -76,14 +86,52 @@ class ItemController extends Controller
             'stock_qty' => ['sometimes', 'integer', 'min:0'],
             'is_active' => ['sometimes', 'boolean'],
             'category' => ['nullable', 'string', 'max:120'],
-            'image_url' => ['nullable', 'url'],
+            'image_url' => ['nullable', 'string', 'max:2048'],
             'variants' => ['nullable', 'array'],
             'availability_schedule' => ['nullable', 'array'],
+            'ingredients' => ['nullable', 'array'],
+            'ingredients.*.name' => ['required_with:ingredients', 'string', 'max:120'],
+            'ingredients.*.removable' => ['nullable', 'boolean'],
+            'combo_offers' => ['nullable', 'array'],
+            'combo_offers.*.name' => ['required_with:combo_offers', 'string', 'max:120'],
+            'combo_offers.*.description' => ['nullable', 'string', 'max:255'],
+            'combo_offers.*.combo_price' => ['required_with:combo_offers', 'numeric', 'min:0'],
             'low_stock_threshold' => ['sometimes', 'integer', 'min:0'],
         ]);
 
+        if (array_key_exists('ingredients', $data)) {
+            $data['ingredients'] = $this->normalizeIngredients($data['ingredients']);
+        }
+
+        if (array_key_exists('combo_offers', $data)) {
+            $data['combo_offers'] = $this->normalizeComboOffers($data['combo_offers']);
+        }
+
         $item->update($data);
         return $this->serializeItem($item->fresh());
+    }
+
+    public function uploadImage(Request $request, Market $market, Item $item)
+    {
+        if ($item->market_id !== $market->id) {
+            return response()->json(['message' => 'Item does not belong to market'], 400);
+        }
+
+        $request->validate([
+            'image' => ['required', 'image', 'max:4096'],
+        ]);
+
+        $path = $request->file('image')->store('item-images', 'public');
+
+        if ($item->image_path) {
+            Storage::disk('public')->delete($item->image_path);
+        }
+
+        $item->update([
+            'image_path' => $path,
+        ]);
+
+        return response()->json($this->serializeItem($item->fresh()));
     }
 
     public function importCsv(Request $request, Market $market)
@@ -128,6 +176,8 @@ class ItemController extends Controller
                     'image_url' => $row['image_url'] ?? null,
                     'variants' => !empty($row['variants']) ? json_decode($row['variants'], true) : null,
                     'availability_schedule' => !empty($row['availability_schedule']) ? json_decode($row['availability_schedule'], true) : null,
+                    'ingredients' => $this->normalizeIngredients(!empty($row['ingredients']) ? json_decode($row['ingredients'], true) : null),
+                    'combo_offers' => $this->normalizeComboOffers(!empty($row['combo_offers']) ? json_decode($row['combo_offers'], true) : null),
                     'low_stock_threshold' => (int) ($row['low_stock_threshold'] ?? 5),
                 ],
             );
@@ -145,7 +195,7 @@ class ItemController extends Controller
             'Content-Disposition' => 'attachment; filename="market-' . $market->id . '-items.csv"',
         ];
 
-        $columns = ['name', 'sku', 'category', 'price', 'discount_type', 'discount_value', 'stock_qty', 'low_stock_threshold', 'is_active', 'image_url', 'variants', 'availability_schedule'];
+        $columns = ['name', 'sku', 'category', 'price', 'discount_type', 'discount_value', 'stock_qty', 'low_stock_threshold', 'is_active', 'image_url', 'variants', 'availability_schedule', 'ingredients', 'combo_offers'];
 
         return response()->stream(function () use ($market, $columns) {
             $handle = fopen('php://output', 'w');
@@ -165,6 +215,8 @@ class ItemController extends Controller
                     $item->image_url,
                     $item->variants ? json_encode($item->variants) : '',
                     $item->availability_schedule ? json_encode($item->availability_schedule) : '',
+                    $item->ingredients ? json_encode($item->ingredients) : '',
+                    $item->combo_offers ? json_encode($item->combo_offers) : '',
                 ]);
             }
 
@@ -191,6 +243,8 @@ class ItemController extends Controller
             'image_url' => $item->image_url,
             'variants' => $item->variants,
             'availability_schedule' => $item->availability_schedule,
+            'ingredients' => $item->ingredients ?? [],
+            'combo_offers' => $item->combo_offers ?? [],
             'price' => $item->price,
             'discount_type' => $item->discount_type,
             'discount_value' => $item->discount_value,
@@ -203,5 +257,60 @@ class ItemController extends Controller
                 'average' => $avg !== null ? round((float) $avg, 1) : null,
             ],
         ];
+    }
+
+    private function normalizeIngredients(?array $ingredients): ?array
+    {
+        if (!is_array($ingredients)) {
+            return null;
+        }
+
+        $normalized = collect($ingredients)
+            ->filter(fn ($ingredient) => is_array($ingredient))
+            ->map(function (array $ingredient) {
+                $name = trim((string) ($ingredient['name'] ?? ''));
+
+                if ($name === '') {
+                    return null;
+                }
+
+                return [
+                    'name' => $name,
+                    'removable' => (bool) ($ingredient['removable'] ?? false),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return $normalized === [] ? null : $normalized;
+    }
+
+    private function normalizeComboOffers(?array $comboOffers): ?array
+    {
+        if (!is_array($comboOffers)) {
+            return null;
+        }
+
+        $normalized = collect($comboOffers)
+            ->filter(fn ($comboOffer) => is_array($comboOffer))
+            ->map(function (array $comboOffer) {
+                $name = trim((string) ($comboOffer['name'] ?? ''));
+
+                if ($name === '') {
+                    return null;
+                }
+
+                return [
+                    'name' => $name,
+                    'description' => trim((string) ($comboOffer['description'] ?? '')) ?: null,
+                    'combo_price' => round((float) ($comboOffer['combo_price'] ?? 0), 2),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return $normalized === [] ? null : $normalized;
     }
 }

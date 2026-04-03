@@ -64,6 +64,9 @@ export type OrderItem = {
   qty: number;
   unit_price: number | string;
   line_total: number | string;
+  ingredients?: Array<{ name: string; removable: boolean }> | null;
+  removed_ingredients?: string[] | null;
+  combo_offer?: { name: string; description?: string | null; combo_price: number | string } | null;
 };
 
 export type DriverLite = {
@@ -143,7 +146,14 @@ export type Order = {
     subtotal?: number | string;
     discount_total?: number | string;
     total?: number | string;
-    items?: Array<{ name: string; qty: number; unit_price?: number | string; line_total?: number | string }>;
+    items?: Array<{
+      name: string;
+      qty: number;
+      unit_price?: number | string;
+      line_total?: number | string;
+      removed_ingredients?: string[];
+      combo_offer?: { name: string; description?: string | null; combo_price: number | string } | null;
+    }>;
   };
   refund_summary?: {
     status?: string | null;
@@ -238,6 +248,8 @@ export type Item = {
   image_url?: string | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
+  ingredients?: Array<{ name: string; removable: boolean }> | null;
+  combo_offers?: Array<{ name: string; description?: string | null; combo_price: number | string }> | null;
   price: string | number;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: string | number;

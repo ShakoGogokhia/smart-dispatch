@@ -31,6 +31,10 @@ class PublicMarketItemsTest extends TestCase
             'price' => 5.50,
             'stock_qty' => 30,
             'is_active' => true,
+            'ingredients' => [
+                ['name' => 'Orange', 'removable' => false],
+                ['name' => 'Ice', 'removable' => true],
+            ],
         ]);
 
         Schema::drop('product_reviews');
@@ -39,6 +43,8 @@ class PublicMarketItemsTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1)
             ->assertJsonPath('0.name', 'Orange Juice')
+            ->assertJsonPath('0.ingredients.0.name', 'Orange')
+            ->assertJsonPath('0.ingredients.1.removable', true)
             ->assertJsonPath('0.review_summary.count', 0)
             ->assertJsonPath('0.review_summary.average', null);
     }

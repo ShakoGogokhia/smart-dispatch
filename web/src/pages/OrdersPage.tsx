@@ -661,8 +661,20 @@ export default function OrdersPage() {
                         <div className="theme-muted mt-2 text-sm">{detailOrder.receipt?.number || "Pending receipt"}</div>
                         <div className="mt-4 grid gap-2 text-sm">
                           {(detailOrder.receipt?.items ?? []).map((item, index) => (
-                            <div key={`${item.name}-${index}`} className="flex items-center justify-between gap-3">
-                              <span>{item.name} x{item.qty}</span>
+                            <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3">
+                              <div>
+                                <span>{item.name} x{item.qty}</span>
+                                {item.combo_offer ? (
+                                  <div className="theme-muted text-xs">
+                                    Combo: {item.combo_offer.name}
+                                  </div>
+                                ) : null}
+                                {(item.removed_ingredients ?? []).length > 0 ? (
+                                  <div className="theme-muted text-xs">
+                                    Without: {item.removed_ingredients?.join(", ")}
+                                  </div>
+                                ) : null}
+                              </div>
                               <span>{formatMoney(item.line_total ?? 0)}</span>
                             </div>
                           ))}

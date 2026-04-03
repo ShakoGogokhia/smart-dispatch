@@ -3,6 +3,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Storage;
 
 class Item extends Model
 {
@@ -12,8 +13,10 @@ class Item extends Model
         'market_id','name','sku','price',
         'discount_type','discount_value',
         'stock_qty','is_active',
-        'category','image_url','variants',
-        'availability_schedule','low_stock_threshold',
+        'category','image_url','image_path',
+        'variants','availability_schedule',
+        'ingredients','combo_offers',
+        'low_stock_threshold',
     ];
 
     protected $casts = [
@@ -22,7 +25,18 @@ class Item extends Model
         'is_active' => 'boolean',
         'variants' => 'array',
         'availability_schedule' => 'array',
+        'ingredients' => 'array',
+        'combo_offers' => 'array',
     ];
+
+    public function getImageUrlAttribute(?string $value): ?string
+    {
+        if ($this->image_path) {
+            return Storage::disk('public')->url($this->image_path);
+        }
+
+        return $value;
+    }
 
     public function market()
     {

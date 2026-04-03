@@ -14,6 +14,15 @@ class OrderItem extends Model
         'qty',
         'unit_price',
         'line_total',
+        'ingredients',
+        'removed_ingredients',
+        'combo_offer',
+    ];
+
+    protected $casts = [
+        'ingredients' => 'array',
+        'removed_ingredients' => 'array',
+        'combo_offer' => 'array',
     ];
 
     public function order()

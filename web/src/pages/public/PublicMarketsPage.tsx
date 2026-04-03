@@ -158,9 +158,20 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
                 key={item.id}
                 className="flex items-center justify-between gap-3 text-sm"
               >
-                <span className="font-medium text-zinc-800 dark:text-zinc-200 line-clamp-1">
-                  {item.name}
-                </span>
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="h-10 w-10 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800">
+                    {item.image_url ? (
+                      <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-zinc-400 dark:text-zinc-600">
+                        <Store className="h-4 w-4" />
+                      </div>
+                    )}
+                  </div>
+                  <span className="font-medium text-zinc-800 dark:text-zinc-200 line-clamp-1">
+                    {item.name}
+                  </span>
+                </div>
                 <span className="font-semibold whitespace-nowrap text-emerald-600 dark:text-emerald-400">
                   {formatMoney(calcStorefrontPrice(item))}
                 </span>
@@ -355,7 +366,7 @@ export default function PublicMarketsPage() {
             <div className="w-10 h-10 rounded-2xl bg-cyan-600 flex items-center justify-center shadow-lg">
               <Sparkles className="h-5 w-5 text-white" />
             </div>
-            <span className="font-bold text-2xl tracking-tighter">marketly</span>
+            <span className="font-bold text-2xl tracking-tighter">SMART_DISPATCH</span>
           </Link>
 
           <div className="flex items-center gap-4 sm:gap-6">

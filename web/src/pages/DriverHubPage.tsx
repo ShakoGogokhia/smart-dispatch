@@ -135,7 +135,11 @@ function OrderCard({
         {order.notes && <div>{text.deliveryNotes}: {order.notes}</div>}
         {order.items?.length ? (
           <div>
-            {text.items}: {order.items.map((item) => `${item.name} x${item.qty}`).join(", ")}
+            {text.items}: {order.items.map((item) => {
+              const combo = item.combo_offer?.name ? ` [combo: ${item.combo_offer.name}]` : "";
+              const removed = (item.removed_ingredients ?? []).length ? ` (without ${(item.removed_ingredients ?? []).join(", ")})` : "";
+              return `${item.name} x${item.qty}${combo}${removed}`;
+            }).join(", ")}
           </div>
         ) : null}
       </div>

@@ -106,6 +106,15 @@ class OrderController extends Controller
             'items.*.sku' => ['nullable', 'string', 'max:255'],
             'items.*.qty' => ['required_with:items', 'integer', 'min:1'],
             'items.*.price' => ['required_with:items', 'numeric', 'min:0'],
+            'items.*.ingredients' => ['nullable', 'array'],
+            'items.*.ingredients.*.name' => ['required_with:items.*.ingredients', 'string', 'max:120'],
+            'items.*.ingredients.*.removable' => ['nullable', 'boolean'],
+            'items.*.removed_ingredients' => ['nullable', 'array'],
+            'items.*.removed_ingredients.*' => ['string', 'max:120'],
+            'items.*.combo_offer' => ['nullable', 'array'],
+            'items.*.combo_offer.name' => ['required_with:items.*.combo_offer', 'string', 'max:120'],
+            'items.*.combo_offer.description' => ['nullable', 'string', 'max:255'],
+            'items.*.combo_offer.combo_price' => ['required_with:items.*.combo_offer', 'numeric', 'min:0'],
         ]);
 
         $market = !empty($data['market_id']) ? Market::findOrFail($data['market_id']) : null;
@@ -114,24 +123,38 @@ class OrderController extends Controller
             if (!empty($item['item_id'])) {
                 $dbItem = Item::find($item['item_id']);
                 if ($dbItem) {
+                    $ingredients = $this->normalizeIngredients($dbItem->ingredients);
+                    $comboOffer = $this->resolveComboOffer($dbItem, $item['combo_offer'] ?? null);
+                    $unitPrice = $comboOffer['combo_price'] ?? (float) $item['price'];
+
                     return [
                         'item_id' => $dbItem->id,
                         'name' => $dbItem->name,
                         'sku' => $dbItem->sku,
                         'qty' => (int) $item['qty'],
-                        'unit_price' => (float) $item['price'],
-                        'line_total' => (float) $item['price'] * (int) $item['qty'],
+                        'unit_price' => $unitPrice,
+                        'line_total' => $unitPrice * (int) $item['qty'],
+                        'ingredients' => $ingredients,
+                        'removed_ingredients' => $this->normalizeRemovedIngredients($ingredients, $item['removed_ingredients'] ?? []),
+                        'combo_offer' => $comboOffer,
                     ];
                 }
             }
+
+            $ingredients = $this->normalizeIngredients($item['ingredients'] ?? null);
+            $comboOffer = $this->normalizeComboOffer($item['combo_offer'] ?? null);
+            $unitPrice = $comboOffer['combo_price'] ?? (float) $item['price'];
 
             return [
                 'item_id' => $item['item_id'] ?? null,
                 'name' => $item['name'] ?? 'Item',
                 'sku' => $item['sku'] ?? null,
                 'qty' => (int) $item['qty'],
-                'unit_price' => (float) $item['price'],
-                'line_total' => (float) $item['price'] * (int) $item['qty'],
+                'unit_price' => $unitPrice,
+                'line_total' => $unitPrice * (int) $item['qty'],
+                'ingredients' => $ingredients,
+                'removed_ingredients' => $this->normalizeRemovedIngredients($ingredients, $item['removed_ingredients'] ?? []),
+                'combo_offer' => $comboOffer,
             ];
         });
 
@@ -189,6 +212,9 @@ class OrderController extends Controller
                     'qty' => $item['qty'],
                     'unit_price' => $item['unit_price'],
                     'line_total' => $item['line_total'],
+                    'ingredients' => $item['ingredients'],
+                    'removed_ingredients' => $item['removed_ingredients'],
+                    'combo_offer' => $item['combo_offer'],
                 ]);
             });
 
@@ -497,6 +523,9 @@ class OrderController extends Controller
                     'qty' => $item->qty,
                     'unit_price' => $item->unit_price,
                     'line_total' => $item->line_total,
+                    'ingredients' => $item->ingredients,
+                    'removed_ingredients' => $item->removed_ingredients,
+                    'combo_offer' => $item->combo_offer,
                 ]);
             }
 
@@ -630,6 +659,8 @@ class OrderController extends Controller
                 'qty' => $item->qty,
                 'unit_price' => $item->unit_price,
                 'line_total' => $item->line_total,
+                'removed_ingredients' => $item->removed_ingredients ?? [],
+                'combo_offer' => $item->combo_offer,
             ])->values(),
         ]);
         $order->setAttribute('refund_summary', [
@@ -731,5 +762,86 @@ class OrderController extends Controller
         }
 
         return now()->parse($data['time_window_start'])->format('H:i') . ' - ' . now()->parse($data['time_window_end'])->format('H:i');
+    }
+
+    private function normalizeIngredients(?array $ingredients): array
+    {
+        if (!is_array($ingredients)) {
+            return [];
+        }
+
+        return collect($ingredients)
+            ->filter(fn ($ingredient) => is_array($ingredient))
+            ->map(function (array $ingredient) {
+                $name = trim((string) ($ingredient['name'] ?? ''));
+
+                if ($name === '') {
+                    return null;
+                }
+
+                return [
+                    'name' => $name,
+                    'removable' => (bool) ($ingredient['removable'] ?? false),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function normalizeRemovedIngredients(array $ingredients, mixed $removedIngredients): array
+    {
+        if (!is_array($removedIngredients) || $ingredients === []) {
+            return [];
+        }
+
+        $removable = collect($ingredients)
+            ->filter(fn (array $ingredient) => (bool) ($ingredient['removable'] ?? false))
+            ->map(fn (array $ingredient) => mb_strtolower($ingredient['name']))
+            ->values();
+
+        return collect($removedIngredients)
+            ->filter(fn ($value) => is_string($value))
+            ->map(fn (string $value) => trim($value))
+            ->filter()
+            ->unique(fn (string $value) => mb_strtolower($value))
+            ->filter(fn (string $value) => $removable->contains(mb_strtolower($value)))
+            ->values()
+            ->all();
+    }
+
+    private function resolveComboOffer(Item $item, mixed $comboOffer): ?array
+    {
+        $requested = $this->normalizeComboOffer($comboOffer);
+
+        if ($requested === null) {
+            return null;
+        }
+
+        $available = collect($item->combo_offers ?? [])
+            ->map(fn ($offer) => $this->normalizeComboOffer($offer))
+            ->filter()
+            ->first(fn (array $offer) => mb_strtolower($offer['name']) === mb_strtolower($requested['name']));
+
+        return $available ?: null;
+    }
+
+    private function normalizeComboOffer(mixed $comboOffer): ?array
+    {
+        if (!is_array($comboOffer)) {
+            return null;
+        }
+
+        $name = trim((string) ($comboOffer['name'] ?? ''));
+
+        if ($name === '') {
+            return null;
+        }
+
+        return [
+            'name' => $name,
+            'description' => trim((string) ($comboOffer['description'] ?? '')) ?: null,
+            'combo_price' => round((float) ($comboOffer['combo_price'] ?? 0), 2),
+        ];
     }
 }

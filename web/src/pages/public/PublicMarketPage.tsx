@@ -22,7 +22,16 @@ import { Input } from "@/components/ui/input";
 import ThemeToggle from "@/components/ThemeToggle";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { clearCart, loadCart, saveCart, setActiveMarketId, type CartItem } from "@/lib/cart";
+import {
+  buildCartItemId,
+  clearCart,
+  loadCart,
+  saveCart,
+  setActiveMarketId,
+  type CartItem,
+  type ComboOffer,
+  type ItemIngredient,
+} from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
 import {
   calcStorefrontPrice,
@@ -38,6 +47,8 @@ type Item = {
   category?: string | null;
   image_url?: string | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
+  ingredients?: ItemIngredient[] | null;
+  combo_offers?: ComboOffer[] | null;
   price: number | string;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: number | string;
@@ -67,6 +78,10 @@ function getErrorMessage(error: unknown, fallback: string) {
 
   const axiosError = error as AxiosError<{ message?: string }>;
   return axiosError.response?.data?.message ?? fallback;
+}
+
+function getRemovableIngredients(item?: Item | null) {
+  return (item?.ingredients ?? []).filter((ingredient) => ingredient.removable);
 }
 
 function StarPicker({
@@ -148,6 +163,8 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedRemovedIngredients, setSelectedRemovedIngredients] = useState<string[]>([]);
+  const [selectedComboOfferName, setSelectedComboOfferName] = useState("");
   const [isMarketReviewsOpen, setIsMarketReviewsOpen] = useState(false);
 
   const [reviewComment, setReviewComment] = useState("");
@@ -163,6 +180,11 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     setActiveMarketId(marketId);
     setCart(loadCart(marketId));
   }, [marketId]);
+
+  useEffect(() => {
+    setSelectedRemovedIngredients([]);
+    setSelectedComboOfferName("");
+  }, [selectedItemId]);
 
   const marketQ = useQuery({
     queryKey: ["public-market", marketId],
@@ -288,6 +310,19 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     [itemsQ.data, selectedItemId]
   );
 
+  const selectedItemRemovableIngredients = useMemo(
+    () => getRemovableIngredients(selectedItem),
+    [selectedItem]
+  );
+
+  const selectedComboOffer = useMemo(
+    () =>
+      (selectedItem?.combo_offers ?? []).find(
+        (comboOffer) => comboOffer.name.toLowerCase() === selectedComboOfferName.toLowerCase(),
+      ) ?? null,
+    [selectedComboOfferName, selectedItem?.combo_offers]
+  );
+
   const marketReviewSummary = useMemo(() => {
     const marketReviews = marketReviewsQ.data ?? [];
     if (!marketReviews.length) {
@@ -316,36 +351,51 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     saveCart(marketId, newCart);
   };
 
-  const addToCart = (item: Item) => {
-    const price = calcStorefrontPrice(item);
-    const existing = cart.find((c) => c.item_id === item.id);
+  const addToCart = (item: Item, removedIngredients: string[] = [], comboOffer?: ComboOffer | null) => {
+    const normalizedRemovedIngredients = [...removedIngredients].sort((left, right) => left.localeCompare(right));
+    const price = comboOffer ? toNumber(comboOffer.combo_price) : calcStorefrontPrice(item);
+    const cartId = buildCartItemId(item.id, normalizedRemovedIngredients, comboOffer?.name);
+    const existing = cart.find((entry) => entry.cart_id === cartId);
 
     if (existing) {
       updateCart(
-        cart.map((c) =>
-          c.item_id === item.id ? { ...c, qty: c.qty + 1 } : c
+        cart.map((entry) =>
+          entry.cart_id === cartId ? { ...entry, qty: entry.qty + 1 } : entry
         )
       );
       return;
     }
 
-    updateCart([...cart, { item_id: item.id, name: item.name, price, qty: 1 }]);
+    updateCart([
+      ...cart,
+      {
+        cart_id: cartId,
+        item_id: item.id,
+        name: item.name,
+        price,
+        qty: 1,
+        image_url: item.image_url ?? null,
+        ingredients: item.ingredients ?? [],
+        removed_ingredients: normalizedRemovedIngredients,
+        combo_offer: comboOffer ?? null,
+      },
+    ]);
   };
 
-  const changeQty = (itemId: number, delta: number) => {
-    const target = cart.find((item) => item.item_id === itemId);
+  const changeQty = (cartId: string, delta: number) => {
+    const target = cart.find((item) => item.cart_id === cartId);
     if (!target) return;
 
     const nextQty = target.qty + delta;
 
     if (nextQty <= 0) {
-      updateCart(cart.filter((item) => item.item_id !== itemId));
+      updateCart(cart.filter((item) => item.cart_id !== cartId));
       return;
     }
 
     updateCart(
       cart.map((item) =>
-        item.item_id === itemId ? { ...item, qty: nextQty } : item
+        item.cart_id === cartId ? { ...item, qty: nextQty } : item
       )
     );
   };
@@ -535,6 +585,10 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                   const finalPrice = calcStorefrontPrice(item);
                   const isDiscounted = Math.abs(toNumber(item.price) - finalPrice) > 0.01;
                   const outOfStock = item.stock_qty <= 0;
+                  const ingredientCount = item.ingredients?.length ?? 0;
+                  const removableCount = getRemovableIngredients(item).length;
+                  const comboCount = item.combo_offers?.length ?? 0;
+                  const needsCustomization = ingredientCount > 0 || comboCount > 0;
 
                   return (
                     <Card
@@ -643,6 +697,24 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                           <span className="text-xs px-3 py-1 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                             Qty: {item.stock_qty}
                           </span>
+
+                          {ingredientCount > 0 && (
+                            <span className="text-xs px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300">
+                              {ingredientCount} ingredients
+                            </span>
+                          )}
+
+                          {removableCount > 0 && (
+                            <span className="text-xs px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+                              {removableCount} removable
+                            </span>
+                          )}
+
+                          {comboCount > 0 && (
+                            <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                              {comboCount} combos
+                            </span>
+                          )}
                         </div>
 
                         <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
@@ -655,15 +727,24 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                             }}
                             className="rounded-2xl h-11"
                           >
-                            Reviews
+                            Details
                           </Button>
 
                           <Button
-                            onClick={() => addToCart(item)}
+                            onClick={() => {
+                              if (needsCustomization) {
+                                setSelectedItemId(item.id);
+                                setReviewComment("");
+                                setReviewRating(5);
+                                return;
+                              }
+
+                              addToCart(item);
+                            }}
                             disabled={outOfStock || !item.is_active}
                             className="rounded-2xl h-11 font-medium"
                           >
-                            {outOfStock ? "Out of Stock" : "Add to Cart"}
+                            {outOfStock ? "Out of Stock" : needsCustomization ? "Customize" : "Add to Cart"}
                           </Button>
                         </div>
                       </CardContent>
@@ -734,7 +815,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 <div className="mt-8 space-y-3 max-h-[26rem] overflow-y-auto pr-1">
                   {cart.map((item) => (
                     <div
-                      key={item.item_id}
+                      key={item.cart_id}
                       className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/60 dark:bg-zinc-950/60"
                     >
                       <div className="flex justify-between gap-4">
@@ -743,6 +824,16 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                           <div className="text-zinc-500 text-xs mt-1">
                             {formatMoney(item.price)} each
                           </div>
+                          {item.combo_offer ? (
+                            <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                              Combo: {item.combo_offer.name}
+                            </div>
+                          ) : null}
+                          {(item.removed_ingredients ?? []).length > 0 ? (
+                            <div className="mt-2 text-xs text-violet-600 dark:text-violet-300">
+                              Without: {item.removed_ingredients?.join(", ")}
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="text-right font-semibold whitespace-nowrap">
@@ -755,7 +846,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                           variant="outline"
                           size="icon"
                           className="h-9 w-9 rounded-xl"
-                          onClick={() => changeQty(item.item_id, -1)}
+                          onClick={() => changeQty(item.cart_id, -1)}
                         >
                           <Minus className="h-3.5 w-3.5" />
                         </Button>
@@ -764,7 +855,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                           variant="outline"
                           size="icon"
                           className="h-9 w-9 rounded-xl"
-                          onClick={() => changeQty(item.item_id, 1)}
+                          onClick={() => changeQty(item.cart_id, 1)}
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </Button>
@@ -782,13 +873,13 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
         </div>
       </div>
 
-      {/* Item Reviews Modal */}
+      {/* Item Details Modal */}
       {selectedItemId !== null && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-[2rem] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800">
+          <div className="bg-white dark:bg-zinc-900 rounded-[2rem] w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800">
             <div className="p-6 sm:p-8 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-start gap-4">
               <div>
-                <h3 className="text-xl sm:text-2xl font-semibold">Item Reviews</h3>
+                <h3 className="text-xl sm:text-2xl font-semibold">Customize Item</h3>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                   {selectedItem?.name || "Selected item"}
                 </p>
@@ -799,6 +890,221 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
             </div>
 
             <div className="flex-1 p-6 sm:p-8 overflow-y-auto space-y-5">
+              {selectedItem ? (
+                <div className="rounded-[1.75rem] border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6">
+                  <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+                    <div className="overflow-hidden rounded-[1.5rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800">
+                      {selectedItem.image_url ? (
+                        <img src={selectedItem.image_url} alt={selectedItem.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex min-h-[220px] items-center justify-center text-zinc-400 dark:text-zinc-600">
+                          <Store className="h-16 w-16" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="grid gap-4">
+                      <div>
+                        <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{selectedItem.sku}</div>
+                        <div className="mt-2 text-3xl font-semibold">
+                          {formatMoney(selectedComboOffer ? selectedComboOffer.combo_price : calcStorefrontPrice(selectedItem))}
+                        </div>
+                        {selectedComboOffer ? (
+                          <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                            Combo selected: {selectedComboOffer.name}
+                          </div>
+                        ) : null}
+                        <div className="mt-3">
+                          <RatingDisplay
+                            value={selectedItem.review_summary?.average ?? null}
+                            count={selectedItem.review_summary?.count ?? 0}
+                            size="md"
+                          />
+                        </div>
+                      </div>
+
+                      {(selectedItem.ingredients ?? []).length > 0 ? (
+                        <div className="grid gap-3">
+                          <div>
+                            <div className="text-sm font-medium">Ingredients</div>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              Required ingredients stay on the item. Optional ones can be removed individually or all at once.
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {(selectedItem.ingredients ?? []).map((ingredient) => (
+                              <span
+                                key={ingredient.name}
+                                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                  ingredient.removable
+                                    ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                                    : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                                }`}
+                              >
+                                {ingredient.name}
+                                {ingredient.removable ? " · removable" : ""}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 p-4 text-sm text-zinc-500 dark:text-zinc-400">
+                          No ingredients listed for this item yet.
+                        </div>
+                      )}
+
+                      {selectedItemRemovableIngredients.length > 0 ? (
+                        <div className="grid gap-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium">Choose removable ingredients</div>
+                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                Keep everything or remove only the optional ingredients you do not want.
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full"
+                                onClick={() => setSelectedRemovedIngredients([])}
+                              >
+                                Keep all
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full"
+                                onClick={() =>
+                                  setSelectedRemovedIngredients(
+                                    selectedItemRemovableIngredients.map((ingredient) => ingredient.name),
+                                  )
+                                }
+                              >
+                                Remove all optional
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {selectedItemRemovableIngredients.map((ingredient) => {
+                              const removed = selectedRemovedIngredients.some(
+                                (entry) => entry.toLowerCase() === ingredient.name.toLowerCase(),
+                              );
+
+                              return (
+                                <button
+                                  key={ingredient.name}
+                                  type="button"
+                                  onClick={() =>
+                                    setSelectedRemovedIngredients((current) =>
+                                      removed
+                                        ? current.filter((entry) => entry.toLowerCase() !== ingredient.name.toLowerCase())
+                                        : [...current, ingredient.name],
+                                    )
+                                  }
+                                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
+                                    removed
+                                      ? "border-violet-600 bg-violet-600 text-white"
+                                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                  }`}
+                                >
+                                  {removed ? `Removed: ${ingredient.name}` : `Keep: ${ingredient.name}`}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {(selectedItem.combo_offers ?? []).length > 0 ? (
+                        <div className="grid gap-3">
+                          <div>
+                            <div className="text-sm font-medium">Combo deals</div>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              Choose the standard item or a discounted combo prepared by the market.
+                            </div>
+                          </div>
+
+                          <div className="grid gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedComboOfferName("")}
+                              className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                                !selectedComboOfferName
+                                  ? "border-cyan-600 bg-cyan-50 text-cyan-900 dark:border-cyan-400 dark:bg-cyan-950/30 dark:text-cyan-100"
+                                  : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-medium">Standard item</span>
+                                <span>{formatMoney(calcStorefrontPrice(selectedItem))}</span>
+                              </div>
+                            </button>
+
+                            {(selectedItem.combo_offers ?? []).map((comboOffer) => {
+                              const active = selectedComboOfferName.toLowerCase() === comboOffer.name.toLowerCase();
+
+                              return (
+                                <button
+                                  key={comboOffer.name}
+                                  type="button"
+                                  onClick={() => setSelectedComboOfferName(comboOffer.name)}
+                                  className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
+                                    active
+                                      ? "border-amber-500 bg-amber-50 text-amber-900 dark:border-amber-400 dark:bg-amber-950/30 dark:text-amber-100"
+                                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="font-medium">{comboOffer.name}</span>
+                                    <span>{formatMoney(comboOffer.combo_price)}</span>
+                                  </div>
+                                  {comboOffer.description ? (
+                                    <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                      {comboOffer.description}
+                                    </div>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <Button
+                        onClick={() => {
+                          addToCart(selectedItem, selectedRemovedIngredients, selectedComboOffer);
+                          setSelectedItemId(null);
+                        }}
+                        disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active}
+                        className="h-12 rounded-2xl text-base"
+                      >
+                        {selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add Customized Item"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-lg font-semibold">Reviews</div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {selectedComboOffer ? (
+                    <div className="text-xs text-amber-700 dark:text-amber-300">
+                      Combo: {selectedComboOffer.name}
+                    </div>
+                  ) : null}
+                  {(selectedRemovedIngredients ?? []).length > 0 ? (
+                    <div className="text-xs text-violet-600 dark:text-violet-300">
+                      Without: {selectedRemovedIngredients.join(", ")}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
               {reviewsQ.isLoading ? (
                 <p className="text-center py-10 text-zinc-500">Loading reviews...</p>
               ) : (reviewsQ.data ?? []).length > 0 ? (

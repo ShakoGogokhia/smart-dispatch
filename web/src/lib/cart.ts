@@ -1,8 +1,24 @@
+export type ItemIngredient = {
+  name: string;
+  removable: boolean;
+};
+
+export type ComboOffer = {
+  name: string;
+  description?: string | null;
+  combo_price: number;
+};
+
 export type CartItem = {
+  cart_id: string;
   item_id: number;
   name: string;
   price: number;
   qty: number;
+  image_url?: string | null;
+  ingredients?: ItemIngredient[];
+  removed_ingredients?: string[];
+  combo_offer?: ComboOffer | null;
 };
 
 const ACTIVE_MARKET_KEY = "activeMarketId";
@@ -19,6 +35,82 @@ export function setActiveMarketId(marketId: string) {
   localStorage.setItem(ACTIVE_MARKET_KEY, marketId);
 }
 
+function normalizeIngredients(value: unknown): ItemIngredient[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((ingredient) => {
+      if (!ingredient || typeof ingredient !== "object") {
+        return null;
+      }
+
+      const entry = ingredient as Partial<ItemIngredient>;
+      const name = typeof entry.name === "string" ? entry.name.trim() : "";
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        name,
+        removable: Boolean(entry.removable),
+      } satisfies ItemIngredient;
+    })
+    .filter((ingredient): ingredient is ItemIngredient => ingredient !== null);
+}
+
+function normalizeRemovedIngredients(value: unknown, ingredients: ItemIngredient[]): string[] {
+  if (!Array.isArray(value) || ingredients.length === 0) {
+    return [];
+  }
+
+  const removable = new Set(
+    ingredients
+      .filter((ingredient) => ingredient.removable)
+      .map((ingredient) => ingredient.name.toLowerCase()),
+  );
+
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry, index, source) => entry && source.findIndex((item) => item.toLowerCase() === entry.toLowerCase()) === index)
+    .filter((entry) => removable.has(entry.toLowerCase()));
+}
+
+function normalizeComboOffer(value: unknown): ComboOffer | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const entry = value as Partial<ComboOffer>;
+  const name = typeof entry.name === "string" ? entry.name.trim() : "";
+  const comboPrice = Number(entry.combo_price);
+
+  if (!name || !Number.isFinite(comboPrice)) {
+    return null;
+  }
+
+  return {
+    name,
+    description: typeof entry.description === "string" && entry.description.trim() ? entry.description.trim() : null,
+    combo_price: comboPrice,
+  };
+}
+
+export function buildCartItemId(itemId: number, removedIngredients: string[] = [], comboOfferName?: string | null) {
+  const suffix = [...removedIngredients]
+    .map((ingredient) => ingredient.trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right))
+    .join("|");
+
+  const comboPart = comboOfferName?.trim() ? `combo=${comboOfferName.trim()}` : "";
+  const parts = [suffix, comboPart].filter(Boolean);
+
+  return parts.length > 0 ? `${itemId}:${parts.join("::")}` : `${itemId}`;
+}
+
 export function loadCart(marketId: string): CartItem[] {
   try {
     const raw = localStorage.getItem(getCartKey(marketId));
@@ -30,7 +122,7 @@ export function loadCart(marketId: string): CartItem[] {
     }
 
     return parsed
-      .map((item) => {
+      .map((item): CartItem | null => {
         if (!item || typeof item !== "object") {
           return null;
         }
@@ -39,17 +131,28 @@ export function loadCart(marketId: string): CartItem[] {
         const itemId = Number(entry.item_id);
         const qty = Number(entry.qty);
         const price = Number(entry.price);
+        const ingredients = normalizeIngredients(entry.ingredients);
+        const removedIngredients = normalizeRemovedIngredients(entry.removed_ingredients, ingredients);
+        const comboOffer = normalizeComboOffer(entry.combo_offer);
 
         if (!Number.isFinite(itemId) || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(price)) {
           return null;
         }
 
         return {
+          cart_id:
+            typeof entry.cart_id === "string" && entry.cart_id.trim()
+              ? entry.cart_id
+              : buildCartItemId(itemId, removedIngredients, comboOffer?.name),
           item_id: itemId,
           name: typeof entry.name === "string" && entry.name.trim() ? entry.name : `Item #${itemId}`,
           price,
           qty,
-        } satisfies CartItem;
+          image_url: typeof entry.image_url === "string" && entry.image_url.trim() ? entry.image_url : null,
+          ingredients,
+          removed_ingredients: removedIngredients,
+          combo_offer: comboOffer,
+        };
       })
       .filter((item): item is CartItem => item !== null);
   } catch {
