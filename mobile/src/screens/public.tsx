@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -24,6 +24,34 @@ type HomeProps = NativeStackScreenProps<RootStackParamList, "Home">;
 
 type CheckoutMarket = MarketLite;
 
+type DiscoveryItem = Item & {
+  market_id: number;
+  market?: {
+    id: number;
+    name: string;
+    code: string;
+  } | null;
+  ordered_qty?: number;
+  is_promoted?: boolean;
+  promotion_ends_at?: string | null;
+};
+
+type DiscoveryFeed = {
+  popular: DiscoveryItem[];
+  combo: DiscoveryItem[];
+  discounted: DiscoveryItem[];
+};
+
+type MarketReviewRecord = {
+  id: number;
+  rating: number;
+  comment?: string | null;
+  user?: {
+    id?: number;
+    name?: string | null;
+  } | null;
+};
+
 function calcItemFinalPrice(item: Item) {
   const base = toNumber(item.price);
   const discountType = item.discount_type ?? "none";
@@ -38,6 +66,29 @@ function calcItemFinalPrice(item: Item) {
   }
 
   return base;
+}
+
+function getRemovableIngredients(item?: Item | null) {
+  if (item?.item_kind === "combo") {
+    return [];
+  }
+
+  return (item?.ingredients ?? []).filter((ingredient) => ingredient.removable);
+}
+
+function getComboIncludedItems(item?: Item | null) {
+  if (item?.item_kind !== "combo") {
+    return [];
+  }
+
+  return item.combo_offers?.[0]?.items ?? [];
+}
+
+function getComboRemovableCount(item?: Item | null) {
+  return getComboIncludedItems(item).reduce(
+    (sum, comboItem) => sum + (comboItem.ingredients ?? []).filter((ingredient) => ingredient.removable).length,
+    0,
+  );
 }
 
 function getItemImageUrls(item?: Item | null) {
@@ -104,6 +155,110 @@ function getMarketBannerUrl(market?: MarketLite | null) {
   );
 }
 
+function formatPromoLabel(promo?: MarketLite["active_promo"] | PromoCode | null, language: "en" | "ka" = "en") {
+  if (!promo?.code) {
+    return null;
+  }
+
+  if (promo.type === "percent") {
+    return `${promo.code} · ${toNumber(promo.value)}% OFF`;
+  }
+
+  return `${promo.code} · ${formatMoney(promo.value ?? 0, language)} OFF`;
+}
+
+function MarketRail({
+  title,
+  subtitle,
+  markets,
+  onOpen,
+}: {
+  title: string;
+  subtitle: string;
+  markets: MarketLite[];
+  onOpen: (marketId: string) => void;
+}) {
+  if (markets.length === 0) {
+    return null;
+  }
+
+  return (
+    <SectionCard title={title} subtitle={subtitle}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
+        {markets.map((market) => (
+          <View key={market.id} style={styles.railCard}>
+            {getMarketBannerUrl(market) ? <Image source={getMarketBannerUrl(market)} style={styles.railHeroImage} contentFit="cover" /> : null}
+            <View style={styles.railCardBody}>
+              <View style={styles.marketHeaderRow}>
+                {resolveMarketMediaUrl(market.logo_url) ? (
+                  <Image source={resolveMarketMediaUrl(market.logo_url)} style={styles.railLogo} contentFit="cover" />
+                ) : null}
+                {market.featured_badge ? <Pill tone="warning">{market.featured_badge}</Pill> : null}
+              </View>
+              <Text style={styles.railTitle}>{market.name}</Text>
+              <HelperText>{market.address || "Marketplace location"}</HelperText>
+              <HelperText>
+                Rating: {market.review_summary?.average ? Number(market.review_summary.average).toFixed(1) : "New"} · {market.review_summary?.count ?? 0} reviews
+              </HelperText>
+              <HelperText>{market.active_items_count ?? 0} items live</HelperText>
+              {formatPromoLabel(market.active_promo) ? <HelperText>{formatPromoLabel(market.active_promo)}</HelperText> : null}
+              <AppButton onPress={() => onOpen(String(market.id))}>Open Market</AppButton>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </SectionCard>
+  );
+}
+
+function DiscoveryRail({
+  title,
+  subtitle,
+  items,
+  language,
+  onOpenMarket,
+}: {
+  title: string;
+  subtitle: string;
+  items: DiscoveryItem[];
+  language: "en" | "ka";
+  onOpenMarket: (marketId: string) => void;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <SectionCard title={title} subtitle={subtitle}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
+        {items.map((item) => {
+          const finalPrice = calcItemFinalPrice(item);
+          const basePrice = toNumber(item.price);
+          const discounted = Math.abs(basePrice - finalPrice) > 0.0001;
+
+          return (
+            <View key={`discovery-${item.market_id}-${item.id}`} style={styles.discoveryCard}>
+              {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.discoveryImage} contentFit="cover" /> : null}
+              <View style={styles.discoveryBody}>
+                <Text style={styles.discoveryTitle}>{item.name}</Text>
+                <HelperText>{item.market?.name ?? "Market item"}</HelperText>
+                <Text style={styles.discoveryPrice}>{formatMoney(finalPrice, language)}</Text>
+                {discounted ? <HelperText>{formatMoney(basePrice, language)} regular</HelperText> : null}
+                <View style={styles.discoveryBadges}>
+                  <Pill>{item.category || "General"}</Pill>
+                  {item.is_promoted ? <Pill tone="warning">Promoted</Pill> : null}
+                  {(item.combo_offers?.length ?? 0) > 0 ? <Pill tone="success">Combo</Pill> : null}
+                </View>
+                <AppButton onPress={() => onOpenMarket(String(item.market_id))}>Open Market</AppButton>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </SectionCard>
+  );
+}
+
 export function HomeScreen({ navigation }: HomeProps) {
   const { ready, token, signOut } = useAuth();
   const meQ = useQuery({
@@ -153,15 +308,23 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
     queryFn: async () => (await api.get("/api/public/markets")).data as MarketLite[],
   });
 
+  const discoveryQ = useQuery({
+    queryKey: ["public-discovery-items"],
+    queryFn: async () => (await api.get("/api/public/discovery-items")).data as DiscoveryFeed,
+  });
+
   const markets = marketsQ.data ?? [];
   const activeMarkets = markets.filter((market) => market.is_active).length;
+  const promotedMarkets = markets.filter((market) => market.is_featured);
+  const promotedIds = new Set(promotedMarkets.map((market) => market.id));
+  const regularMarkets = markets.filter((market) => !promotedIds.has(market.id));
 
   return (
     <Screen>
       <HeroCard
-        eyebrow="Mobile Commerce"
-        title="Smart Dispatch"
-        subtitle="Browse live markets, build a cart, and move from storefront to dispatch on the same backend as the web app."
+        eyebrow="Premium Marketplace"
+        title="Discover exceptional markets"
+        subtitle="Explore premium storefronts, promoted markets, and discovery rails for popular, combo, and discounted items."
       >
         <View style={styles.heroActions}>
           <AppButton
@@ -205,21 +368,49 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
         <EmptyBlock message={`Could not load markets from ${api.defaults.baseURL}.`} actionLabel="Retry" onAction={() => void marketsQ.refetch()} />
       ) : (
         <View style={uiStyles.listGap}>
-          {markets.map((market) => (
-            <SectionCard
-              key={market.id}
-              title={market.name}
-              subtitle={market.address || "Address coming soon"}
-              right={<Pill tone={market.is_active ? "success" : "warning"}>{market.is_active ? "Open" : "Closed"}</Pill>}
-            >
-              {getMarketBannerUrl(market) ? <Image source={getMarketBannerUrl(market)} style={styles.marketHeroImage} contentFit="cover" /> : null}
-              {resolveMarketMediaUrl(market.logo_url) ? <Image source={resolveMarketMediaUrl(market.logo_url)} style={styles.marketLogoImage} contentFit="cover" /> : null}
-              <HelperText>{market.code}</HelperText>
-              <AppButton onPress={() => navigation.navigate("PublicMarket", { marketId: String(market.id) })}>
-                Open market
-              </AppButton>
-            </SectionCard>
-          ))}
+          <SectionCard title="Campaign" subtitle="Smart Dispatch Boost Week">
+            <HelperText>
+              Limited time storefront boost for selected markets with premium placement, stronger visibility, and cleaner discovery.
+            </HelperText>
+          </SectionCard>
+
+          <DiscoveryRail
+            title="Popular"
+            subtitle="Popular Items Right Now"
+            items={discoveryQ.data?.popular ?? []}
+            language={language}
+            onOpenMarket={(id) => navigation.navigate("PublicMarket", { marketId: id })}
+          />
+
+          <DiscoveryRail
+            title="Combos"
+            subtitle="Combo Picks"
+            items={discoveryQ.data?.combo ?? []}
+            language={language}
+            onOpenMarket={(id) => navigation.navigate("PublicMarket", { marketId: id })}
+          />
+
+          <DiscoveryRail
+            title="Deals"
+            subtitle="Discounted Items"
+            items={discoveryQ.data?.discounted ?? []}
+            language={language}
+            onOpenMarket={(id) => navigation.navigate("PublicMarket", { marketId: id })}
+          />
+
+          <MarketRail
+            title="Featured"
+            subtitle="Promoted Markets"
+            markets={promotedMarkets}
+            onOpen={(id) => navigation.navigate("PublicMarket", { marketId: id })}
+          />
+
+          <MarketRail
+            title="Community"
+            subtitle="All Live Markets"
+            markets={regularMarkets}
+            onOpen={(id) => navigation.navigate("PublicMarket", { marketId: id })}
+          />
         </View>
       )}
     </Screen>
@@ -237,6 +428,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
+  const [marketReviewComment, setMarketReviewComment] = useState("");
   const [cartReady, setCartReady] = useState(false);
 
   useEffect(() => {
@@ -293,6 +485,13 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
     enabled: selectedItemId != null,
   });
 
+  const marketReviewsQ = useQuery({
+    queryKey: ["market-reviews", marketId],
+    queryFn: async () => (await api.get(`/api/public/markets/${marketId}/reviews`)).data as MarketReviewRecord[],
+    enabled: !!marketId,
+    retry: false,
+  });
+
   const favoriteM = useMutation({
     mutationFn: async (payload: { market_id?: number; item_id?: number }) => (await api.post("/api/favorites/toggle", payload)).data,
     onSuccess: async () => {
@@ -317,6 +516,21 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
       setReviewComment("");
       await queryClient.invalidateQueries({ queryKey: ["item-reviews", selectedItemId] });
       await queryClient.invalidateQueries({ queryKey: ["public-market-items", marketId] });
+    },
+  });
+
+  const marketReviewM = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post(`/api/markets/${marketId}/reviews`, {
+          rating: 5,
+          comment: marketReviewComment || null,
+        })
+      ).data,
+    onSuccess: async () => {
+      setMarketReviewComment("");
+      await queryClient.invalidateQueries({ queryKey: ["market-reviews", marketId] });
+      await queryClient.invalidateQueries({ queryKey: ["public-market", marketId] });
     },
   });
 
@@ -351,6 +565,15 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   );
 
   const selectedItemImageUrls = useMemo(() => getItemImageUrls(selectedItem), [selectedItem]);
+  const marketReviewAverage = useMemo(() => {
+    const reviews = marketReviewsQ.data ?? [];
+    if (reviews.length === 0) {
+      return marketQ.data?.review_summary?.average ?? 0;
+    }
+
+    return reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length;
+  }, [marketQ.data?.review_summary?.average, marketReviewsQ.data]);
+  const marketReviewCount = (marketReviewsQ.data ?? []).length || marketQ.data?.review_summary?.count || 0;
 
   useEffect(() => {
     setSelectedImageIndex(0);
@@ -409,6 +632,9 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
             </AppButton>
           ) : null}
         </View>
+        {marketQ.data?.featured_badge ? <Pill tone="warning">{marketQ.data.featured_badge}</Pill> : null}
+        {marketQ.data?.featured_headline ? <HelperText>{marketQ.data.featured_headline}</HelperText> : null}
+        {marketQ.data?.featured_copy ? <HelperText>{marketQ.data.featured_copy}</HelperText> : null}
 
         {promoQ.data?.is_active ? (
           <HelperText tone="success">
@@ -416,10 +642,38 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           </HelperText>
         ) : null}
 
+        {marketQ.data?.active_promo?.is_active && !promoQ.data?.is_active ? (
+          <HelperText tone="success">{formatPromoLabel(marketQ.data.active_promo, language)}</HelperText>
+        ) : null}
+
         {(marketQ.data?.delivery_slots ?? []).length ? (
           <HelperText>
             Delivery slots: {(marketQ.data?.delivery_slots ?? []).map((slot: any) => typeof slot === "string" ? slot : slot.label || `${slot.from}-${slot.to}`).join(", ")}
           </HelperText>
+        ) : null}
+
+        <StatGrid>
+          <StatCard label="Rating" value={marketReviewAverage ? marketReviewAverage.toFixed(1) : "New"} />
+          <StatCard label="Reviews" value={marketReviewCount} />
+        </StatGrid>
+
+        {(marketQ.data?.item_preview ?? []).length > 0 ? (
+          <SectionCard title="Preview Items" subtitle="Live public selection">
+            <View style={uiStyles.listGap}>
+              {(marketQ.data?.item_preview ?? []).slice(0, 3).map((previewItem) => {
+                const previewFinalPrice = calcItemFinalPrice(previewItem as Item);
+                const previewBasePrice = toNumber(previewItem.price);
+                const previewDiscounted = Math.abs(previewBasePrice - previewFinalPrice) > 0.0001;
+
+                return (
+                  <SectionCard key={`preview-${previewItem.id}`} title={previewItem.name} subtitle={previewItem.sku}>
+                    <HelperText>{formatMoney(previewFinalPrice, language)}</HelperText>
+                    {previewDiscounted ? <HelperText>{formatMoney(previewBasePrice, language)} regular</HelperText> : null}
+                  </SectionCard>
+                );
+              })}
+            </View>
+          </SectionCard>
         ) : null}
 
         <InputField label="Search items" value={query} onChangeText={setQuery} placeholder="Search by name or SKU" />
@@ -475,6 +729,32 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
         )}
       </SectionCard>
 
+      <SectionCard title="Market Reviews" subtitle={`${marketQ.data?.name || "Market"} ratings and comments`}>
+        <HelperText>
+          Overall rating: {marketReviewAverage ? marketReviewAverage.toFixed(1) : "0.0"} · {marketReviewCount} review{marketReviewCount === 1 ? "" : "s"}
+        </HelperText>
+        {(marketReviewsQ.data ?? []).length > 0 ? (
+          <View style={uiStyles.listGap}>
+            {(marketReviewsQ.data ?? []).map((review) => (
+              <SectionCard key={`market-review-${review.id}`} title={`${review.user?.name || "Anonymous"} · ${review.rating}/5`} subtitle={review.comment || "No comment provided."} />
+            ))}
+          </View>
+        ) : marketReviewsQ.isLoading ? (
+          <HelperText>Loading reviews...</HelperText>
+        ) : (
+          <HelperText>No market reviews yet. Be the first to review!</HelperText>
+        )}
+        {token ? (
+          <>
+            <InputField label="Market review" value={marketReviewComment} onChangeText={setMarketReviewComment} placeholder="Add an optional market comment..." />
+            {marketReviewM.error ? <HelperText tone="danger">{getErrorMessage(marketReviewM.error)}</HelperText> : null}
+            <AppButton onPress={() => marketReviewM.mutate()} disabled={marketReviewM.isPending}>
+              {marketReviewM.isPending ? "Posting Review..." : "Post 5-Star Market Review"}
+            </AppButton>
+          </>
+        ) : null}
+      </SectionCard>
+
       {itemsQ.isLoading ? (
         <LoadingBlock message="Loading catalog..." />
       ) : itemsQ.isError ? (
@@ -488,6 +768,10 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
             const finalPrice = calcItemFinalPrice(item);
             const discounted = Math.abs(basePrice - finalPrice) > 0.0001;
             const outOfStock = item.stock_qty <= 0;
+            const removableCount = getRemovableIngredients(item).length;
+            const comboIncludedItems = getComboIncludedItems(item);
+            const comboRemovableCount = getComboRemovableCount(item);
+            const needsDetails = item.item_kind === "combo" || removableCount > 0 || (item.combo_offers?.length ?? 0) > 0;
 
             return (
               <SectionCard
@@ -500,13 +784,31 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
                 <Text style={styles.price}>{formatMoney(finalPrice, language)}</Text>
                 {discounted ? <HelperText>{formatMoney(basePrice, language)} regular</HelperText> : null}
                 {getItemImageUrls(item).length > 1 ? <HelperText>{getItemImageUrls(item).length} photos available</HelperText> : null}
+                <HelperText>Type: {item.item_kind === "combo" ? "Combo item" : "Regular item"}</HelperText>
+                {item.item_kind === "combo" && comboIncludedItems.length > 0 ? (
+                  <HelperText>Includes {comboIncludedItems.length} items</HelperText>
+                ) : null}
+                {item.item_kind === "combo" && comboRemovableCount > 0 ? (
+                  <HelperText>{comboRemovableCount} removable in combo</HelperText>
+                ) : null}
+                {item.item_kind !== "combo" && removableCount > 0 ? <HelperText>{removableCount} removable</HelperText> : null}
                 <HelperText>Reviews: {item.review_summary?.average ?? "-"} / {item.review_summary?.count ?? 0}</HelperText>
                 <View style={styles.heroActions}>
-                  <AppButton onPress={() => addToCart(item)} disabled={outOfStock || !item.is_active}>
-                    {outOfStock ? "Unavailable" : "Add to cart"}
+                  <AppButton
+                    onPress={() => {
+                      if (needsDetails) {
+                        setSelectedItemId(item.id);
+                        return;
+                      }
+
+                      addToCart(item);
+                    }}
+                    disabled={outOfStock || !item.is_active}
+                  >
+                    {outOfStock ? "Out of Stock" : needsDetails ? "View Details" : "Add to Cart"}
                   </AppButton>
                   <AppButton compact variant="secondary" onPress={() => setSelectedItemId(item.id)}>
-                    Reviews
+                    Details
                   </AppButton>
                   {token ? (
                     <AppButton compact variant="secondary" onPress={() => favoriteM.mutate({ item_id: item.id })}>
@@ -521,7 +823,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
       )}
 
       {selectedItemId != null ? (
-        <SectionCard title={selectedItem?.name || "Reviews"} subtitle={selectedItem?.sku || "Item details"}>
+        <SectionCard title={selectedItem?.name || "Item details"} subtitle={selectedItem?.sku || "Item details"}>
           {selectedItemImageUrls[0] ? (
             <Image
               source={selectedItemImageUrls[selectedImageIndex] ?? selectedItemImageUrls[0]}
@@ -541,6 +843,48 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
                 </Pressable>
               ))}
             </View>
+          ) : null}
+
+          {selectedItem ? (
+            <>
+              <Text style={styles.price}>{formatMoney(calcItemFinalPrice(selectedItem), language)}</Text>
+              <HelperText>Type: {selectedItem.item_kind === "combo" ? "Combo item" : "Regular item"}</HelperText>
+
+              {selectedItem.item_kind === "combo" && getComboIncludedItems(selectedItem).length > 0 ? (
+                <SectionCard title="Included in this combo" subtitle="This combo item already uses the combo price shown above.">
+                  <View style={uiStyles.listGap}>
+                    {getComboIncludedItems(selectedItem).map((comboItem) => (
+                      <SectionCard key={`combo-mobile-${comboItem.id}`} title={comboItem.name} subtitle={comboItem.sku || "Included item"}>
+                        {(comboItem.ingredients ?? []).length > 0 ? (
+                          <HelperText>
+                            {(comboItem.ingredients ?? [])
+                              .map((ingredient) => `${ingredient.name}${ingredient.removable ? " (removable)" : ""}`)
+                              .join(", ")}
+                          </HelperText>
+                        ) : (
+                          <HelperText>No ingredients listed</HelperText>
+                        )}
+                      </SectionCard>
+                    ))}
+                  </View>
+                </SectionCard>
+              ) : null}
+
+              {selectedItem.item_kind !== "combo" && getRemovableIngredients(selectedItem).length > 0 ? (
+                <SectionCard title="Removable ingredients" subtitle="Optional ingredients customers can remove from this item.">
+                  <HelperText>{getRemovableIngredients(selectedItem).map((ingredient) => ingredient.name).join(", ")}</HelperText>
+                </SectionCard>
+              ) : null}
+
+              <View style={styles.heroActions}>
+                <AppButton onPress={() => addToCart(selectedItem)} disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active}>
+                  {selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add to Cart"}
+                </AppButton>
+                <AppButton variant="secondary" onPress={() => setSelectedItemId(null)}>
+                  Close
+                </AppButton>
+              </View>
+            </>
           ) : null}
 
           {(reviewsQ.data ?? []).map((review) => (
@@ -875,6 +1219,100 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 12,
     backgroundColor: "#ffffff",
+  },
+  railContent: {
+    gap: 12,
+    paddingRight: 12,
+  },
+  railCard: {
+    width: 300,
+    minHeight: 412,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#fffaf2",
+    borderWidth: 1,
+    borderColor: "#e5d4bd",
+    shadowColor: "#8b5e34",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  railHeroImage: {
+    width: "100%",
+    height: 172,
+    backgroundColor: "#ece7df",
+  },
+  railCardBody: {
+    flex: 1,
+    padding: 16,
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  marketHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+    minHeight: 60,
+  },
+  railLogo: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#eadbc7",
+  },
+  railTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0f172a",
+    minHeight: 24,
+  },
+  discoveryCard: {
+    width: 250,
+    minHeight: 356,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#fffaf2",
+    borderWidth: 1,
+    borderColor: "#e5d4bd",
+    shadowColor: "#8b5e34",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 5,
+  },
+  discoveryImage: {
+    width: "100%",
+    height: 154,
+    backgroundColor: "#ece7df",
+  },
+  discoveryBody: {
+    flex: 1,
+    padding: 16,
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  discoveryTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0f172a",
+    minHeight: 42,
+  },
+  discoveryPrice: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#059669",
+    minHeight: 26,
+  },
+  discoveryBadges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    minHeight: 32,
+    alignContent: "flex-start",
   },
   preferenceRow: {
     flexDirection: "row",

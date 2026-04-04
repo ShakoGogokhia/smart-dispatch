@@ -36,6 +36,21 @@ type AvailabilitySlot = {
   to: string;
 };
 
+type ItemIngredient = {
+  name: string;
+  removable: boolean;
+};
+
+type ComboOffer = NonNullable<Item["combo_offers"]>[number];
+
+type ComboSelectableItem = {
+  id: number;
+  name: string;
+  sku: string;
+  price: string | number;
+  ingredients: ItemIngredient[];
+};
+
 const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function emptyVariant(): ItemVariant {
@@ -43,6 +58,23 @@ function emptyVariant(): ItemVariant {
     name: "",
     value: "",
     price_delta: 0,
+  };
+}
+
+function emptyIngredient(): ItemIngredient {
+  return {
+    name: "",
+    removable: false,
+  };
+}
+
+function emptyComboOffer(): ComboOffer {
+  return {
+    name: "",
+    description: null,
+    combo_price: 0,
+    item_ids: [],
+    items: [],
   };
 }
 
@@ -76,6 +108,114 @@ function normalizeAvailabilitySchedule(slots: AvailabilitySlot[]) {
     .filter((slot) => slot.day && slot.from && slot.to);
 
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeIngredients(ingredients: ItemIngredient[]) {
+  const normalized = ingredients
+    .map((ingredient) => ({
+      name: ingredient.name.trim(),
+      removable: Boolean(ingredient.removable),
+    }))
+    .filter((ingredient) => ingredient.name.length > 0);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeComboOffers(comboOffers: ComboOffer[]) {
+  const normalized = comboOffers
+    .map((comboOffer) => ({
+      name: comboOffer.name?.trim() || "",
+      description: comboOffer.description?.trim() ? comboOffer.description.trim() : null,
+      combo_price: Number(comboOffer.combo_price || 0),
+      item_ids: Array.from(
+        new Set(
+          (comboOffer.item_ids ?? [])
+            .map((itemId) => Number(itemId))
+            .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+        ),
+      ),
+    }))
+    .filter((comboOffer) => comboOffer.item_ids.length > 0);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function buildComboName(selectedItems: ComboSelectableItem[]) {
+  return selectedItems
+    .map((item) => item.name.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" + ");
+}
+
+function getComboSelectableItems(items: Item[], currentItemId?: number | null): ComboSelectableItem[] {
+  return items
+    .filter((item) => item.id !== currentItemId)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      sku: item.sku,
+      price: item.price,
+      ingredients: item.ingredients ?? [],
+    }));
+}
+
+function hydrateComboOffers(comboOffers: Item["combo_offers"], items: ComboSelectableItem[]): ComboOffer[] {
+  return (comboOffers ?? []).map((comboOffer) => {
+    const selectedIds = Array.from(
+      new Set(
+        (comboOffer.item_ids ?? comboOffer.items?.map((item) => item.id) ?? [])
+          .map((itemId) => Number(itemId))
+          .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+      ),
+    );
+    const selectedItems = selectedIds
+      .map((itemId) => items.find((item) => item.id === itemId))
+      .filter((item): item is ComboSelectableItem => Boolean(item));
+
+    return {
+      ...comboOffer,
+      name: comboOffer.name?.trim() || buildComboName(selectedItems),
+      item_ids: selectedIds,
+      items: selectedItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku,
+        ingredients: item.ingredients,
+      })),
+    };
+  });
+}
+
+function buildComboPayload(itemKind: "regular" | "combo", comboOffers: ComboOffer[], priceValue: string | number) {
+  const normalized = normalizeComboOffers(comboOffers) ?? [];
+
+  if (itemKind === "combo") {
+    const primaryCombo = normalized[0];
+
+    if (!primaryCombo) {
+      return null;
+    }
+
+    return [
+      {
+        ...primaryCombo,
+        name: primaryCombo.name || "Combo bundle",
+        description: null,
+        combo_price: Number(priceValue || 0),
+      },
+    ];
+  }
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function getItemIngredientsPayload(itemKind: "regular" | "combo", ingredients: ItemIngredient[]) {
+  if (itemKind === "combo") {
+    return null;
+  }
+
+  return normalizeIngredients(ingredients);
 }
 
 function resolveMediaUrl(url?: string | null) {
@@ -158,7 +298,13 @@ function ChoiceRow({
     <View style={styles.choiceWrap}>
       {options.map((option) => (
         <Pressable key={option} onPress={() => onChange(option)} style={[styles.choiceChip, value === option && styles.choiceChipActive]}>
-          <Text style={styles.choiceChipText}>{option}</Text>
+          <Text style={styles.choiceChipText}>
+            {option === "regular"
+              ? "Regular item"
+              : option === "combo"
+                ? "Combo item"
+                : option.charAt(0).toUpperCase() + option.slice(1)}
+          </Text>
         </Pressable>
       ))}
     </View>
@@ -258,6 +404,186 @@ function ScheduleEditor({
       <AppButton variant="secondary" onPress={() => onChange([...schedule, emptyScheduleSlot()])}>
         Add schedule row
       </AppButton>
+    </View>
+  );
+}
+
+function IngredientEditor({
+  ingredients,
+  onChange,
+}: {
+  ingredients: ItemIngredient[];
+  onChange: (ingredients: ItemIngredient[]) => void;
+}) {
+  return (
+    <View style={uiStyles.listGap}>
+      {ingredients.map((ingredient, index) => (
+        <SectionCard key={`ingredient-${index}`} title={`Ingredient ${index + 1}`}>
+          <InputField
+            label="Ingredient name"
+            value={ingredient.name}
+            onChangeText={(value) =>
+              onChange(ingredients.map((entry, entryIndex) => (entryIndex === index ? { ...entry, name: value } : entry)))
+            }
+            placeholder="Tomato"
+          />
+          <ToggleRow
+            label="Removable"
+            value={ingredient.removable}
+            onValueChange={(value) =>
+              onChange(ingredients.map((entry, entryIndex) => (entryIndex === index ? { ...entry, removable: value } : entry)))
+            }
+          />
+          <AppButton variant="secondary" onPress={() => onChange(ingredients.filter((_, entryIndex) => entryIndex !== index))}>
+            Remove ingredient
+          </AppButton>
+        </SectionCard>
+      ))}
+
+      <AppButton variant="secondary" onPress={() => onChange([...ingredients, emptyIngredient()])}>
+        Add ingredient
+      </AppButton>
+    </View>
+  );
+}
+
+function ComboOfferEditor({
+  comboOffers,
+  availableItems,
+  itemKind,
+  onChange,
+}: {
+  comboOffers: ComboOffer[];
+  availableItems: ComboSelectableItem[];
+  itemKind: "regular" | "combo";
+  onChange: (comboOffers: ComboOffer[]) => void;
+}) {
+  const visibleComboOffers = itemKind === "combo" ? (comboOffers.length > 0 ? [comboOffers[0]] : [emptyComboOffer()]) : comboOffers;
+
+  function toggleComboItem(comboIndex: number, item: ComboSelectableItem) {
+    const sourceOffers = itemKind === "combo" ? visibleComboOffers : comboOffers;
+    const next = sourceOffers.map((entry, entryIndex) => {
+      if (entryIndex !== comboIndex) {
+        return entry;
+      }
+
+      const currentIds = new Set(entry.item_ids ?? []);
+      if (currentIds.has(item.id)) {
+        currentIds.delete(item.id);
+      } else {
+        currentIds.add(item.id);
+      }
+
+      const selectedItems = availableItems.filter((candidate) => currentIds.has(candidate.id));
+
+      return {
+        ...entry,
+        name: entry.name?.trim() || buildComboName(selectedItems),
+        item_ids: selectedItems.map((candidate) => candidate.id),
+        items: selectedItems.map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          sku: candidate.sku,
+          ingredients: candidate.ingredients,
+        })),
+      };
+    });
+
+    onChange(next);
+  }
+
+  return (
+    <View style={uiStyles.listGap}>
+      {availableItems.length === 0 ? <HelperText>Add other market items first so this combo can include them.</HelperText> : null}
+
+      {visibleComboOffers.map((comboOffer, index) => (
+        <SectionCard key={`combo-offer-${index}`} title={itemKind === "combo" ? "Combo items" : `Combo ${index + 1}`}>
+          {itemKind === "regular" ? (
+            <>
+              <InputField
+                label="Combo label"
+                value={comboOffer.name ?? ""}
+                onChangeText={(value) =>
+                  onChange(comboOffers.map((entry, entryIndex) => (entryIndex === index ? { ...entry, name: value } : entry)))
+                }
+                placeholder="Auto-filled from selected items"
+              />
+              <InputField
+                label="Combo price"
+                value={String(comboOffer.combo_price ?? 0)}
+                onChangeText={(value) =>
+                  onChange(comboOffers.map((entry, entryIndex) => (entryIndex === index ? { ...entry, combo_price: Number(value || 0) } : entry)))
+                }
+                keyboardType="numeric"
+              />
+              <InputField
+                label="Description"
+                value={comboOffer.description ?? ""}
+                onChangeText={(value) =>
+                  onChange(comboOffers.map((entry, entryIndex) => (entryIndex === index ? { ...entry, description: value } : entry)))
+                }
+                placeholder="Optional short note"
+              />
+            </>
+          ) : (
+            <HelperText>This combo item uses the main price above. Only choose which market items are included.</HelperText>
+          )}
+
+          <HelperText>Select combo items from this market</HelperText>
+          <View style={uiStyles.listGap}>
+            {availableItems.map((item) => {
+              const active = (comboOffer.item_ids ?? []).includes(item.id);
+
+              return (
+                <Pressable key={`${item.id}-${index}`} onPress={() => toggleComboItem(index, item)} style={[styles.optionRow, active && styles.optionRowSelected]}>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Text style={styles.optionLabel}>{item.name}</Text>
+                    <HelperText>
+                      {item.sku} · {formatMoney(item.price, "en")}
+                    </HelperText>
+                    {(item.ingredients ?? []).length > 0 ? (
+                      <HelperText>
+                        Ingredients: {(item.ingredients ?? []).map((ingredient) => `${ingredient.name}${ingredient.removable ? " (removable)" : ""}`).join(", ")}
+                      </HelperText>
+                    ) : null}
+                  </View>
+                  {active ? <Pill tone="success">Included</Pill> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {(comboOffer.items ?? []).length > 0 ? (
+            <View style={uiStyles.listGap}>
+              {(comboOffer.items ?? []).map((item) => (
+                <SectionCard key={`combo-item-preview-${item.id}`} title={item.name} subtitle={item.sku || "Included item"}>
+                  {(item.ingredients ?? []).length > 0 ? (
+                    <HelperText>
+                      {(item.ingredients ?? []).map((ingredient) => `${ingredient.name}${ingredient.removable ? " (removable)" : ""}`).join(", ")}
+                    </HelperText>
+                  ) : (
+                    <HelperText>No ingredients listed</HelperText>
+                  )}
+                </SectionCard>
+              ))}
+            </View>
+          ) : (
+            <HelperText>Choose at least one item for this combo.</HelperText>
+          )}
+
+          {itemKind === "regular" ? (
+            <AppButton variant="secondary" onPress={() => onChange(comboOffers.filter((_, entryIndex) => entryIndex !== index))}>
+              Remove combo
+            </AppButton>
+          ) : null}
+        </SectionCard>
+      ))}
+
+      {itemKind === "regular" ? (
+        <AppButton variant="secondary" onPress={() => onChange([...(comboOffers ?? []), emptyComboOffer()])} disabled={availableItems.length === 0}>
+          Add combo offer
+        </AppButton>
+      ) : null}
     </View>
   );
 }
@@ -559,6 +885,9 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
   const [createSchedule, setCreateSchedule] = useState<AvailabilitySlot[]>([]);
   const [createSelectedImages, setCreateSelectedImages] = useState<{ uri: string; name: string; type: string }[]>([]);
   const [isActive, setIsActive] = useState(true);
+  const [createItemKind, setCreateItemKind] = useState<"regular" | "combo">("regular");
+  const [createIngredients, setCreateIngredients] = useState<ItemIngredient[]>([]);
+  const [createComboOffers, setCreateComboOffers] = useState<ComboOffer[]>([]);
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [editVariants, setEditVariants] = useState<ItemVariant[]>([]);
   const [editSchedule, setEditSchedule] = useState<AvailabilitySlot[]>([]);
@@ -570,6 +899,9 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
     queryFn: async () => (await api.get(`/api/markets/${id}/items`)).data as Item[],
     enabled: access.ready && Number.isFinite(id),
   });
+  const createComboSelectableItems = getComboSelectableItems(itemsQ.data ?? []);
+  const editComboSelectableItems = getComboSelectableItems(itemsQ.data ?? [], editItem?.id ?? null);
+  const editItemKind: "regular" | "combo" = editItem?.item_kind === "combo" ? "combo" : "regular";
 
   const createM = useMutation({
     mutationFn: async () => {
@@ -577,10 +909,13 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
         await api.post(`/api/markets/${id}/items`, {
           name,
           sku,
+          item_kind: createItemKind,
           category: category.trim() || null,
           image_url: imageUrl.trim() || null,
           variants: normalizeVariants(createVariants),
           availability_schedule: normalizeAvailabilitySchedule(createSchedule),
+          ingredients: getItemIngredientsPayload(createItemKind, createIngredients),
+          combo_offers: buildComboPayload(createItemKind, createComboOffers, price),
           price: Number(price),
           discount_type: discountType,
           discount_value: Number(discountValue || 0),
@@ -623,6 +958,9 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
       setLowStockThreshold("5");
       setCreateVariants([]);
       setCreateSchedule([]);
+      setCreateItemKind("regular");
+      setCreateIngredients([]);
+      setCreateComboOffers([]);
       setCreateSelectedImages([]);
       setIsActive(true);
     },
@@ -638,6 +976,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
         await api.patch(`/api/markets/${id}/items/${editItem.id}`, {
           name: editItem.name,
           sku: editItem.sku,
+          item_kind: editItem.item_kind ?? "regular",
           price: Number(editItem.price),
           discount_type: editItem.discount_type,
           discount_value: Number(editItem.discount_value || 0),
@@ -646,6 +985,8 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
           image_url: editItem.image_url?.trim() || null,
           variants: normalizeVariants(editVariants),
           availability_schedule: normalizeAvailabilitySchedule(editSchedule),
+          ingredients: getItemIngredientsPayload(editItemKind, (editItem.ingredients as ItemIngredient[] | null) ?? []),
+          combo_offers: buildComboPayload(editItemKind, (editItem.combo_offers as ComboOffer[] | null) ?? [], editItem.price),
           low_stock_threshold: Number(editItem.low_stock_threshold || 5),
           is_active: !!editItem.is_active,
         })
@@ -757,14 +1098,23 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
           {(itemsQ.data ?? []).map((item) => (
             <SectionCard key={item.id} title={item.name} subtitle={`${item.sku} • ${formatMoney(item.price, "en")}`}>
               {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.itemPreview} contentFit="cover" /> : null}
+              <HelperText>Type: {item.item_kind === "combo" ? "Combo item" : "Regular item"}</HelperText>
               <HelperText>Discount: {item.discount_type === "none" ? "None" : `${item.discount_type} ${item.discount_value}`}</HelperText>
               <HelperText>Stock: {item.stock_qty}</HelperText>
               <HelperText>Status: {item.is_active ? "Active" : "Inactive"}</HelperText>
+              {item.item_kind === "combo" && (item.combo_offers?.[0]?.items ?? []).length > 0 ? (
+                <HelperText>Includes: {(item.combo_offers?.[0]?.items ?? []).map((comboItem) => comboItem.name).join(", ")}</HelperText>
+              ) : null}
               <AppButton
                 compact
                 variant="secondary"
                 onPress={() => {
-                  setEditItem({ ...item });
+                  setEditItem({
+                    ...item,
+                    item_kind: item.item_kind ?? "regular",
+                    ingredients: item.ingredients ?? [],
+                    combo_offers: hydrateComboOffers(item.combo_offers, getComboSelectableItems(itemsQ.data ?? [], item.id)),
+                  });
                   setEditVariants((item.variants as ItemVariant[] | null) ?? []);
                   setEditSchedule((item.availability_schedule as AvailabilitySlot[] | null) ?? []);
                   setEditSelectedImages([]);
@@ -779,10 +1129,28 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
       )}
 
       <AppModal visible={createOpen} title="Add item" onClose={() => setCreateOpen(false)}>
+        <HelperText>Item type</HelperText>
+        <ChoiceRow
+          value={createItemKind}
+          onChange={(value) => {
+            const nextKind = value as "regular" | "combo";
+            setCreateItemKind(nextKind);
+
+            if (nextKind === "combo") {
+              setCreateIngredients([]);
+              setCreateComboOffers(createComboOffers.length > 0 ? [createComboOffers[0]] : [emptyComboOffer()]);
+              return;
+            }
+
+            setCreateComboOffers([]);
+          }}
+          options={["regular", "combo"]}
+        />
         <InputField label="Name" value={name} onChangeText={setName} placeholder="Item name" />
         <InputField label="SKU" value={sku} onChangeText={setSku} placeholder="SKU" />
+        <HelperText>Must be unique inside this market.</HelperText>
         <InputField label="Category" value={category} onChangeText={setCategory} placeholder="General" />
-        <InputField label="Price" value={price} onChangeText={setPrice} keyboardType="numeric" />
+        <InputField label={createItemKind === "combo" ? "Combo price" : "Price"} value={price} onChangeText={setPrice} keyboardType="numeric" />
         <HelperText>Discount type</HelperText>
         <ChoiceRow value={discountType} onChange={setDiscountType as (value: string) => void} options={["none", "percent", "fixed"]} />
         <InputField label="Discount value" value={discountValue} onChangeText={setDiscountValue} keyboardType="numeric" />
@@ -793,31 +1161,87 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
           Choose item images
         </AppButton>
         {createSelectedImages.length > 0 ? <HelperText>{createSelectedImages.length} image(s) selected</HelperText> : null}
-        <SectionCard title="Variants" subtitle="Add choices like size, color, or packaging.">
+        <SectionCard title="Variants" subtitle="Add customer choices like size, color, or pack type without writing JSON.">
           <VariantEditor variants={createVariants} onChange={setCreateVariants} />
         </SectionCard>
-        <SectionCard title="Availability schedule" subtitle="Show when this item should be available.">
+        <SectionCard title="Availability schedule" subtitle="Leave this empty if the item is always available, or add day and time rows below.">
           <ScheduleEditor schedule={createSchedule} onChange={setCreateSchedule} />
         </SectionCard>
+        {createItemKind === "regular" ? (
+          <SectionCard title="Ingredients" subtitle="Add every ingredient the market uses in this item and mark the ones customers can remove.">
+            <IngredientEditor ingredients={createIngredients} onChange={setCreateIngredients} />
+          </SectionCard>
+        ) : null}
+        {createItemKind === "combo" || createComboOffers.length > 0 ? (
+          <SectionCard
+            title="Combo offers"
+            subtitle={
+              createItemKind === "combo"
+                ? "Build combo deals by selecting other items from this market. The top price is the combo price."
+                : "Add optional bundle prices customers can choose during checkout."
+            }
+          >
+            <ComboOfferEditor
+              comboOffers={createComboOffers}
+              availableItems={createComboSelectableItems}
+              itemKind={createItemKind}
+              onChange={setCreateComboOffers}
+            />
+          </SectionCard>
+        ) : null}
         <ToggleRow label="Active" value={isActive} onValueChange={setIsActive} />
         {createM.error ? <HelperText tone="danger">{getErrorMessage(createM.error)}</HelperText> : null}
-        <AppButton onPress={() => createM.mutate()} disabled={createM.isPending || !name.trim() || !sku.trim() || !price.trim()}>
-          {createM.isPending ? "Saving..." : "Save item"}
+        <AppButton
+          onPress={() => createM.mutate()}
+          disabled={
+            createM.isPending ||
+            !name.trim() ||
+            !sku.trim() ||
+            !price.trim() ||
+            (createItemKind === "combo" && !buildComboPayload("combo", createComboOffers, price))
+          }
+        >
+          {createM.isPending ? "Saving..." : "Save"}
         </AppButton>
       </AppModal>
 
       <AppModal visible={editOpen} title="Edit item" onClose={() => setEditOpen(false)}>
         {editItem ? (
           <>
+            <HelperText>Item type</HelperText>
+            <ChoiceRow
+              value={editItemKind}
+              onChange={(value) => {
+                const nextKind = value as "regular" | "combo";
+                setEditItem({
+                  ...editItem,
+                  item_kind: nextKind,
+                  ingredients: nextKind === "combo" ? [] : editItem.ingredients ?? [],
+                  combo_offers:
+                    nextKind === "combo"
+                      ? (editItem.combo_offers ?? []).length > 0
+                        ? [((editItem.combo_offers ?? [])[0] as ComboOffer) ?? emptyComboOffer()]
+                        : [emptyComboOffer()]
+                      : [],
+                });
+              }}
+              options={["regular", "combo"]}
+            />
             <InputField label="Name" value={editItem.name} onChangeText={(value) => setEditItem({ ...editItem, name: value })} placeholder="Item name" />
             <InputField label="SKU" value={editItem.sku} onChangeText={(value) => setEditItem({ ...editItem, sku: value })} placeholder="SKU" />
+            <HelperText>Must be unique inside this market.</HelperText>
             <InputField
               label="Category"
               value={editItem.category ?? ""}
               onChangeText={(value) => setEditItem({ ...editItem, category: value })}
               placeholder="General"
             />
-            <InputField label="Price" value={String(editItem.price)} onChangeText={(value) => setEditItem({ ...editItem, price: value })} keyboardType="numeric" />
+            <InputField
+              label={editItemKind === "combo" ? "Combo price" : "Price"}
+              value={String(editItem.price)}
+              onChangeText={(value) => setEditItem({ ...editItem, price: value })}
+              keyboardType="numeric"
+            />
             <ChoiceRow value={editItem.discount_type ?? "none"} onChange={(value) => setEditItem({ ...editItem, discount_type: value as Item["discount_type"] })} options={["none", "percent", "fixed"]} />
             <InputField label="Discount value" value={String(editItem.discount_value ?? 0)} onChangeText={(value) => setEditItem({ ...editItem, discount_value: value })} keyboardType="numeric" />
             <InputField label="Stock quantity" value={String(editItem.stock_qty)} onChangeText={(value) => setEditItem({ ...editItem, stock_qty: Number(value) })} keyboardType="numeric" />
@@ -863,16 +1287,41 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
                 </AppButton>
               </SectionCard>
             ) : null}
-            <SectionCard title="Variants" subtitle="Add customer-selectable options without JSON.">
+            <SectionCard title="Variants" subtitle="Add customer-selectable options here instead of raw JSON.">
               <VariantEditor variants={editVariants} onChange={setEditVariants} />
             </SectionCard>
-            <SectionCard title="Availability schedule" subtitle="Use rows to control item time slots.">
+            <SectionCard title="Availability schedule" subtitle="Add rows for limited windows, or leave it empty to keep the item available all day.">
               <ScheduleEditor schedule={editSchedule} onChange={setEditSchedule} />
             </SectionCard>
+            {editItemKind === "regular" ? (
+              <SectionCard title="Ingredients" subtitle="Mark only optional ingredients as removable so customers can order without them.">
+                <IngredientEditor
+                  ingredients={(editItem.ingredients as ItemIngredient[] | null) ?? []}
+                  onChange={(ingredients) => setEditItem({ ...editItem, ingredients })}
+                />
+              </SectionCard>
+            ) : null}
+            {editItemKind === "combo" || (editItem.combo_offers ?? []).length > 0 ? (
+              <SectionCard
+                title="Combo offers"
+                subtitle={
+                  editItemKind === "combo"
+                    ? "Build combo deals by selecting other items from this market. The top price is the combo price."
+                    : "Add optional bundle prices customers can choose during checkout."
+                }
+              >
+                <ComboOfferEditor
+                  comboOffers={(editItem.combo_offers as ComboOffer[] | null) ?? []}
+                  availableItems={editComboSelectableItems}
+                  itemKind={editItemKind}
+                  onChange={(combo_offers) => setEditItem({ ...editItem, combo_offers })}
+                />
+              </SectionCard>
+            ) : null}
             <ToggleRow label="Active" value={!!editItem.is_active} onValueChange={(value) => setEditItem({ ...editItem, is_active: value })} />
             {updateM.error ? <HelperText tone="danger">{getErrorMessage(updateM.error)}</HelperText> : null}
             <AppButton onPress={() => updateM.mutate()} disabled={updateM.isPending}>
-              {updateM.isPending ? "Saving..." : "Save changes"}
+              {updateM.isPending ? "Saving..." : "Save"}
             </AppButton>
           </>
         ) : null}

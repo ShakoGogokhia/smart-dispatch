@@ -84,6 +84,36 @@ export type MarketLite = {
   logo_url?: string | null;
   banner_url?: string | null;
   image_url?: string | null;
+  is_featured?: boolean;
+  featured_badge?: string | null;
+  featured_headline?: string | null;
+  featured_copy?: string | null;
+  featured_theme?: {
+    tone?: "amber" | "cyan" | "emerald" | "rose" | "slate";
+    shape?: "pill" | "soft" | "outline";
+  } | null;
+  active_items_count?: number;
+  review_summary?: {
+    count?: number;
+    average?: number | null;
+  };
+  active_promo?: {
+    id?: number;
+    code?: string;
+    type?: string;
+    value?: string | number;
+    is_active?: boolean;
+  } | null;
+  item_preview?: Array<{
+    id: number;
+    name: string;
+    sku: string;
+    image_url?: string | null;
+    image_urls?: string[] | null;
+    price: number | string;
+    discount_type?: "none" | "percent" | "fixed";
+    discount_value?: number | string;
+  }>;
   delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
 };
 
@@ -258,11 +288,14 @@ export type Item = {
   market_id?: number;
   name: string;
   sku: string;
+  item_kind?: "regular" | "combo";
   category?: string | null;
   image_url?: string | null;
   image_urls?: string[] | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
+  ingredients?: Array<{ name: string; removable: boolean }> | null;
+  combo_offers?: ComboOfferApi[] | null;
   price: string | number;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: string | number;

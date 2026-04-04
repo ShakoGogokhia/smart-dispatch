@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import * as Haptics from "expo-haptics";
-import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 
 import type { Order } from "@/src/types/api";
 
@@ -8,17 +8,51 @@ const DRIVER_CHANNEL_ID = "driver-offers";
 
 let notificationsPrepared = false;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: false,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+let notificationsModulePromise: Promise<typeof import("expo-notifications") | null> | null = null;
+let notificationHandlerConfigured = false;
+
+function shouldUseExpoNotifications() {
+  if (Platform.OS === "web") {
+    return false;
+  }
+
+  return Constants.executionEnvironment !== "storeClient";
+}
+
+async function getNotificationsModule() {
+  if (!shouldUseExpoNotifications()) {
+    return null;
+  }
+
+  if (!notificationsModulePromise) {
+    notificationsModulePromise = import("expo-notifications")
+      .then((module) => module)
+      .catch(() => null);
+  }
+
+  const Notifications = await notificationsModulePromise;
+
+  if (!Notifications || notificationHandlerConfigured) {
+    return Notifications;
+  }
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: false,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+  notificationHandlerConfigured = true;
+
+  return Notifications;
+}
 
 export async function prepareLocalNotifications() {
-  if (Platform.OS === "web") {
+  const Notifications = await getNotificationsModule();
+
+  if (!Notifications) {
     return;
   }
 
@@ -47,7 +81,9 @@ export async function prepareLocalNotifications() {
 }
 
 export async function notifyIncomingOffer(order: Order) {
-  if (Platform.OS === "web") {
+  const Notifications = await getNotificationsModule();
+
+  if (!Notifications) {
     return;
   }
 
