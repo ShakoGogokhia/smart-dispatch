@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 type Market = StorefrontMarket & {
   owner_user_id?: number;
   logo_path?: string | null;
+  banner_path?: string | null;
 };
 
 type StaffUser = {
@@ -27,6 +28,25 @@ type StaffUser = {
   is_owner?: boolean;
   pivot?: { role?: string };
 };
+
+function resolveMarketMediaUrl(url?: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
+    const parsed = new URL(url, apiOrigin);
+
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
 
 export default function MarketSettingsPage() {
   const { marketId } = useParams();
@@ -101,6 +121,7 @@ export default function MarketSettingsPage() {
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
 
   const uploadLogoM = useMutation({
     mutationFn: async () => {
@@ -119,6 +140,27 @@ export default function MarketSettingsPage() {
       await qc.invalidateQueries({ queryKey: ["market-settings-source"] });
       await qc.invalidateQueries({ queryKey: ["markets"] });
       await qc.invalidateQueries({ queryKey: ["public-markets"] });
+    },
+  });
+
+  const uploadBannerM = useMutation({
+    mutationFn: async () => {
+      if (!bannerFile) throw new Error("Select a file first");
+      const fd = new FormData();
+      fd.append("banner", bannerFile);
+
+      return (
+        await api.post(`/api/markets/${id}/banner`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: async () => {
+      setBannerFile(null);
+      await qc.invalidateQueries({ queryKey: ["market-settings-source"] });
+      await qc.invalidateQueries({ queryKey: ["markets"] });
+      await qc.invalidateQueries({ queryKey: ["public-markets"] });
+      await qc.invalidateQueries({ queryKey: ["public-market", String(id)] });
     },
   });
 
@@ -170,6 +212,11 @@ export default function MarketSettingsPage() {
   const logoError =
     (uploadLogoM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
     (uploadLogoM.error as { message?: string })?.message ??
+    null;
+
+  const bannerError =
+    (uploadBannerM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
+    (uploadBannerM.error as { message?: string })?.message ??
     null;
 
   const staffError =
@@ -323,8 +370,8 @@ export default function MarketSettingsPage() {
                         <div className="theme-ink font-medium">Market logo</div>
                       </div>
 
-                      {market.logo_url && (
-                        <img src={market.logo_url} alt={`${market.name} logo`} className="h-24 w-24 rounded-2xl border object-cover" />
+                      {resolveMarketMediaUrl(market.logo_url) && (
+                        <img src={resolveMarketMediaUrl(market.logo_url) ?? undefined} alt={`${market.name} logo`} className="h-24 w-24 rounded-2xl border object-cover" />
                       )}
 
                       <Input
@@ -346,6 +393,32 @@ export default function MarketSettingsPage() {
                       </div>
 
                       {logoError && <div className="text-sm text-red-600">{logoError}</div>}
+                    </div>
+
+                    <div className="subpanel grid gap-4 p-4">
+                      <div className="flex items-center gap-2">
+                        <ImagePlus className="h-4 w-4 text-cyan-600 dark:text-cyan-200" />
+                        <div className="theme-ink font-medium">Market banner</div>
+                      </div>
+
+                      {resolveMarketMediaUrl(market.banner_url) && (
+                        <img src={resolveMarketMediaUrl(market.banner_url) ?? undefined} alt={`${market.name} banner`} className="h-40 w-full rounded-2xl border object-cover" />
+                      )}
+
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setBannerFile(e.target.files?.[0] ?? null)}
+                        className="input-shell"
+                      />
+
+                      <div className="flex flex-wrap gap-3">
+                        <Button variant="secondary" onClick={() => uploadBannerM.mutate()} disabled={!bannerFile || uploadBannerM.isPending}>
+                          {uploadBannerM.isPending ? "Uploading..." : "Upload banner"}
+                        </Button>
+                      </div>
+
+                      {bannerError && <div className="text-sm text-red-600">{bannerError}</div>}
                     </div>
 
                     {updateError && <div className="text-sm text-red-600">{updateError}</div>}

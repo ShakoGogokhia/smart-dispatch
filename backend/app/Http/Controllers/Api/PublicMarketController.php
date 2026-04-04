@@ -7,6 +7,7 @@ use App\Models\Market;
 use App\Models\PromoCode;
 use App\Models\ProductReview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class PublicMarketController extends Controller
 {
@@ -38,6 +39,7 @@ class PublicMarketController extends Controller
                             'sku',
                             'image_url',
                             'image_path',
+                            'image_paths',
                             'combo_offers',
                             'price',
                             'discount_type',
@@ -84,6 +86,8 @@ class PublicMarketController extends Controller
                 'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
                 'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
                 'logo_url' => $market->logo_url,
+                'banner_url' => $market->banner_url,
+                'image_url' => $market->image_url,
                 'delivery_slots' => $market->delivery_slots ?? [],
                 'active_items_count' => (int) ($market->active_items_count ?? 0),
                 'review_summary' => [
@@ -103,6 +107,7 @@ class PublicMarketController extends Controller
                         'name' => $item->name,
                         'sku' => $item->sku,
                         'image_url' => $item->image_url,
+                        'image_urls' => $this->resolveImageUrls($item),
                         'combo_offers' => $item->combo_offers ?? [],
                         'price' => $item->price,
                         'discount_type' => $item->discount_type,
@@ -145,6 +150,8 @@ class PublicMarketController extends Controller
             'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
             'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
             'logo_url' => $market->logo_url,
+            'banner_url' => $market->banner_url,
+            'image_url' => $market->image_url,
             'delivery_slots' => $market->delivery_slots ?? [],
             'active_items_count' => (int) ($market->active_items_count ?? 0),
             'review_summary' => [
@@ -174,6 +181,7 @@ class PublicMarketController extends Controller
                 'category',
                 'image_url',
                 'image_path',
+                'image_paths',
                 'variants',
                 'availability_schedule',
                 'ingredients',
@@ -203,6 +211,7 @@ class PublicMarketController extends Controller
                     'sku' => $item->sku,
                     'category' => $item->category,
                     'image_url' => $item->image_url,
+                    'image_urls' => $this->resolveImageUrls($item),
                     'variants' => $item->variants,
                     'availability_schedule' => $item->availability_schedule,
                     'ingredients' => $item->ingredients ?? [],
@@ -312,5 +321,30 @@ class PublicMarketController extends Controller
         }
 
         return min($subtotal, round($value, 2));
+    }
+
+    private function resolveImageUrls($item): array
+    {
+        $urls = [];
+
+        foreach (($item->image_paths ?? []) as $path) {
+            if (is_string($path) && $path !== '') {
+                $urls[] = url(Storage::disk('public')->url($path));
+            }
+        }
+
+        if ($urls === [] && $item->image_path) {
+            $urls[] = url(Storage::disk('public')->url($item->image_path));
+        }
+
+        $rawImageUrl = method_exists($item, 'getRawOriginal')
+            ? $item->getRawOriginal('image_url')
+            : $item->image_url;
+
+        if (is_string($rawImageUrl) && trim($rawImageUrl) !== '') {
+            $urls[] = trim($rawImageUrl);
+        }
+
+        return collect($urls)->filter()->unique()->values()->all();
     }
 }

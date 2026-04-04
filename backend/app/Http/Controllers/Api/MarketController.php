@@ -191,8 +191,30 @@ class MarketController extends Controller
 
         return response()->json([
             'id' => $market->id,
-            'logo_url' => Storage::disk('public')->url($path),
+            'logo_url' => $market->fresh()->logo_url,
             'logo_path' => $path,
+        ]);
+    }
+
+    public function uploadBanner(Request $request, Market $market)
+    {
+        $request->validate([
+            'banner' => ['required', 'image', 'max:4096'],
+        ]);
+
+        $path = $request->file('banner')->store('market-banners', 'public');
+
+        if ($market->banner_path) {
+            Storage::disk('public')->delete($market->banner_path);
+        }
+
+        $market->update(['banner_path' => $path]);
+
+        return response()->json([
+            'id' => $market->id,
+            'banner_url' => $market->fresh()->banner_url,
+            'banner_path' => $path,
+            'image_url' => $market->fresh()->image_url,
         ]);
     }
     public function staff(Market $market)
@@ -257,6 +279,9 @@ public function addStaff(Request $request, Market $market)
             'owner' => $market->owner,
             'logo_path' => $market->logo_path,
             'logo_url' => $market->logo_url,
+            'banner_path' => $market->banner_path,
+            'banner_url' => $market->banner_url,
+            'image_url' => $market->image_url,
             'delivery_slots' => $market->delivery_slots ?? [],
             'approval_status' => $market->approval_status ?? 'approved',
             'active_items_count' => (int) ($market->active_items_count ?? 0),

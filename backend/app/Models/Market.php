@@ -26,6 +26,7 @@ class Market extends Model
         'featured_headline',
         'featured_copy',
         'logo_path',
+        'banner_path',
         'delivery_slots',
         'approval_status',
     ];
@@ -40,6 +41,8 @@ class Market extends Model
 
     protected $appends = [
         'logo_url',
+        'banner_url',
+        'image_url',
     ];
 
     public function owner()
@@ -75,7 +78,21 @@ class Market extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->logo_path);
+        return url(Storage::disk('public')->url($this->logo_path));
+    }
+
+    public function getBannerUrlAttribute(): ?string
+    {
+        if (!$this->banner_path) {
+            return null;
+        }
+
+        return url(Storage::disk('public')->url($this->banner_path));
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->banner_url ?? $this->logo_url;
     }
 
     public static function hasFeaturedColumns(): bool

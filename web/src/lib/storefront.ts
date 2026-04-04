@@ -41,6 +41,7 @@ export type StorefrontMarket = {
   code: string;
   address?: string | null;
   image_url?: string | null;
+  banner_url?: string | null;
   lat?: number | string | null;
   lng?: number | string | null;
   is_active: boolean;

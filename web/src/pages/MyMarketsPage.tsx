@@ -26,7 +26,11 @@ export default function MyMarketsPage() {
       <section className="intro-panel">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
+            <div className="section-kicker text-white/70">Owner Workspace</div>
             <h1 className="intro-title">My markets</h1>
+            <p className="intro-copy">
+              Use the same control surface for visibility, catalog, and promotions across every assigned market.
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <span className="status-chip">{markets.length} markets</span>
@@ -42,13 +46,31 @@ export default function MyMarketsPage() {
         </div>
       </section>
 
+      <section className="data-grid">
+        <div className="dashboard-card">
+          <div className="section-kicker">Assigned</div>
+          <div className="theme-ink mt-3 text-3xl font-semibold">{markets.length}</div>
+          <div className="theme-muted mt-2 text-sm">Markets connected to your owner account.</div>
+        </div>
+        <div className="dashboard-card">
+          <div className="section-kicker">Promoted</div>
+          <div className="theme-ink mt-3 text-3xl font-semibold">{featuredCount}</div>
+          <div className="theme-muted mt-2 text-sm">Storefronts currently using featured visibility.</div>
+        </div>
+        <div className="dashboard-card">
+          <div className="section-kicker">Live offers</div>
+          <div className="theme-ink mt-3 text-3xl font-semibold">{promoCount}</div>
+          <div className="theme-muted mt-2 text-sm">Markets with an active promotion running now.</div>
+        </div>
+      </section>
+
       {marketsQ.isLoading ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600">Loading markets...</CardContent>
+          <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">Loading markets...</CardContent>
         </Card>
       ) : marketsQ.isError ? (
         <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-red-700">Failed to load markets.</CardContent>
+          <CardContent className="p-8 text-sm text-red-700 dark:text-red-300">Failed to load markets.</CardContent>
         </Card>
       ) : (
         <div className="grid gap-5 xl:grid-cols-2">
@@ -128,7 +150,7 @@ export default function MyMarketsPage() {
           ))}
           {markets.length === 0 && (
             <Card className="rounded-[30px]">
-              <CardContent className="p-8 text-sm text-slate-600">No markets are assigned to your account yet.</CardContent>
+              <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">No markets are assigned to your account yet.</CardContent>
             </Card>
           )}
         </div>

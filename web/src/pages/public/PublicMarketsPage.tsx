@@ -41,6 +41,33 @@ type RailProps = {
   autoScrollMs?: number;
 };
 
+function resolveMarketMediaUrl(url?: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
+    const parsed = new URL(url, apiOrigin);
+
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getMarketBannerUrl(market: StorefrontMarket) {
+  return (
+    resolveMarketMediaUrl(market.banner_url) ??
+    resolveMarketMediaUrl(market.image_url) ??
+    resolveMarketMediaUrl(market.logo_url)
+  );
+}
+
 function getBadgeTheme(badge?: string | null) {
   const value = (badge ?? "").trim().toLowerCase();
 
@@ -61,15 +88,20 @@ function getBadgeTheme(badge?: string | null) {
 
 function MarketCard({ market }: { market: StorefrontMarket }) {
   const previewItems = (market.item_preview ?? []).slice(0, 3);
+  const previewCount = previewItems.length;
+  const totalItems = Number(market.active_items_count ?? previewCount);
+  const remainingItems = Math.max(totalItems - previewCount, 0);
   const reviewAverage = market.review_summary?.average ?? 0;
   const reviewCount = market.review_summary?.count ?? 0;
+  const heroImage = getMarketBannerUrl(market);
+  const logoImage = resolveMarketMediaUrl(market.logo_url);
 
   return (
-    <article className="group min-w-[330px] sm:min-w-[370px] lg:min-w-[390px] h-[620px] flex-shrink-0 snap-start rounded-[2rem] overflow-hidden border border-zinc-200/80 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-cyan-300/70 dark:hover:border-cyan-700 hover:shadow-[0_25px_80px_rgba(0,0,0,0.12)] transition-all duration-500 flex flex-col">
-      <div className="relative h-[270px] overflow-hidden">
-        {market.image_url ? (
+    <article className="group min-h-[680px] min-w-[330px] sm:min-w-[370px] lg:min-w-[390px] flex-shrink-0 snap-start overflow-hidden rounded-[2rem] border border-zinc-200/80 bg-white transition-all duration-500 hover:border-cyan-300/70 hover:shadow-[0_25px_80px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-cyan-700 flex flex-col">
+      <div className="relative h-[230px] overflow-hidden">
+        {heroImage ? (
           <img
-            src={market.image_url}
+            src={heroImage}
             alt={market.name}
             className="w-full h-full object-cover group-hover:scale-[1.06] transition-transform duration-700"
           />
@@ -80,14 +112,16 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/10" />
         <div className="absolute top-0 inset-x-0 h-1.5 bg-cyan-500" />
 
+        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
+
         <div className="absolute top-5 left-5 right-5 flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-2">
-            <span className="w-fit font-mono text-xs sm:text-sm tracking-widest text-white/80 bg-black/20 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10">
+          <div className="flex flex-wrap gap-2">
+            <span className="w-fit rounded-full border border-white/10 bg-black/25 px-3 py-1.5 font-mono text-xs tracking-widest text-white/85 backdrop-blur-md sm:text-sm">
               {market.code}
             </span>
 
             {market.is_featured ? (
-              <span className="w-fit px-3 py-1 rounded-full text-xs font-medium bg-cyan-400/15 text-cyan-100 border border-cyan-300/20 backdrop-blur-md">
+              <span className="w-fit rounded-full border border-cyan-300/20 bg-cyan-400/15 px-3 py-1 text-xs font-medium text-cyan-100 backdrop-blur-md">
                 Featured
               </span>
             ) : null}
@@ -104,48 +138,101 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
           ) : null}
         </div>
 
-        <div className="absolute bottom-5 left-5 right-5">
-          <h3 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white leading-none">
-            {market.name}
-          </h3>
-
-          <div className="mt-3 flex items-center gap-2 text-sm text-white/80">
-            <MapPin className="h-4 w-4" />
-            <span className="line-clamp-1">
-              {market.address || "Marketplace location"}
-            </span>
-          </div>
-        </div>
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 via-black/35 to-transparent" />
       </div>
 
-      <div className="flex-1 flex flex-col p-6 sm:p-7">
-        <p className="text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400 line-clamp-3 min-h-[72px]">
-          {market.featured_headline ||
-            market.featured_copy ||
-            market.address ||
-            "Premium marketplace experience."}
-        </p>
+      <div className="relative flex flex-1 flex-col p-6 sm:p-7">
+        <div className="flex items-start gap-4">
+          <div className="shrink-0 pt-1">
+            {logoImage ? (
+              <img
+                src={logoImage}
+                alt={`${market.name} logo`}
+                className="h-20 w-20 rounded-[1.7rem] border border-zinc-200 bg-white object-cover shadow-lg dark:border-zinc-800 dark:bg-zinc-950"
+              />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-[1.7rem] border border-zinc-200 bg-zinc-100 shadow-lg dark:border-zinc-800 dark:bg-zinc-800">
+                <Store className="h-8 w-8 text-zinc-400 dark:text-zinc-500" />
+              </div>
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-2xl font-semibold leading-tight tracking-tight text-zinc-950 dark:text-white">
+                  {market.name}
+                </h3>
+                <div className="mt-3 flex items-start gap-2 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="line-clamp-3">
+                    {market.address || "Marketplace location"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                {market.is_active ? "Open" : "Closed"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="rounded-[1.4rem] border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+              Rating
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-white">
+              <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+              <span>{reviewAverage ? reviewAverage.toFixed(1) : "New"}</span>
+            </div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {reviewCount ? `${reviewCount} reviews` : "Be the first review"}
+            </div>
+          </div>
+
+          <div className="rounded-[1.4rem] border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+              Catalog
+            </div>
+            <div className="mt-2 text-lg font-semibold text-zinc-900 dark:text-white">
+              {market.active_items_count ?? 0} items
+            </div>
+            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Live public selection
+            </div>
+          </div>
+        </div>
 
         <div className="mt-5 flex flex-wrap gap-2">
           {market.active_promo ? (
-            <span className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+            <span className="rounded-full bg-amber-100 px-3.5 py-1.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-300">
               {formatPromoLabel(market.active_promo)}
             </span>
           ) : null}
 
-          <span className="px-3.5 py-1.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-            {market.active_items_count ?? 0} items
-          </span>
-
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-            <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
-            {reviewAverage ? reviewAverage.toFixed(1) : "New"}
-            {reviewCount ? ` (${reviewCount})` : ""}
-          </span>
+          {market.featured_badge ? (
+            <span className="rounded-full bg-zinc-100 px-3.5 py-1.5 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+              {market.featured_badge}
+            </span>
+          ) : null}
         </div>
 
-        <div className="mt-6 rounded-[1.5rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3 mb-3">
+        <div className="mt-5 min-h-[72px] rounded-[1.5rem] border border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+            About
+          </div>
+          <p className="mt-2 text-[15px] leading-relaxed text-zinc-600 dark:text-zinc-400 line-clamp-3">
+            {market.featured_headline ||
+              market.featured_copy ||
+              market.address ||
+              "Premium marketplace experience."}
+          </p>
+        </div>
+
+        <div className="mt-5 rounded-[1.5rem] border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Preview Items
             </div>
@@ -160,8 +247,12 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="h-10 w-10 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                    {resolveMarketMediaUrl(item.image_url) ? (
+                      <img
+                        src={resolveMarketMediaUrl(item.image_url) ?? undefined}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-zinc-400 dark:text-zinc-600">
                         <Store className="h-4 w-4" />
@@ -181,6 +272,12 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
             {previewItems.length === 0 ? (
               <div className="text-sm text-zinc-500 dark:text-zinc-400">
                 No preview items available.
+              </div>
+            ) : null}
+
+            {remainingItems > 0 ? (
+              <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-100/90 px-3 py-2 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/80 dark:text-zinc-300">
+                +{remainingItems} more item{remainingItems === 1 ? "" : "s"} in this market
               </div>
             ) : null}
           </div>

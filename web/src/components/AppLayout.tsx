@@ -68,8 +68,8 @@ function AppNavLink({
         [
           "group relative flex items-center gap-3 rounded-[20px] border px-3 py-3 transition-all duration-200",
           isActive
-            ? "border-cyan-200 bg-gradient-to-r from-cyan-50 via-sky-50 to-white text-slate-950 shadow-[0_10px_30px_rgba(8,145,178,0.10)] dark:border-cyan-500/30 dark:bg-gradient-to-r dark:from-cyan-500/12 dark:via-slate-900 dark:to-slate-900 dark:text-white dark:shadow-[0_8px_30px_rgba(6,182,212,0.12)]"
-            : "border-transparent bg-white/70 text-slate-700 hover:-translate-y-[1px] hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:bg-transparent dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800/70 dark:hover:text-white dark:hover:shadow-none",
+            ? "border-cyan-200 bg-cyan-50 text-slate-950 shadow-[0_10px_30px_rgba(8,145,178,0.10)] dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-white dark:shadow-[0_10px_30px_rgba(6,182,212,0.12)]"
+            : "border-transparent bg-white/70 text-slate-700 hover:-translate-y-[1px] hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:bg-slate-900/70 dark:text-slate-200 dark:hover:border-slate-700 dark:hover:bg-slate-900 dark:hover:text-white dark:hover:shadow-[0_12px_28px_rgba(0,0,0,0.25)]",
         ].join(" ")
       }
     >
@@ -79,8 +79,8 @@ function AppNavLink({
             className={[
               "flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border transition-all",
               isActive
-                ? "border-cyan-200 bg-white text-cyan-700 shadow-sm dark:border-cyan-500/30 dark:bg-cyan-500/12 dark:text-cyan-200 dark:shadow-none"
-                : "border-slate-200/80 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+                ? "border-cyan-200 bg-white text-cyan-700 shadow-sm dark:border-cyan-500/30 dark:bg-cyan-500/15 dark:text-cyan-200 dark:shadow-none"
+                : "border-slate-200/80 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
             ].join(" ")}
           >
             <Icon className="h-4 w-4" />
@@ -91,7 +91,7 @@ function AppNavLink({
           </div>
 
           {badge !== undefined ? (
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
               {badge}
             </span>
           ) : null}
@@ -243,26 +243,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const sidebar = (
     <div className="flex h-full flex-col gap-4">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-gradient-to-br from-white via-slate-50 to-cyan-50/50 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-        <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-cyan-400/10 blur-3xl dark:bg-cyan-400/8" />
-        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-400/8" />
+      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-[0_18px_50px_rgba(0,0,0,0.40)]">
+        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-400/10" />
 
         <Link to="/" onClick={() => setMobileOpen(false)} className="relative flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-gradient-to-br from-cyan-500 to-sky-600 text-white shadow-[0_18px_40px_rgba(8,145,178,0.30)]">
+          <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-slate-900 text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)] dark:bg-cyan-500/14 dark:text-cyan-100 dark:shadow-none">
             <Sparkles className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <div className="truncate text-[22px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
               Smart Dispatch
             </div>
-            <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
               Markets, deliveries, and dispatch in one workspace
             </div>
           </div>
         </Link>
       </div>
 
-      <div className="rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+      <div className="rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
         <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
           Signed in as
         </div>
@@ -271,7 +270,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {meQ.data?.name || "Loading user..."}
         </div>
 
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
           {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
         </div>
 
@@ -279,7 +278,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {roles.map((role: string) => (
             <span
               key={role}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
             >
               {ROLE_LABELS[role] ?? role}
             </span>
@@ -295,21 +294,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {currentMarket && (
-          <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-gradient-to-r from-slate-50 to-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
               Active market
             </div>
             <div className="mt-2 text-base font-semibold text-slate-950 dark:text-white">{currentMarket.name}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400">{currentMarket.code}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-300">{currentMarket.code}</div>
           </div>
         )}
 
-        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-gradient-to-r from-slate-50 to-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
               Notifications
             </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-slate-800 dark:text-slate-200">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-cyan-500/15 dark:text-cyan-200">
               <Bell className="h-4 w-4" />
             </div>
           </div>
@@ -320,10 +319,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {(notificationsQ.data ?? []).slice(0, 3).map((notification) => (
               <div
                 key={notification.id}
-                className="rounded-[18px] border border-slate-200/70 bg-white px-3 py-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                className="rounded-[18px] border border-slate-200/70 bg-white px-3 py-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800/90"
               >
                 <div className="font-semibold text-slate-900 dark:text-white">{notification.title}</div>
-                <div className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
+                <div className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-300">
                   {notification.message}
                 </div>
               </div>
@@ -332,7 +331,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+      <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
         <SectionLabel>Operations</SectionLabel>
         <div className="space-y-2">
           {primaryNav.map((entry) => (
@@ -342,7 +341,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {!isCustomerOnly && (
-        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
           <SectionLabel>Markets</SectionLabel>
           <div className="space-y-2">
             <AppNavLink
@@ -362,7 +361,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {isAdmin && (
-        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.28)]">
+        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
           <SectionLabel>Admin</SectionLabel>
           <div className="space-y-2">
             <AppNavLink
@@ -384,7 +383,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="mt-auto">
         <Button
           variant="secondary"
-          className="h-14 w-full justify-start rounded-[22px] border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+          className="h-14 w-full justify-start rounded-[22px] border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
           onClick={logout}
         >
           <LogOut className="mr-2 h-4 w-4" />
@@ -395,7 +394,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.10),transparent_26%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.10),transparent_30%)] bg-slate-100 text-slate-900 dark:bg-[#020617] dark:text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-[#020617] dark:text-white">
       <div className="mx-auto flex min-h-screen max-w-[1700px] gap-5 px-3 py-3 md:px-5 md:py-5">
         <aside className="hidden w-[340px] shrink-0 xl:block">{sidebar}</aside>
 
@@ -433,7 +432,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          <div className="hidden overflow-hidden rounded-[34px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 px-6 py-6 shadow-[0_25px_80px_rgba(0,0,0,0.22)] xl:flex xl:items-start xl:justify-between">
+          <div className="hidden overflow-hidden rounded-[34px] border border-white/10 bg-slate-950 px-6 py-6 shadow-[0_25px_80px_rgba(0,0,0,0.22)] xl:flex xl:items-start xl:justify-between dark:bg-[#08111b]">
             <div className="max-w-3xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/85">
                 <PanelTop className="h-3.5 w-3.5" />

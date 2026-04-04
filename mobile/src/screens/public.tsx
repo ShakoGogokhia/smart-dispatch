@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -37,6 +38,70 @@ function calcItemFinalPrice(item: Item) {
   }
 
   return base;
+}
+
+function getItemImageUrls(item?: Item | null) {
+  const urls = [...(item?.image_urls ?? [])];
+
+  if (item?.image_url) {
+    urls.push(item.image_url);
+  }
+
+  return Array.from(
+    new Set(
+      urls
+        .map((url) => {
+          if (!url) {
+            return null;
+          }
+
+          try {
+            const apiOrigin = new URL(api.defaults.baseURL ?? "http://127.0.0.1:8000").origin;
+            const parsed = new URL(url, apiOrigin);
+
+            if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+              return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+            }
+
+            return parsed.toString();
+          } catch {
+            return url;
+          }
+        })
+        .filter((url): url is string => typeof url === "string" && url.length > 0),
+    ),
+  );
+}
+
+function resolveMarketMediaUrl(url?: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const apiOrigin = new URL(api.defaults.baseURL ?? "http://127.0.0.1:8000").origin;
+    const parsed = new URL(url, apiOrigin);
+
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getMarketBannerUrl(market?: MarketLite | null) {
+  if (!market) {
+    return null;
+  }
+
+  return (
+    resolveMarketMediaUrl(market.banner_url) ??
+    resolveMarketMediaUrl(market.image_url) ??
+    resolveMarketMediaUrl(market.logo_url)
+  );
 }
 
 export function HomeScreen({ navigation }: HomeProps) {
@@ -147,6 +212,8 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
               subtitle={market.address || "Address coming soon"}
               right={<Pill tone={market.is_active ? "success" : "warning"}>{market.is_active ? "Open" : "Closed"}</Pill>}
             >
+              {getMarketBannerUrl(market) ? <Image source={getMarketBannerUrl(market)} style={styles.marketHeroImage} contentFit="cover" /> : null}
+              {resolveMarketMediaUrl(market.logo_url) ? <Image source={resolveMarketMediaUrl(market.logo_url)} style={styles.marketLogoImage} contentFit="cover" /> : null}
               <HelperText>{market.code}</HelperText>
               <AppButton onPress={() => navigation.navigate("PublicMarket", { marketId: String(market.id) })}>
                 Open market
@@ -168,6 +235,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [cartReady, setCartReady] = useState(false);
 
@@ -277,6 +345,17 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
     return { quantity, subtotal };
   }, [cart]);
 
+  const selectedItem = useMemo(
+    () => (itemsQ.data ?? []).find((item) => item.id === selectedItemId) ?? null,
+    [itemsQ.data, selectedItemId],
+  );
+
+  const selectedItemImageUrls = useMemo(() => getItemImageUrls(selectedItem), [selectedItem]);
+
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [selectedItemId]);
+
   async function persistCart(nextCart: CartItem[]) {
     setCart(nextCart);
     await saveCart(marketId, nextCart);
@@ -315,6 +394,8 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   return (
     <Screen>
       <SectionCard title={marketQ.data?.name || `Market #${marketId}`} subtitle={marketQ.data?.address || "No address set yet."}>
+        {getMarketBannerUrl(marketQ.data) ? <Image source={getMarketBannerUrl(marketQ.data)} style={styles.marketHeroImage} contentFit="cover" /> : null}
+        {resolveMarketMediaUrl(marketQ.data?.logo_url) ? <Image source={resolveMarketMediaUrl(marketQ.data?.logo_url)} style={styles.marketLogoImageLarge} contentFit="cover" /> : null}
         <View style={styles.heroActions}>
           <AppButton variant="secondary" onPress={() => navigation.goBack()}>
             Back
@@ -415,8 +496,10 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
                 subtitle={`${item.sku} • ${item.category || "General"} • ${item.stock_qty} in stock`}
                 right={<Pill tone={outOfStock ? "danger" : "success"}>{outOfStock ? "Out of stock" : "Ready"}</Pill>}
               >
+                {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.itemImage} contentFit="cover" /> : null}
                 <Text style={styles.price}>{formatMoney(finalPrice, language)}</Text>
                 {discounted ? <HelperText>{formatMoney(basePrice, language)} regular</HelperText> : null}
+                {getItemImageUrls(item).length > 1 ? <HelperText>{getItemImageUrls(item).length} photos available</HelperText> : null}
                 <HelperText>Reviews: {item.review_summary?.average ?? "-"} / {item.review_summary?.count ?? 0}</HelperText>
                 <View style={styles.heroActions}>
                   <AppButton onPress={() => addToCart(item)} disabled={outOfStock || !item.is_active}>
@@ -438,7 +521,28 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
       )}
 
       {selectedItemId != null ? (
-        <SectionCard title="Reviews">
+        <SectionCard title={selectedItem?.name || "Reviews"} subtitle={selectedItem?.sku || "Item details"}>
+          {selectedItemImageUrls[0] ? (
+            <Image
+              source={selectedItemImageUrls[selectedImageIndex] ?? selectedItemImageUrls[0]}
+              style={styles.selectedImage}
+              contentFit="cover"
+            />
+          ) : null}
+          {selectedItemImageUrls.length > 1 ? (
+            <View style={styles.galleryRow}>
+              {selectedItemImageUrls.map((url, index) => (
+                <Pressable
+                  key={`${url}-${index}`}
+                  onPress={() => setSelectedImageIndex(index)}
+                  style={[styles.galleryThumbWrap, selectedImageIndex === index && styles.galleryThumbWrapActive]}
+                >
+                  <Image source={url} style={styles.galleryThumb} contentFit="cover" />
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
           {(reviewsQ.data ?? []).map((review) => (
             <SectionCard key={review.id} title={`${review.user?.name || "Customer"} - ${review.rating}/5`} subtitle={review.comment || "No comment"} />
           ))}
@@ -751,6 +855,27 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
+  marketHeroImage: {
+    width: "100%",
+    height: 180,
+    borderRadius: 20,
+    marginBottom: 12,
+    backgroundColor: "#e5e7eb",
+  },
+  marketLogoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    marginBottom: 10,
+    backgroundColor: "#ffffff",
+  },
+  marketLogoImageLarge: {
+    width: 88,
+    height: 88,
+    borderRadius: 20,
+    marginBottom: 12,
+    backgroundColor: "#ffffff",
+  },
   preferenceRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -760,6 +885,42 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "800",
     color: "#0f172a",
+  },
+  itemImage: {
+    width: "100%",
+    height: 180,
+    borderRadius: 18,
+    marginBottom: 12,
+    backgroundColor: "#e5e7eb",
+  },
+  selectedImage: {
+    width: "100%",
+    height: 240,
+    borderRadius: 20,
+    marginBottom: 12,
+    backgroundColor: "#e5e7eb",
+  },
+  galleryRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  galleryThumbWrap: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    padding: 2,
+  },
+  galleryThumbWrapActive: {
+    borderColor: "#0891b2",
+    backgroundColor: "#cffafe",
+  },
+  galleryThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: "#e5e7eb",
   },
   filterRow: {
     flexDirection: "row",

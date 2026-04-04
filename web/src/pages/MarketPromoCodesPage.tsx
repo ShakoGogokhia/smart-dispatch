@@ -489,9 +489,9 @@ function PromoModalLayout({
 }) {
   return (
     <div className="grid gap-0 lg:grid-cols-[340px_minmax(0,1fr)]">
-      <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#131d2b]">
+      <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#101927]">
         <div className="grid gap-4 lg:sticky lg:top-0">
-          <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0f1825]">
+          <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0c1521]">
             <div className="section-kicker">Offer preview</div>
             <div className="theme-ink mt-3 text-3xl font-semibold">{titleValue}</div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -528,7 +528,7 @@ function PromoFieldGroup({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
+    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.055]">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
         <Label className="field-label">{label}</Label>
@@ -550,7 +550,7 @@ function PromoSwitchCard({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-4 md:col-span-2 dark:border-white/10 dark:bg-[#131d2b]">
+    <div className="rounded-[24px] border border-slate-200 bg-white p-4 md:col-span-2 dark:border-white/10 dark:bg-white/[0.055]">
       <div className="flex items-center justify-between gap-4">
         <div>
           <div className="theme-ink font-medium">{title}</div>
@@ -564,7 +564,7 @@ function PromoSwitchCard({
 
 function PromoStatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
+    <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.055]">
       <div className="section-kicker">{label}</div>
       <div className="theme-ink mt-2 text-sm font-semibold leading-6">{value}</div>
     </div>

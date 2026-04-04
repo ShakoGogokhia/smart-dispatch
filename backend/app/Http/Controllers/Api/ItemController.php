@@ -118,17 +118,83 @@ class ItemController extends Controller
         }
 
         $request->validate([
-            'image' => ['required', 'image', 'max:4096'],
+            'image' => ['nullable', 'image', 'max:4096'],
+            'images' => ['nullable', 'array', 'max:8'],
+            'images.*' => ['image', 'max:4096'],
         ]);
 
-        $path = $request->file('image')->store('item-images', 'public');
+        $uploads = [];
 
-        if ($item->image_path) {
-            Storage::disk('public')->delete($item->image_path);
+        if ($request->hasFile('image')) {
+            $uploads[] = $request->file('image');
+        }
+
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $uploads[] = $file;
+            }
+        }
+
+        if ($uploads === []) {
+            return response()->json(['message' => 'At least one image is required'], 422);
+        }
+
+        $storedPaths = collect($uploads)
+            ->map(fn ($file) => $file->store('item-images', 'public'))
+            ->values()
+            ->all();
+
+        $this->deleteStoredImages($item);
+
+        $item->update([
+            'image_path' => $storedPaths[0] ?? null,
+            'image_paths' => $storedPaths,
+        ]);
+
+        return response()->json($this->serializeItem($item->fresh()));
+    }
+
+    public function deleteImage(Market $market, Item $item, int $imageIndex)
+    {
+        if ($item->market_id !== $market->id) {
+            return response()->json(['message' => 'Item does not belong to market'], 400);
+        }
+
+        $paths = collect($item->image_paths ?? [])
+            ->values()
+            ->all();
+
+        if (!array_key_exists($imageIndex, $paths)) {
+            return response()->json(['message' => 'Image not found'], 404);
+        }
+
+        $removedPath = $paths[$imageIndex];
+        unset($paths[$imageIndex]);
+        $paths = array_values($paths);
+
+        if (is_string($removedPath) && $removedPath !== '') {
+            Storage::disk('public')->delete($removedPath);
         }
 
         $item->update([
-            'image_path' => $path,
+            'image_path' => $paths[0] ?? null,
+            'image_paths' => $paths === [] ? null : $paths,
+        ]);
+
+        return response()->json($this->serializeItem($item->fresh()));
+    }
+
+    public function clearImages(Market $market, Item $item)
+    {
+        if ($item->market_id !== $market->id) {
+            return response()->json(['message' => 'Item does not belong to market'], 400);
+        }
+
+        $this->deleteStoredImages($item);
+
+        $item->update([
+            'image_path' => null,
+            'image_paths' => null,
         ]);
 
         return response()->json($this->serializeItem($item->fresh()));
@@ -241,6 +307,7 @@ class ItemController extends Controller
             'sku' => $item->sku,
             'category' => $item->category,
             'image_url' => $item->image_url,
+            'image_urls' => $this->resolveImageUrls($item),
             'variants' => $item->variants,
             'availability_schedule' => $item->availability_schedule,
             'ingredients' => $item->ingredients ?? [],
@@ -312,5 +379,40 @@ class ItemController extends Controller
             ->all();
 
         return $normalized === [] ? null : $normalized;
+    }
+
+    private function resolveImageUrls(Item $item): array
+    {
+        $urls = [];
+
+        foreach (($item->image_paths ?? []) as $path) {
+            if (is_string($path) && $path !== '') {
+                $urls[] = url(Storage::disk('public')->url($path));
+            }
+        }
+
+        if ($urls === [] && $item->image_path) {
+            $urls[] = url(Storage::disk('public')->url($item->image_path));
+        }
+
+        if (is_string($item->getRawOriginal('image_url')) && trim((string) $item->getRawOriginal('image_url')) !== '') {
+            $urls[] = trim((string) $item->getRawOriginal('image_url'));
+        }
+
+        return collect($urls)->filter()->unique()->values()->all();
+    }
+
+    private function deleteStoredImages(Item $item): void
+    {
+        $paths = collect($item->image_paths ?? [])
+            ->push($item->image_path)
+            ->filter(fn ($path) => is_string($path) && $path !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($paths !== []) {
+            Storage::disk('public')->delete($paths);
+        }
     }
 }

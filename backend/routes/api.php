@@ -219,9 +219,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/markets/{market}/items', [ItemController::class, 'store']);
         Route::patch('/markets/{market}/items/{item}', [ItemController::class, 'update']);
         Route::post('/markets/{market}/items/{item}/image', [ItemController::class, 'uploadImage']);
+        Route::delete('/markets/{market}/items/{item}/images', [ItemController::class, 'clearImages']);
+        Route::delete('/markets/{market}/items/{item}/images/{imageIndex}', [ItemController::class, 'deleteImage']);
         Route::post('/markets/{market}/items/import-csv', [ItemController::class, 'importCsv']);
         Route::get('/markets/{market}/items/export-csv', [ItemController::class, 'exportCsv']);
         Route::post('/markets/{market}/logo', [MarketController::class, 'uploadLogo']);
+        Route::post('/markets/{market}/banner', [MarketController::class, 'uploadBanner']);
         // Promo Codes
         Route::get('/markets/{market}/promo-codes', [PromoCodeController::class, 'index']);
         Route::post('/markets/{market}/promo-codes', [PromoCodeController::class, 'store']);

@@ -59,22 +59,22 @@
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.17 0.014 252);
+  --background: oklch(0.15 0.014 252);
   --foreground: oklch(0.96 0.004 95);
-  --card: oklch(0.22 0.014 252 / 96%);
+  --card: oklch(0.2 0.014 252 / 96%);
   --card-foreground: oklch(0.96 0.004 95);
-  --popover: oklch(0.2 0.014 252 / 98%);
+  --popover: oklch(0.18 0.014 252 / 98%);
   --popover-foreground: oklch(0.96 0.004 95);
   --primary: oklch(0.74 0.09 192);
   --primary-foreground: oklch(0.14 0.015 252);
-  --secondary: oklch(0.29 0.012 252 / 94%);
+  --secondary: oklch(0.25 0.012 252 / 94%);
   --secondary-foreground: oklch(0.95 0.004 95);
-  --muted: oklch(0.27 0.01 252 / 92%);
+  --muted: oklch(0.23 0.01 252 / 92%);
   --muted-foreground: oklch(0.79 0.006 95);
   --accent: oklch(0.74 0.05 84);
   --accent-foreground: oklch(0.14 0.015 252);
-  --border: oklch(0.37 0.012 252 / 72%);
-  --input: oklch(0.24 0.012 252 / 96%);
+  --border: oklch(0.34 0.012 252 / 72%);
+  --input: oklch(0.2 0.012 252 / 96%);
   --ring: oklch(0.74 0.09 192 / 42%);
 }
 
@@ -124,10 +124,10 @@
 
   .dark body {
     background:
-      radial-gradient(circle at 16% 16%, rgba(34, 211, 238, 0.14), transparent 20%),
-      radial-gradient(circle at 84% 12%, rgba(45, 212, 191, 0.1), transparent 18%),
-      radial-gradient(circle at 50% 100%, rgba(34, 211, 238, 0.08), transparent 24%),
-      linear-gradient(180deg, #08111b 0%, #0f1729 46%, #070d16 100%);
+      radial-gradient(circle at 16% 16%, rgba(34, 211, 238, 0.16), transparent 20%),
+      radial-gradient(circle at 84% 12%, rgba(45, 212, 191, 0.11), transparent 18%),
+      radial-gradient(circle at 50% 100%, rgba(34, 211, 238, 0.09), transparent 24%),
+      linear-gradient(180deg, #06101a 0%, #0b1420 46%, #050b12 100%);
   }
 
   button,
@@ -183,8 +183,8 @@
 
   .dark .subpanel {
     background:
-      linear-gradient(180deg, rgba(22, 31, 46, 0.94), rgba(16, 24, 36, 0.92)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.07), transparent 24%);
+      linear-gradient(180deg, rgba(16, 25, 37, 0.95), rgba(12, 20, 31, 0.93)),
+      radial-gradient(circle at top right, rgba(34, 211, 238, 0.08), transparent 24%);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
   }
 
@@ -197,10 +197,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background:
-      radial-gradient(circle at 10% 14%, rgba(34, 211, 238, 0.06), transparent 18%),
-      radial-gradient(circle at 86% 10%, rgba(34, 211, 238, 0.05), transparent 18%),
-      radial-gradient(circle at 50% 96%, rgba(34, 211, 238, 0.04), transparent 20%);
+    background: transparent;
   }
 
   .app-shell-mobile-safe {
@@ -245,18 +242,14 @@
 
   .rail-panel {
     @apply rounded-[28px] border p-5 text-slate-950 dark:text-white;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.8)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.08), transparent 24%);
+    background: rgba(255, 255, 255, 0.9);
     border-color: rgba(228, 228, 231, 0.9);
     box-shadow: 0 22px 56px rgba(15, 23, 42, 0.08);
     backdrop-filter: blur(18px);
   }
 
   .dark .rail-panel {
-    background:
-      linear-gradient(180deg, rgba(18, 18, 21, 0.94), rgba(24, 24, 27, 0.92)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.1), transparent 24%);
+    background: rgba(11, 18, 28, 0.94);
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 22px 56px rgba(0, 0, 0, 0.34);
   }
@@ -265,9 +258,7 @@
   .dashboard-card,
   .intro-panel {
     @apply rounded-[28px] border;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.82)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.05), transparent 24%);
+    background: rgba(255, 255, 255, 0.9);
     border-color: rgba(228, 228, 231, 0.88);
     box-shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
     backdrop-filter: blur(16px);
@@ -276,9 +267,7 @@
   .dark .paper-panel,
   .dark .dashboard-card,
   .dark .intro-panel {
-    background:
-      linear-gradient(180deg, rgba(24, 24, 27, 0.92), rgba(18, 18, 21, 0.9)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.05), transparent 22%);
+    background: rgba(11, 19, 29, 0.92);
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
   }
@@ -393,9 +382,7 @@
   .metric-block,
   .mobile-record {
     @apply rounded-[24px] border;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.84)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.05), transparent 22%);
+    background: rgba(255, 255, 255, 0.92);
     border-color: rgba(228, 228, 231, 0.84);
     box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
     backdrop-filter: blur(12px);
@@ -406,9 +393,7 @@
   .dark .frost-panel,
   .dark .metric-block,
   .dark .mobile-record {
-    background:
-      linear-gradient(180deg, rgba(39, 39, 42, 0.72), rgba(24, 24, 27, 0.72)),
-      radial-gradient(circle at top right, rgba(34, 211, 238, 0.06), transparent 22%);
+    background: rgba(14, 22, 33, 0.88);
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
   }
@@ -417,7 +402,7 @@
   .metric-dark,
   .hero-panel {
     @apply rounded-[28px] border text-white;
-    background: linear-gradient(145deg, rgba(17, 31, 46, 0.98), rgba(12, 22, 34, 0.96));
+    background: rgba(15, 23, 34, 0.98);
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 22px 52px rgba(15, 23, 42, 0.18);
   }
@@ -425,7 +410,7 @@
   .dark .ink-panel,
   .dark .metric-dark,
   .dark .hero-panel {
-    background: linear-gradient(145deg, rgba(13, 22, 34, 0.98), rgba(10, 18, 28, 0.98));
+    background: rgba(10, 18, 28, 0.98);
     box-shadow: 0 22px 52px rgba(0, 0, 0, 0.38);
   }
 
@@ -438,18 +423,13 @@
     content: "";
     position: absolute;
     inset: 0;
-    background:
-      radial-gradient(circle at top right, rgba(255, 255, 255, 0.1), transparent 26%),
-      linear-gradient(135deg, rgba(88, 181, 196, 0.06), transparent 36%);
+    background: transparent;
     pointer-events: none;
   }
 
   .intro-panel {
     @apply p-6 md:p-7 text-white;
-    background:
-      radial-gradient(circle at 16% 18%, rgba(34, 211, 238, 0.18), transparent 22%),
-      radial-gradient(circle at 84% 16%, rgba(34, 211, 238, 0.08), transparent 20%),
-      linear-gradient(135deg, rgba(9, 9, 11, 0.98), rgba(24, 24, 27, 0.96));
+    background: rgba(15, 23, 34, 0.98);
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
   }
@@ -687,7 +667,7 @@
   }
 
   .dark .app-modal-header {
-    background: rgba(19, 29, 43, 0.96);
+    background: rgba(15, 24, 36, 0.96);
     border-color: rgba(255, 255, 255, 0.08);
   }
 
@@ -710,7 +690,7 @@
   }
 
   .dark .app-modal-sidebar {
-    background: rgba(19, 29, 43, 0.96);
+    background: rgba(15, 24, 36, 0.96);
     border-color: rgba(255, 255, 255, 0.08);
   }
 
@@ -727,18 +707,18 @@
   }
 
   .app-modal-card {
-    @apply rounded-[24px] border bg-white p-4 dark:border-white/10 dark:bg-[#131d2b];
+    @apply rounded-[24px] border bg-white p-4 dark:border-white/10 dark:bg-white/[0.055];
     border-color: rgba(226, 232, 240, 0.88);
   }
 
   .app-modal-preview {
-    @apply rounded-[26px] border p-5 dark:border-white/10 dark:bg-[#0f1825];
+    @apply rounded-[26px] border p-5 dark:border-white/10 dark:bg-[#0c1521];
     background: rgba(247, 244, 236, 0.98);
     border-color: rgba(226, 232, 240, 0.88);
   }
 
   .dark .app-modal-preview {
-    background: rgba(15, 24, 37, 0.98);
+    background: rgba(11, 20, 31, 0.98);
   }
 
   .app-modal-footer {
@@ -748,7 +728,7 @@
   }
 
   .dark .app-modal-footer {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(13, 20, 31, 0.92);
     border-color: rgba(255, 255, 255, 0.08);
   }
 

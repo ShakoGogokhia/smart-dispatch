@@ -46,6 +46,7 @@ type Item = {
   sku: string;
   category?: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   ingredients?: ItemIngredient[] | null;
   combo_offers?: ComboOffer[] | null;
@@ -82,6 +83,70 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function getRemovableIngredients(item?: Item | null) {
   return (item?.ingredients ?? []).filter((ingredient) => ingredient.removable);
+}
+
+function getItemImageUrls(item?: Item | null) {
+  const urls = [...(item?.image_urls ?? [])];
+
+  if (item?.image_url) {
+    urls.push(item.image_url);
+  }
+
+  return Array.from(
+    new Set(
+      urls
+        .map((url) => {
+          if (!url) {
+            return null;
+          }
+
+          try {
+            const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
+            const parsed = new URL(url, apiOrigin);
+
+            if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+              return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+            }
+
+            return parsed.toString();
+          } catch {
+            return url;
+          }
+        })
+        .filter((url): url is string => typeof url === "string" && url.length > 0),
+    ),
+  );
+}
+
+function resolveMarketMediaUrl(url?: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
+    const parsed = new URL(url, apiOrigin);
+
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getMarketBannerUrl(market?: StorefrontMarket | null) {
+  if (!market) {
+    return null;
+  }
+
+  return (
+    resolveMarketMediaUrl(market.banner_url) ??
+    resolveMarketMediaUrl(market.image_url) ??
+    resolveMarketMediaUrl(market.logo_url)
+  );
 }
 
 function StarPicker({
@@ -163,6 +228,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedRemovedIngredients, setSelectedRemovedIngredients] = useState<string[]>([]);
   const [selectedComboOfferName, setSelectedComboOfferName] = useState("");
   const [isMarketReviewsOpen, setIsMarketReviewsOpen] = useState(false);
@@ -184,6 +250,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   useEffect(() => {
     setSelectedRemovedIngredients([]);
     setSelectedComboOfferName("");
+    setSelectedImageIndex(0);
   }, [selectedItemId]);
 
   const marketQ = useQuery({
@@ -309,6 +376,8 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     () => (itemsQ.data ?? []).find((item) => item.id === selectedItemId) ?? null,
     [itemsQ.data, selectedItemId]
   );
+
+  const selectedItemImageUrls = useMemo(() => getItemImageUrls(selectedItem), [selectedItem]);
 
   const selectedItemRemovableIngredients = useMemo(
     () => getRemovableIngredients(selectedItem),
@@ -447,10 +516,10 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
         {/* Hero */}
         <div className="relative overflow-hidden rounded-[2rem] shadow-2xl mb-10 sm:mb-12 border border-zinc-200/60 dark:border-zinc-800">
           <div className="relative h-[360px] sm:h-[430px]">
-            {market?.image_url ? (
+            {getMarketBannerUrl(market) ? (
               <img
-                src={market.image_url}
-                alt={market.name}
+                src={getMarketBannerUrl(market) ?? undefined}
+                alt={market?.name ?? "Market"}
                 className="absolute inset-0 w-full h-full object-cover"
               />
             ) : (
@@ -475,6 +544,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
             <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 text-white">
               <div className="flex flex-wrap items-center gap-3 mb-4">
+                {resolveMarketMediaUrl(market?.logo_url) ? (
+                  <img src={resolveMarketMediaUrl(market?.logo_url) ?? undefined} alt={`${market?.name ?? "Market"} logo`} className="h-16 w-16 rounded-2xl border border-white/30 object-cover shadow-lg" />
+                ) : null}
                 <span className="font-mono text-xs sm:text-sm tracking-widest text-white/75">
                   {market?.code}
                 </span>
@@ -596,9 +668,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                       className="group relative overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/60 hover:shadow-2xl transition-all duration-300 bg-white dark:bg-zinc-900 flex flex-col h-full"
                     >
                       <div className="relative h-56 sm:h-64 bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                        {item.image_url ? (
+                        {getItemImageUrls(item)[0] ? (
                           <img
-                            src={item.image_url}
+                            src={getItemImageUrls(item)[0]}
                             alt={item.name}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           />
@@ -611,7 +683,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/45 to-transparent">
                           <div className="flex items-center justify-between gap-2">
                             {item.category ? (
-                              <span className="text-xs bg-white/90 text-zinc-900 px-3 py-1 rounded-full font-medium">
+                              <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-zinc-900 dark:bg-zinc-900/90 dark:text-zinc-100">
                                 {item.category}
                               </span>
                             ) : (
@@ -624,6 +696,13 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                               </span>
                             )}
                           </div>
+                          {getItemImageUrls(item).length > 1 ? (
+                            <div className="mt-2 text-right">
+                              <span className="inline-flex rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white">
+                                {getItemImageUrls(item).length} photos
+                              </span>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
@@ -821,7 +900,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                       <div className="flex justify-between gap-4">
                         <div className="min-w-0 flex-1">
                           <div className="font-medium line-clamp-1">{item.name}</div>
-                          <div className="text-zinc-500 text-xs mt-1">
+                          <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                             {formatMoney(item.price)} each
                           </div>
                           {item.combo_offer ? (
@@ -894,8 +973,12 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 <div className="rounded-[1.75rem] border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6">
                   <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
                     <div className="overflow-hidden rounded-[1.5rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800">
-                      {selectedItem.image_url ? (
-                        <img src={selectedItem.image_url} alt={selectedItem.name} className="h-full w-full object-cover" />
+                      {selectedItemImageUrls[0] ? (
+                        <img
+                          src={selectedItemImageUrls[selectedImageIndex] ?? selectedItemImageUrls[0]}
+                          alt={selectedItem.name}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
                         <div className="flex min-h-[220px] items-center justify-center text-zinc-400 dark:text-zinc-600">
                           <Store className="h-16 w-16" />
@@ -922,6 +1005,29 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                           />
                         </div>
                       </div>
+
+                      {selectedItemImageUrls.length > 1 ? (
+                        <div className="grid gap-2">
+                          <div className="text-sm font-medium">Gallery</div>
+                          <div className="flex flex-wrap gap-2">
+                            {selectedItemImageUrls.map((url, index) => {
+                              const active = index === selectedImageIndex;
+                              return (
+                                <button
+                                  key={`${url}-${index}`}
+                                  type="button"
+                                  onClick={() => setSelectedImageIndex(index)}
+                                  className={`overflow-hidden rounded-2xl border ${
+                                    active ? "border-cyan-500 ring-2 ring-cyan-300/60" : "border-zinc-200 dark:border-zinc-800"
+                                  }`}
+                                >
+                                  <img src={url} alt={`${selectedItem.name} ${index + 1}`} className="h-16 w-16 object-cover" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
 
                       {(selectedItem.ingredients ?? []).length > 0 ? (
                         <div className="grid gap-3">
@@ -1106,7 +1212,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
               </div>
 
               {reviewsQ.isLoading ? (
-                <p className="text-center py-10 text-zinc-500">Loading reviews...</p>
+                <p className="py-10 text-center text-zinc-500 dark:text-zinc-400">Loading reviews...</p>
               ) : (reviewsQ.data ?? []).length > 0 ? (
                 reviewsQ.data?.map((review) => (
                   <div
@@ -1127,7 +1233,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                   </div>
                 ))
               ) : (
-                <p className="text-center py-12 text-zinc-500">
+                <p className="py-12 text-center text-zinc-500 dark:text-zinc-400">
                   No reviews yet. Be the first to review!
                 </p>
               )}
@@ -1203,9 +1309,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
               <div className="space-y-5">
                 {marketReviewsQ.isLoading ? (
-                  <p className="text-center py-10 text-zinc-500">Loading reviews...</p>
+                  <p className="py-10 text-center text-zinc-500 dark:text-zinc-400">Loading reviews...</p>
                 ) : marketReviewsQ.isError ? (
-                  <p className="text-center py-10 text-zinc-500">
+                  <p className="py-10 text-center text-zinc-500 dark:text-zinc-400">
                     Market reviews are not available yet.
                   </p>
                 ) : (marketReviewsQ.data ?? []).length > 0 ? (
@@ -1226,7 +1332,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                     </div>
                   ))
                 ) : (
-                  <p className="text-center py-12 text-zinc-500">
+                  <p className="py-12 text-center text-zinc-500 dark:text-zinc-400">
                     No market reviews yet. Be the first to review!
                   </p>
                 )}

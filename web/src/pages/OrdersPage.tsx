@@ -1,5 +1,17 @@
 import { useMemo, useState } from "react";
-import { Clock3, MapPin, MessageSquareMore, PackagePlus, Search, Star, Truck, Undo2, UserRound, Wallet, XCircle } from "lucide-react";
+import {
+  Clock3,
+  MapPin,
+  MessageSquareMore,
+  PackagePlus,
+  Search,
+  Star,
+  Truck,
+  Undo2,
+  UserRound,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 import { MapContainer, Marker, TileLayer } from "react-leaflet";
@@ -21,7 +33,6 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus, getOrderStatusTone } from "@/lib/format";
-import { repairMojibake } from "@/lib/text";
 import { useMe } from "@/lib/useMe";
 import type { Order, Paginated } from "@/types/api";
 
@@ -44,210 +55,10 @@ function getErrorMessage(error: unknown) {
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
-const copy = {
-  en: {
-    customerDesk: "Customer order desk",
-    customerHeroTitle: "Your ETA, proof of delivery, and reorder flow in one calm timeline.",
-    customerHeroText: "Track the order state, inspect delivery proof, cancel early-stage orders, and rate completed deliveries without leaving the list.",
-    commandBoard: "Orders command board",
-    opsHeroTitle: "A cleaner dispatch board for intake, fulfillment, and customer follow-up.",
-    opsHeroText: "Dispatch can now see ETA signals, open richer order detail, and hand customers a cleaner delivery experience.",
-    createOpsOrder: "Create ops order",
-    createOpsText: "Manual order intake for call center or dispatch scenarios.",
-    detail: "Open detail",
-    noAddress: "No address set",
-    noOrders: "You have not placed any orders yet.",
-    noResults: "No orders matched your search.",
-    loading: "Loading orders...",
-    failed: "Failed to load orders.",
-    search: "Search orders",
-    eta: "ETA",
-    promised: "Promised",
-    timeline: "Timeline",
-    proof: "Delivery proof",
-    rate: "Rate delivery",
-    cancel: "Cancel order",
-    reorder: "Reorder",
-    reason: "Cancellation reason",
-    feedback: "Feedback",
-    rating: "Rating (1-5)",
-    submit: "Submit",
-    close: "Close",
-    created: "Created",
-    waitingForDriver: "Waiting for driver",
-    inDeliveryFlow: "In delivery flow",
-    marketPending: "Market pending",
-    visibleOrders: "Visible orders",
-    delivered: "Delivered",
-    inDriverFlow: "In driver flow",
-    late: "Late",
-    proofMissing: "No delivery proof has been attached yet.",
-    tracking: "Live driver tracking",
-    trackingCopy: "Tracking appears after pickup so the timeline stays signal-first.",
-    createdLabel: "Created",
-    customer: "Customer",
-    driver: "Driver",
-    market: "Market",
-    total: "Total",
-  },
-  ka: {
-    customerDesk: "მომხმარებლის შეკვეთები",
-    customerHeroTitle: "ETA, მიწოდების დადასტურება და ხელახალი შეკვეთა ერთ სუფთა timeline-ში.",
-    customerHeroText: "ნახეთ შეკვეთის სტატუსი, დადასტურება, გააუქმეთ ადრეულ ეტაპზე და შეაფასეთ დასრულებული მიწოდება უშუალოდ ამ სიიდან.",
-    commandBoard: "შეკვეთების დაფა",
-    opsHeroTitle: "უფრო სუფთა დისპეტჩერის დაფა მიღებისთვის, შესრულებისთვის და მომხმარებელთან შემდგომი კომუნიკაციისთვის.",
-    opsHeroText: "ოპერაციები ახლა ხედავს ETA-ს, დეტალურ შეკვეთას და მომხმარებლისთვის უკეთეს მიწოდების გამოცდილებას.",
-    createOpsOrder: "ოპერატორის შეკვეთა",
-    createOpsText: "ხელით მიღება ქოლ-ცენტრის ან დისპეტჩერის სცენარებისთვის.",
-    detail: "დეტალის გახსნა",
-    noAddress: "მისამართი არ არის მითითებული",
-    noOrders: "ჯერ შეკვეთა არ გაგიკეთებიათ.",
-    noResults: "შედეგი ვერ მოიძებნა.",
-    loading: "შეკვეთები იტვირთება...",
-    failed: "შეკვეთების ჩატვირთვა ვერ მოხერხდა.",
-    search: "შეკვეთების ძებნა",
-    eta: "ETA",
-    promised: "დაპირებული დრო",
-    timeline: "ტაიმლაინი",
-    proof: "მიწოდების დადასტურება",
-    rate: "მიწოდების შეფასება",
-    cancel: "შეკვეთის გაუქმება",
-    reorder: "ხელახლა შეკვეთა",
-    reason: "გაუქმების მიზეზი",
-    feedback: "კომენტარი",
-    rating: "შეფასება (1-5)",
-    submit: "გაგზავნა",
-    close: "დახურვა",
-    created: "შექმნილი",
-    waitingForDriver: "მძღოლს ელოდება",
-    inDeliveryFlow: "მიწოდების პროცესში",
-    marketPending: "ბაზარს ელოდება",
-    visibleOrders: "ხილული შეკვეთები",
-    delivered: "მიწოდებული",
-    inDriverFlow: "მძღოლის პროცესში",
-    late: "აგვიანებს",
-    proofMissing: "მიწოდების დადასტურება ჯერ არ არის დამატებული.",
-    tracking: "მძღოლის ცოცხალი ტრეკინგი",
-    trackingCopy: "ტრეკინგი ჩნდება აყვანის შემდეგ, რათა ეკრანი მკაფიო დარჩეს.",
-    createdLabel: "შექმნილი",
-    customer: "მომხმარებელი",
-    driver: "მძღოლი",
-    market: "ბაზარი",
-    total: "ჯამი",
-  },
-} as const;
-
-type PageCopy = Record<keyof (typeof copy)["en"], string>;
-
-export function getPageCopy(language: "en" | "ka"): PageCopy {
-  const source = copy[language];
-  if (language !== "ka") {
-    return source;
-  }
-
-  return Object.fromEntries(Object.entries(source).map(([key, value]) => [key, repairMojibake(value)])) as PageCopy;
-}
-
-export function getCleanPageCopy(language: "en" | "ka") {
-  if (language === "ka") {
-    return {
-      customerDesk: "მომხმარებლის შეკვეთები",
-      customerHeroTitle: "ETA, მიწოდების დადასტურება და ხელახლა შეკვეთა ერთ სუფთა ქრონოლოგიაში.",
-      customerHeroText: "ნახე შეკვეთის სტატუსი, მიწოდების მტკიცებულება, გააუქმე ადრეულ ეტაპზე და შეაფასე დასრულებული მიწოდება სიის დატოვების გარეშე.",
-      commandBoard: "შეკვეთების დაფა",
-      opsHeroTitle: "სუფთა სადისპეტჩერო დაფა მიღებისთვის, შესრულებისთვის და შემდგომი რეაგირებისთვის.",
-      opsHeroText: "ოპერაციები ახლა უკეთ ხედავს ETA-ს, დეტალურ შეკვეთას და მომხმარებლის მიწოდების სრულ გზას.",
-      createOpsOrder: "ოპერაციული შეკვეთის შექმნა",
-      createOpsText: "შეკვეთის ხელით მიღება ქოლ ცენტრის ან დისპეტჩერის სცენარებისთვის.",
-      detail: "დეტალების ნახვა",
-      noAddress: "მისამართი მითითებული არ არის",
-      noOrders: "თქვენ ჯერ შეკვეთა არ გაგიკეთებიათ.",
-      noResults: "თქვენს ძებნაზე შედეგი ვერ მოიძებნა.",
-      loading: "შეკვეთები იტვირთება...",
-      failed: "შეკვეთების ჩატვირთვა ვერ მოხერხდა.",
-      search: "შეკვეთების ძებნა",
-      eta: "ETA",
-      promised: "დაპირებული დრო",
-      timeline: "ქრონოლოგია",
-      proof: "მიწოდების დადასტურება",
-      rate: "მიწოდების შეფასება",
-      cancel: "შეკვეთის გაუქმება",
-      reorder: "ხელახლა შეკვეთა",
-      reason: "გაუქმების მიზეზი",
-      feedback: "კომენტარი",
-      rating: "შეფასება (1-5)",
-      submit: "გაგზავნა",
-      close: "დახურვა",
-      created: "შექმნილი",
-      waitingForDriver: "მძღოლს ელოდება",
-      inDeliveryFlow: "მიწოდების პროცესში",
-      marketPending: "მარკეტს ელოდება",
-      visibleOrders: "ხილული შეკვეთები",
-      delivered: "მიტანილი",
-      inDriverFlow: "მძღოლის პროცესში",
-      late: "იგვიანებს",
-      proofMissing: "მიწოდების დადასტურება ჯერ დამატებული არ არის.",
-      tracking: "მძღოლის ცოცხალი თვალთვალი",
-      trackingCopy: "თვალთვალი გამოჩნდება აყვანის შემდეგ, რომ ეკრანი სიგნალებზე იყოს ორიენტირებული.",
-      createdLabel: "შექმნილი",
-      customer: "მომხმარებელი",
-      driver: "მძღოლი",
-      market: "მარკეტი",
-      total: "ჯამი",
-    };
-  }
-
-  return {
-    customerDesk: "Customer order desk",
-    customerHeroTitle: "Your ETA, proof of delivery, and reorder flow in one calm timeline.",
-    customerHeroText: "Track the order state, inspect delivery proof, cancel early-stage orders, and rate completed deliveries without leaving the list.",
-    commandBoard: "Orders command board",
-    opsHeroTitle: "A cleaner dispatch board for intake, fulfillment, and customer follow-up.",
-    opsHeroText: "Dispatch can now see ETA signals, open richer order detail, and hand customers a cleaner delivery experience.",
-    createOpsOrder: "Create ops order",
-    createOpsText: "Manual order intake for call center or dispatch scenarios.",
-    detail: "Open detail",
-    noAddress: "No address set",
-    noOrders: "You have not placed any orders yet.",
-    noResults: "No orders matched your search.",
-    loading: "Loading orders...",
-    failed: "Failed to load orders.",
-    search: "Search orders",
-    eta: "ETA",
-    promised: "Promised",
-    timeline: "Timeline",
-    proof: "Delivery proof",
-    rate: "Rate delivery",
-    cancel: "Cancel order",
-    reorder: "Reorder",
-    reason: "Cancellation reason",
-    feedback: "Feedback",
-    rating: "Rating (1-5)",
-    submit: "Submit",
-    close: "Close",
-    created: "Created",
-    waitingForDriver: "Waiting for driver",
-    inDeliveryFlow: "In delivery flow",
-    marketPending: "Market pending",
-    visibleOrders: "Visible orders",
-    delivered: "Delivered",
-    inDriverFlow: "In driver flow",
-    late: "Late",
-    proofMissing: "No delivery proof has been attached yet.",
-    tracking: "Live driver tracking",
-    trackingCopy: "Tracking appears after pickup so the timeline stays signal-first.",
-    createdLabel: "Created",
-    customer: "Customer",
-    driver: "Driver",
-    market: "Market",
-    total: "Total",
-  };
-}
-
 export default function OrdersPage() {
   const meQ = useMe();
-  const text = copy.en;
   const queryClient = useQueryClient();
+
   const [dropoffAddress, setDropoffAddress] = useState("Tbilisi Center");
   const [dropoffLat, setDropoffLat] = useState("41.7151");
   const [dropoffLng, setDropoffLng] = useState("44.8271");
@@ -260,7 +71,8 @@ export default function OrdersPage() {
 
   const roles = meQ.data?.roles ?? [];
   const isCustomerOnly =
-    roles.includes("customer") && !roles.some((role: string) => ["admin", "owner", "staff", "driver"].includes(role));
+    roles.includes("customer") &&
+    !roles.some((role: string) => ["admin", "owner", "staff", "driver"].includes(role));
   const isOpsUser = roles.some((role: string) => ["admin", "owner", "staff"].includes(role));
 
   const ordersQ = useQuery({
@@ -301,7 +113,8 @@ export default function OrdersPage() {
   });
 
   const cancelM = useMutation({
-    mutationFn: async (orderId: number) => (await api.post(`/api/orders/${orderId}/request-cancel`, { reason: cancelReason || null })).data,
+    mutationFn: async (orderId: number) =>
+      (await api.post(`/api/orders/${orderId}/request-cancel`, { reason: cancelReason || null })).data,
     onSuccess: async () => {
       setCancelReason("");
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -317,7 +130,9 @@ export default function OrdersPage() {
   });
 
   const refundM = useMutation({
-    mutationFn: async (orderId: number) => (await api.post(`/api/orders/${orderId}/request-refund`, { reason: refundReason || "Requested by customer" })).data,
+    mutationFn: async (orderId: number) =>
+      (await api.post(`/api/orders/${orderId}/request-refund`, { reason: refundReason || "Requested by customer" }))
+        .data,
     onSuccess: async () => {
       setRefundReason("");
       await queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -351,7 +166,10 @@ export default function OrdersPage() {
 
   const deliveredCount = filteredOrders.filter((order) => order.status === "DELIVERED").length;
   const marketPendingCount = filteredOrders.filter((order) => order.status === "MARKET_PENDING").length;
-  const driverFlowCount = filteredOrders.filter((order) => ["READY_FOR_PICKUP", "OFFERED", "ASSIGNED", "PICKED_UP"].includes(order.status)).length;
+  const driverFlowCount = filteredOrders.filter((order) =>
+    ["READY_FOR_PICKUP", "OFFERED", "ASSIGNED", "PICKED_UP"].includes(order.status),
+  ).length;
+
   const detailOrder = detailQ.data;
 
   const errorMessage =
@@ -364,42 +182,86 @@ export default function OrdersPage() {
 
   return (
     <div className="grid gap-6">
-      <section className="hero-grid">
-        <div className="hero-panel">
-          <h1 className="font-display mt-5 text-5xl font-semibold tracking-[-0.06em] text-white md:text-6xl">
-            Orders
-          </h1>
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_420px]">
+        <div className="relative overflow-hidden rounded-[34px] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 shadow-[0_25px_80px_rgba(0,0,0,0.22)] dark:border-slate-800">
+          <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Metric title={text.visibleOrders} value={filteredOrders.length} helper={isCustomerOnly ? text.timeline : text.search} />
-            <Metric title={text.marketPending} value={marketPendingCount} helper={text.market} />
-            <Metric title={text.inDriverFlow} value={driverFlowCount} helper={text.driver} />
-            <Metric title={text.delivered} value={deliveredCount} helper={text.proof} />
+          <div className="relative">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/80">
+              Orders workspace
+            </div>
+
+            <h1 className="mt-5 text-5xl font-semibold tracking-[-0.06em] text-white md:text-6xl">
+              Orders
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
+              Manage intake, delivery flow, proof of delivery, and customer follow-up in one clean workspace.
+            </p>
+
+            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Metric
+                title="Visible orders"
+                value={filteredOrders.length}
+                helper={isCustomerOnly ? "Timeline" : "Search orders"}
+              />
+              <Metric title="Market pending" value={marketPendingCount} helper="Market" />
+              <Metric title="In driver flow" value={driverFlowCount} helper="Driver" />
+              <Metric title="Delivered" value={deliveredCount} helper="Delivery proof" />
+            </div>
           </div>
         </div>
 
         <div className="grid gap-4">
           {!isCustomerOnly && isOpsUser && (
-            <Card>
+            <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.07)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
               <CardHeader>
-                <CardTitle className="panel-title">{text.createOpsOrder}</CardTitle>
+                <CardTitle className="text-xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
+                  Create ops order
+                </CardTitle>
+                <p className="text-sm text-slate-500 dark:text-slate-300">
+                  Manual order intake for call center or dispatch scenarios.
+                </p>
               </CardHeader>
+
               <CardContent className="grid gap-4">
-                <div className="field-group">
-                  <Label className="field-label">Address</Label>
-                  <Input value={dropoffAddress} onChange={(event) => setDropoffAddress(event.target.value)} className="input-shell" />
+                <div className="grid gap-2">
+                  <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                    Address
+                  </Label>
+                  <Input
+                    value={dropoffAddress}
+                    onChange={(event) => setDropoffAddress(event.target.value)}
+                    className="h-12 rounded-[18px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  />
                 </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="field-group">
-                    <Label className="field-label">Latitude</Label>
-                    <Input value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} className="input-shell" />
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                      Latitude
+                    </Label>
+                    <Input
+                      value={dropoffLat}
+                      onChange={(event) => setDropoffLat(event.target.value)}
+                      className="h-12 rounded-[18px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    />
                   </div>
-                  <div className="field-group">
-                    <Label className="field-label">Longitude</Label>
-                    <Input value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} className="input-shell" />
+
+                  <div className="grid gap-2">
+                    <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                      Longitude
+                    </Label>
+                    <Input
+                      value={dropoffLng}
+                      onChange={(event) => setDropoffLng(event.target.value)}
+                      className="h-12 rounded-[18px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                    />
                   </div>
                 </div>
-                <Button className="h-12" onClick={() => createOrderM.mutate()} disabled={createOrderM.isPending}>
+
+                <Button className="h-12 rounded-[18px]" onClick={() => createOrderM.mutate()} disabled={createOrderM.isPending}>
                   <PackagePlus className="h-4 w-4" />
                   {createOrderM.isPending ? "Creating..." : "Create order"}
                 </Button>
@@ -407,30 +269,54 @@ export default function OrdersPage() {
             </Card>
           )}
 
-          <div className="frost-panel p-5">
-            <div className="section-kicker">{text.search}</div>
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={text.search} className="input-shell pl-11" />
+          <div className="rounded-[30px] border border-slate-200/70 bg-white/85 p-5 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              Search orders
             </div>
-            {errorMessage && <div className="status-bad mt-4 rounded-[18px] border px-4 py-3 text-sm">{errorMessage}</div>}
+
+            <div className="relative mt-3">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search orders"
+                className="h-12 rounded-[18px] border-slate-200 bg-white pl-11 text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+              />
+            </div>
+
+            {errorMessage && (
+              <div className="mt-4 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-300/20 dark:bg-rose-300/10 dark:text-rose-100">
+                {errorMessage}
+              </div>
+            )}
           </div>
         </div>
       </section>
 
       {ordersQ.isLoading ? (
-        <Card><CardContent className="p-8 text-sm text-slate-600">{text.loading}</CardContent></Card>
+        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 dark:border-slate-800 dark:bg-slate-950/90">
+          <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">
+            Loading orders...
+          </CardContent>
+        </Card>
       ) : ordersQ.isError ? (
-        <Card><CardContent className="p-8 text-sm text-rose-700">{text.failed}</CardContent></Card>
+        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 dark:border-slate-800 dark:bg-slate-950/90">
+          <CardContent className="p-8 text-sm text-rose-700 dark:text-rose-200">
+            Failed to load orders.
+          </CardContent>
+        </Card>
       ) : filteredOrders.length === 0 ? (
-        <Card><CardContent className="p-8 text-sm text-slate-600">{isCustomerOnly ? text.noOrders : text.noResults}</CardContent></Card>
+        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 dark:border-slate-800 dark:bg-slate-950/90">
+          <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">
+            {isCustomerOnly ? "You have not placed any orders yet." : "No orders matched your search."}
+          </CardContent>
+        </Card>
       ) : isCustomerOnly ? (
         <div className="grid gap-5">
           {filteredOrders.map((order) => (
             <CustomerOrderCard
               key={order.id}
               order={order}
-              text={text}
               onOpenDetail={() => setSelectedOrderId(order.id)}
               onCancel={() => cancelM.mutate(order.id)}
               onReorder={() => reorderM.mutate(order.id)}
@@ -438,50 +324,82 @@ export default function OrdersPage() {
           ))}
         </div>
       ) : (
-        <Card>
-          <CardHeader className="border-b border-slate-200/80 dark:border-white/10">
-            <CardTitle className="panel-title">Operations orders</CardTitle>
-            <p className="panel-copy">Readable intake, owner review, and next-step actions in one place.</p>
+        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.07)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
+          <CardHeader className="border-b border-slate-200/80 dark:border-slate-800">
+            <CardTitle className="text-xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
+              Operations orders
+            </CardTitle>
+            <p className="text-sm text-slate-500 dark:text-slate-300">
+              Readable intake, review, and next-step actions in one place.
+            </p>
           </CardHeader>
+
           <CardContent className="grid gap-5 pt-6">
             <div className="mobile-stack-table gap-5">
               {filteredOrders.map((order) => (
-                <Card key={order.id} className="mobile-record border-slate-200/80 bg-white/96 py-0 shadow-[0_16px_38px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#131d2b]">
+                <Card
+                  key={order.id}
+                  className="mobile-record rounded-[28px] border-slate-200/80 bg-white/96 py-0 shadow-[0_16px_38px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900/90"
+                >
                   <CardContent className="grid gap-4 p-5">
                     <div className="flex flex-col gap-3">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <div className="section-kicker">{order.market?.code || "ORD"}</div>
-                          <div className="theme-ink mt-2 text-xl font-semibold">{order.code}</div>
-                          <div className="theme-muted mt-1 text-sm">{order.dropoff_address || text.noAddress}</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                            {order.market?.code || "ORD"}
+                          </div>
+                          <div className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">
+                            {order.code}
+                          </div>
+                          <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+                            {order.dropoff_address || "No address set"}
+                          </div>
                         </div>
-                        <span className={`status-chip ${statusBadgeClass(order.status)}`}>{formatOrderStatus(order.status)}</span>
+
+                        <span className={`status-chip ${statusBadgeClass(order.status)}`}>
+                          {formatOrderStatus(order.status)}
+                        </span>
                       </div>
+
                       <div className="mobile-record-row">
-                        <span className="mobile-record-label">{text.market}</span>
-                        <span className="theme-copy text-right">{order.market?.name || "Direct order"}</span>
+                        <span className="mobile-record-label">Market</span>
+                        <span className="text-right text-slate-700 dark:text-slate-200">
+                          {order.market?.name || "Direct order"}
+                        </span>
                       </div>
+
                       <div className="mobile-record-row">
-                        <span className="mobile-record-label">{text.customer}</span>
-                        <span className="theme-copy text-right">{order.customer_name || order.customer?.name || "Unknown"}</span>
+                        <span className="mobile-record-label">Customer</span>
+                        <span className="text-right text-slate-700 dark:text-slate-200">
+                          {order.customer_name || order.customer?.name || "Unknown"}
+                        </span>
                       </div>
+
                       <div className="mobile-record-row">
-                        <span className="mobile-record-label">{text.driver}</span>
-                        <span className="theme-copy text-right">{order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}</span>
+                        <span className="mobile-record-label">Driver</span>
+                        <span className="text-right text-slate-700 dark:text-slate-200">
+                          {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}
+                        </span>
                       </div>
+
                       <div className="mobile-record-row">
-                        <span className="mobile-record-label">{text.total}</span>
-                        <span className="theme-copy text-right">{order.total != null ? formatMoney(order.total) : "-"}</span>
+                        <span className="mobile-record-label">Total</span>
+                        <span className="text-right text-slate-700 dark:text-slate-200">
+                          {order.total != null ? formatMoney(order.total) : "-"}
+                        </span>
                       </div>
+
                       <div className="mobile-record-row">
-                        <span className="mobile-record-label">{text.eta}</span>
-                        <span className="theme-copy text-right">{formatDateTime(order.eta_summary?.estimated_delivery_at)}</span>
+                        <span className="mobile-record-label">ETA</span>
+                        <span className="text-right text-slate-700 dark:text-slate-200">
+                          {formatDateTime(order.eta_summary?.estimated_delivery_at)}
+                        </span>
                       </div>
                     </div>
 
                     <OrderActionRow
                       order={order}
-                      detailLabel={text.detail}
+                      detailLabel="Open detail"
                       onOpenDetail={() => setSelectedOrderId(order.id)}
                       onAccept={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })}
                       onMarkReady={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })}
@@ -490,34 +408,42 @@ export default function OrdersPage() {
                 </Card>
               ))}
             </div>
-            <div className="table-desktop table-shell">
+
+            <div className="table-desktop overflow-hidden rounded-[24px] border border-slate-200/80 dark:border-slate-800">
               <Table>
                 <TableHeader>
-                  <TableRow>
+                  <TableRow className="bg-slate-50/80 dark:bg-slate-900/80">
                     <TableHead>Code</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>{text.market}</TableHead>
-                    <TableHead>{text.customer}</TableHead>
-                    <TableHead>{text.driver}</TableHead>
-                    <TableHead>{text.total}</TableHead>
-                    <TableHead>{text.eta}</TableHead>
+                    <TableHead>Market</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Driver</TableHead>
+                    <TableHead>Total</TableHead>
+                    <TableHead>ETA</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
+
                 <TableBody>
                   {filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-semibold">{order.code}</TableCell>
-                      <TableCell><span className={`status-chip ${statusBadgeClass(order.status)}`}>{formatOrderStatus(order.status)}</span></TableCell>
+                    <TableRow key={order.id} className="dark:border-slate-800">
+                      <TableCell className="font-semibold text-slate-950 dark:text-white">{order.code}</TableCell>
+                      <TableCell>
+                        <span className={`status-chip ${statusBadgeClass(order.status)}`}>
+                          {formatOrderStatus(order.status)}
+                        </span>
+                      </TableCell>
                       <TableCell>{order.market?.name || "Direct order"}</TableCell>
                       <TableCell>{order.customer_name || order.customer?.name || "Unknown"}</TableCell>
-                      <TableCell>{order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}</TableCell>
+                      <TableCell>
+                        {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}
+                      </TableCell>
                       <TableCell>{order.total != null ? formatMoney(order.total) : "-"}</TableCell>
                       <TableCell>{formatDateTime(order.eta_summary?.estimated_delivery_at)}</TableCell>
                       <TableCell>
                         <OrderActionRow
                           order={order}
-                          detailLabel={text.detail}
+                          detailLabel="Open detail"
                           onOpenDetail={() => setSelectedOrderId(order.id)}
                           onAccept={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })}
                           onMarkReady={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })}
@@ -533,68 +459,154 @@ export default function OrdersPage() {
       )}
 
       <Dialog open={selectedOrderId != null} onOpenChange={(open) => !open && setSelectedOrderId(null)}>
-        <DialogContent className="app-modal-shell">
-          <DialogHeader className="app-modal-header">
+        <DialogContent className="max-h-[92vh] overflow-hidden rounded-[30px] border border-slate-200/70 bg-white p-0 shadow-[0_25px_80px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-[0_25px_80px_rgba(0,0,0,0.45)]">
+          <DialogHeader className="border-b border-slate-200/80 px-6 py-5 dark:border-slate-800">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <div className="section-kicker">{detailOrder?.market?.code || "ORD"}</div>
-                <DialogTitle className="panel-title mt-2">{detailOrder?.code || "Order detail"}</DialogTitle>
-                <DialogDescription className="theme-copy mt-2 pr-10 text-sm leading-6">{detailOrder?.dropoff_address || text.noAddress}</DialogDescription>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                  {detailOrder?.market?.code || "ORD"}
+                </div>
+
+                <DialogTitle className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
+                  {detailOrder?.code || "Order detail"}
+                </DialogTitle>
+
+                <DialogDescription className="mt-2 pr-10 text-sm leading-6 text-slate-500 dark:text-slate-300">
+                  {detailOrder?.dropoff_address || "No address set"}
+                </DialogDescription>
               </div>
+
               {detailOrder ? (
                 <div className="flex flex-wrap gap-2">
-                  <Badge className={`status-chip ${statusBadgeClass(detailOrder.status)}`}>{formatOrderStatus(detailOrder.status)}</Badge>
-                  <Badge className="status-chip status-neutral">{detailOrder.total != null ? formatMoney(detailOrder.total) : "-"}</Badge>
-                  {detailOrder.eta_summary?.is_late && <Badge className="status-chip status-bad">{text.late}</Badge>}
+                  <Badge className={`status-chip ${statusBadgeClass(detailOrder.status)}`}>
+                    {formatOrderStatus(detailOrder.status)}
+                  </Badge>
+                  <Badge className="status-chip status-neutral">
+                    {detailOrder.total != null ? formatMoney(detailOrder.total) : "-"}
+                  </Badge>
+                  {detailOrder.eta_summary?.is_late && <Badge className="status-chip status-bad">Late</Badge>}
                 </div>
               ) : null}
             </div>
           </DialogHeader>
+
           <div className="min-h-0 overflow-y-auto overscroll-contain">
             {detailOrder ? (
               <div className="grid min-h-full gap-0 xl:grid-cols-[380px_minmax(0,1fr)]">
-                <aside className="border-b border-slate-200 bg-white/94 p-5 xl:border-b-0 xl:border-r dark:border-white/10 dark:bg-[#131d2b]">
+                <aside className="border-b border-slate-200 bg-slate-50/80 p-5 xl:border-b-0 xl:border-r dark:border-slate-800 dark:bg-[#101927]">
                   <div className="grid gap-4 xl:sticky xl:top-0">
                     <div className="grid gap-3">
-                      <DetailStat icon={Clock3} label={text.eta} value={formatDateTime(detailOrder.eta_summary?.estimated_delivery_at)} />
-                      <DetailStat icon={Wallet} label={text.total} value={detailOrder.total != null ? formatMoney(detailOrder.total) : "-"} />
-                      <DetailStat icon={Truck} label={text.driver} value={detailOrder.assigned_driver?.user?.name || detailOrder.offered_driver?.user?.name || text.waitingForDriver} />
-                      <DetailStat icon={UserRound} label={text.customer} value={detailOrder.customer_name || detailOrder.customer?.name || "Unknown"} />
+                      <DetailStat
+                        icon={Clock3}
+                        label="ETA"
+                        value={formatDateTime(detailOrder.eta_summary?.estimated_delivery_at)}
+                      />
+                      <DetailStat
+                        icon={Wallet}
+                        label="Total"
+                        value={detailOrder.total != null ? formatMoney(detailOrder.total) : "-"}
+                      />
+                      <DetailStat
+                        icon={Truck}
+                        label="Driver"
+                        value={
+                          detailOrder.assigned_driver?.user?.name ||
+                          detailOrder.offered_driver?.user?.name ||
+                          "Waiting for driver"
+                        }
+                      />
+                      <DetailStat
+                        icon={UserRound}
+                        label="Customer"
+                        value={detailOrder.customer_name || detailOrder.customer?.name || "Unknown"}
+                      />
                     </div>
 
-                    <div className="rounded-[24px] border border-slate-200 bg-[#f7f4ec] p-4 dark:border-white/10 dark:bg-[#0f1825]">
-                      <div className="section-kicker">{text.rate}</div>
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/90">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                        Rate delivery
+                      </div>
+
                       <div className="mt-4 grid gap-4">
-                        <div className="field-group">
-                          <Label className="field-label">{text.rating}</Label>
-                          <Input value={rating} onChange={(event) => setRating(event.target.value)} className="input-shell" />
-                        </div>
-                        <div className="field-group">
-                          <Label className="field-label">{text.feedback}</Label>
-                          <Input value={feedback} onChange={(event) => setFeedback(event.target.value)} className="input-shell" />
-                        </div>
-                        <div className="field-group">
-                          <Label className="field-label">{text.reason}</Label>
-                          <Input value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="input-shell" />
-                        </div>
-                        <div className="field-group">
-                          <Label className="field-label">Refund reason</Label>
-                          <Input value={refundReason} onChange={(event) => setRefundReason(event.target.value)} className="input-shell" />
-                        </div>
                         <div className="grid gap-2">
-                          <Button onClick={() => rateM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_rate || rateM.isPending}>
+                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                            Rating (1-5)
+                          </Label>
+                          <Input
+                            value={rating}
+                            onChange={(event) => setRating(event.target.value)}
+                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                            Feedback
+                          </Label>
+                          <Input
+                            value={feedback}
+                            onChange={(event) => setFeedback(event.target.value)}
+                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                            Cancellation reason
+                          </Label>
+                          <Input
+                            value={cancelReason}
+                            onChange={(event) => setCancelReason(event.target.value)}
+                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                            Refund reason
+                          </Label>
+                          <Input
+                            value={refundReason}
+                            onChange={(event) => setRefundReason(event.target.value)}
+                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Button
+                            onClick={() => rateM.mutate(detailOrder.id)}
+                            disabled={!detailOrder.actions?.can_rate || rateM.isPending}
+                          >
                             <Star className="h-4 w-4" />
-                            {text.submit}
+                            Submit
                           </Button>
-                          <Button variant="secondary" onClick={() => reorderM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_reorder || reorderM.isPending}>
+
+                          <Button
+                            variant="secondary"
+                            onClick={() => reorderM.mutate(detailOrder.id)}
+                            disabled={!detailOrder.actions?.can_reorder || reorderM.isPending}
+                            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+                          >
                             <Undo2 className="h-4 w-4" />
-                            {text.reorder}
+                            Reorder
                           </Button>
-                          <Button variant="secondary" onClick={() => cancelM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_cancel || cancelM.isPending}>
+
+                          <Button
+                            variant="secondary"
+                            onClick={() => cancelM.mutate(detailOrder.id)}
+                            disabled={!detailOrder.actions?.can_cancel || cancelM.isPending}
+                            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+                          >
                             <XCircle className="h-4 w-4" />
-                            {text.cancel}
+                            Cancel order
                           </Button>
-                          <Button variant="secondary" onClick={() => refundM.mutate(detailOrder.id)} disabled={!detailOrder.actions?.can_request_refund || refundM.isPending}>
+
+                          <Button
+                            variant="secondary"
+                            onClick={() => refundM.mutate(detailOrder.id)}
+                            disabled={!detailOrder.actions?.can_request_refund || refundM.isPending}
+                            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+                          >
                             Request refund
                           </Button>
                         </div>
@@ -605,106 +617,192 @@ export default function OrdersPage() {
 
                 <main className="grid gap-5 p-5 sm:p-6">
                   <section className="grid gap-4 lg:grid-cols-2">
-                    <FlatDetailRow icon={MapPin} label={text.market} value={detailOrder.market?.name || "Direct order"} />
-                    <FlatDetailRow icon={Clock3} label={text.createdLabel} value={formatDateTime(detailOrder.created_at)} />
-                    <FlatDetailRow icon={MapPin} label="Dropoff" value={detailOrder.dropoff_address || text.noAddress} fullWidth />
-                    <FlatDetailRow icon={MapPin} label="Pickup" value={detailOrder.pickup_address || text.noAddress} fullWidth />
+                    <FlatDetailRow icon={MapPin} label="Market" value={detailOrder.market?.name || "Direct order"} />
+                    <FlatDetailRow icon={Clock3} label="Created" value={formatDateTime(detailOrder.created_at)} />
+                    <FlatDetailRow
+                      icon={MapPin}
+                      label="Dropoff"
+                      value={detailOrder.dropoff_address || "No address set"}
+                      fullWidth
+                    />
+                    <FlatDetailRow
+                      icon={MapPin}
+                      label="Pickup"
+                      value={detailOrder.pickup_address || "No address set"}
+                      fullWidth
+                    />
                     <FlatDetailRow icon={MessageSquareMore} label="Notes" value={detailOrder.notes || "-"} fullWidth />
                   </section>
 
-                  <section className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#131d2b]">
+                  <section className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/90">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <div className="section-kicker">{text.timeline}</div>
-                        <h3 className="theme-ink mt-2 text-2xl font-semibold">Order progress</h3>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                          Timeline
+                        </div>
+                        <h3 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">
+                          Order progress
+                        </h3>
                       </div>
-                      <div className="theme-muted max-w-sm text-right text-sm leading-6">{text.trackingCopy}</div>
+
+                      <div className="max-w-sm text-right text-sm leading-6 text-slate-500 dark:text-slate-300">
+                        Tracking appears after pickup so the timeline stays signal-first.
+                      </div>
                     </div>
+
                     <div className="mt-5 grid gap-3">
                       {(detailOrder.timeline ?? []).map((step, index) => (
-                        <div key={step.key} className="grid gap-3 rounded-[20px] border border-slate-200 bg-[#f7f4ec] p-4 dark:border-white/10 dark:bg-[#0f1825] sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:items-center">
-                          <div className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold ${step.done ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-300/12 dark:text-emerald-100" : "bg-slate-200 text-slate-700 dark:bg-white/10 dark:text-slate-200"}`}>
+                        <div
+                          key={step.key}
+                          className="grid gap-3 rounded-[20px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:items-center"
+                        >
+                          <div
+                            className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold ${
+                              step.done
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-300/12 dark:text-emerald-100"
+                                : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                            }`}
+                          >
                             {index + 1}
                           </div>
+
                           <div className="min-w-0">
-                            <div className="theme-ink text-base font-semibold">{step.label}</div>
-                            <div className="theme-muted mt-1 text-sm">{formatDateTime(step.at)}</div>
+                            <div className="text-base font-semibold text-slate-950 dark:text-white">{step.label}</div>
+                            <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+                              {formatDateTime(step.at)}
+                            </div>
                           </div>
-                          <Badge className={`status-chip ${step.done ? "status-good" : "status-neutral"}`}>{step.done ? "Done" : "Pending"}</Badge>
+
+                          <Badge className={`status-chip ${step.done ? "status-good" : "status-neutral"}`}>
+                            {step.done ? "Done" : "Pending"}
+                          </Badge>
                         </div>
                       ))}
                     </div>
                   </section>
 
                   <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-                    <div className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-[#131d2b]">
-                      <div className="section-kicker">{text.proof}</div>
-                      <h3 className="theme-ink mt-2 text-2xl font-semibold">Delivery proof</h3>
+                    <div className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/90">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                        Delivery proof
+                      </div>
+
+                      <h3 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">
+                        Delivery proof
+                      </h3>
+
                       <div className="mt-5 grid gap-4">
                         {detailOrder.delivery_proof?.photo_url ? (
-                          <img src={detailOrder.delivery_proof.photo_url} alt="Proof of delivery" className="h-72 w-full rounded-[24px] object-cover" />
+                          <img
+                            src={detailOrder.delivery_proof.photo_url}
+                            alt="Proof of delivery"
+                            className="h-72 w-full rounded-[24px] object-cover"
+                          />
                         ) : (
-                          <div className="flex min-h-52 items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-[#f7f4ec] px-5 text-center text-sm text-slate-500 dark:border-white/12 dark:bg-[#0f1825] dark:text-slate-300">
-                            {text.proofMissing}
+                          <div className="flex min-h-52 items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                            No delivery proof has been attached yet.
                           </div>
                         )}
-                      <div className="rounded-[20px] border border-slate-200 bg-[#f7f4ec] px-4 py-4 text-sm leading-7 text-slate-700 dark:border-white/10 dark:bg-[#0f1825] dark:text-slate-200">
-                          {detailOrder.delivery_proof?.note || text.proofMissing}
-                          {detailOrder.delivery_proof?.signature_name ? ` | Signature: ${detailOrder.delivery_proof.signature_name}` : ""}
+
+                        <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+                          {detailOrder.delivery_proof?.note || "No delivery proof has been attached yet."}
+                          {detailOrder.delivery_proof?.signature_name
+                            ? ` | Signature: ${detailOrder.delivery_proof.signature_name}`
+                            : ""}
                         </div>
                       </div>
                     </div>
 
                     <div className="grid gap-5">
-                      <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
-                        <div className="section-kicker">Receipt</div>
-                        <div className="theme-muted mt-2 text-sm">{detailOrder.receipt?.number || "Pending receipt"}</div>
-                        <div className="mt-4 grid gap-2 text-sm">
+                      <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/90">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                          Receipt
+                        </div>
+
+                        <div className="mt-2 text-sm text-slate-500 dark:text-slate-300">
+                          {detailOrder.receipt?.number || "Pending receipt"}
+                        </div>
+
+                        <div className="mt-4 grid gap-2 text-sm text-slate-700 dark:text-slate-200">
                           {(detailOrder.receipt?.items ?? []).map((item, index) => (
                             <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3">
                               <div>
-                                <span>{item.name} x{item.qty}</span>
+                                <span>
+                                  {item.name} x{item.qty}
+                                </span>
+
                                 {item.combo_offer ? (
-                                  <div className="theme-muted text-xs">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     Combo: {item.combo_offer.name}
                                   </div>
                                 ) : null}
+
                                 {(item.removed_ingredients ?? []).length > 0 ? (
-                                  <div className="theme-muted text-xs">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     Without: {item.removed_ingredients?.join(", ")}
                                   </div>
                                 ) : null}
                               </div>
+
                               <span>{formatMoney(item.line_total ?? 0)}</span>
                             </div>
                           ))}
                         </div>
-                        <div className="mt-4 text-sm font-semibold">
+
+                        <div className="mt-4 text-sm font-semibold text-slate-950 dark:text-white">
                           Total: {formatMoney(detailOrder.receipt?.total ?? detailOrder.total ?? 0)}
                         </div>
-                        <div className="theme-muted mt-2 text-xs">Refund: {detailOrder.refund_summary?.status || "none"}</div>
+
+                        <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                          Refund: {detailOrder.refund_summary?.status || "none"}
+                        </div>
                       </div>
+
                       {detailOrder.assigned_driver?.latest_ping && detailOrder.status === "PICKED_UP" && (
-                        <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
-                          <div className="section-kicker">{text.tracking}</div>
-                          <div className="theme-muted mt-2 text-sm leading-6">{text.trackingCopy}</div>
-                          <div className="map-frame mt-4 h-[260px]">
+                        <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/90">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                            Live driver tracking
+                          </div>
+
+                          <div className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">
+                            Tracking appears after pickup so the timeline stays signal-first.
+                          </div>
+
+                          <div className="mt-4 h-[260px] overflow-hidden rounded-[22px] border border-slate-200 dark:border-slate-800">
                             <MapContainer
-                              center={[Number(detailOrder.assigned_driver.latest_ping.lat), Number(detailOrder.assigned_driver.latest_ping.lng)]}
+                              center={[
+                                Number(detailOrder.assigned_driver.latest_ping.lat),
+                                Number(detailOrder.assigned_driver.latest_ping.lng),
+                              ]}
                               zoom={13}
                               style={{ height: "100%", width: "100%" }}
                             >
-                              <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                              <Marker position={[Number(detailOrder.assigned_driver.latest_ping.lat), Number(detailOrder.assigned_driver.latest_ping.lng)]} />
-                              <Marker position={[Number(detailOrder.dropoff_lat), Number(detailOrder.dropoff_lng)]} />
+                              <TileLayer
+                                attribution="&copy; OpenStreetMap"
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                              />
+                              <Marker
+                                position={[
+                                  Number(detailOrder.assigned_driver.latest_ping.lat),
+                                  Number(detailOrder.assigned_driver.latest_ping.lng),
+                                ]}
+                              />
+                              <Marker
+                                position={[Number(detailOrder.dropoff_lat), Number(detailOrder.dropoff_lng)]}
+                              />
                             </MapContainer>
                           </div>
                         </div>
                       )}
+
                       {detailOrder.eta_summary?.is_late && (
                         <div className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 dark:border-rose-300/20 dark:bg-rose-300/10">
-                          <div className="section-kicker text-rose-600 dark:text-rose-200">{text.late}</div>
-                          <div className="mt-2 text-lg font-semibold text-rose-700 dark:text-rose-100">This order needs attention.</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-600 dark:text-rose-200">
+                            Late
+                          </div>
+                          <div className="mt-2 text-lg font-semibold text-rose-700 dark:text-rose-100">
+                            This order needs attention.
+                          </div>
                           <div className="mt-1 text-sm leading-6 text-rose-700/80 dark:text-rose-100/80">
                             ETA has slipped past the expected window.
                           </div>
@@ -716,14 +814,21 @@ export default function OrdersPage() {
               </div>
             ) : (
               <div className="p-6">
-                <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600 dark:border-white/10 dark:bg-[#131d2b] dark:text-slate-300">
+                <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/90 dark:text-slate-300">
                   Loading order detail...
                 </div>
               </div>
             )}
           </div>
-          <DialogFooter className="app-modal-footer">
-            <Button variant="secondary" onClick={() => setSelectedOrderId(null)}>{text.close}</Button>
+
+          <DialogFooter className="border-t border-slate-200/80 px-6 py-4 dark:border-slate-800">
+            <Button
+              variant="secondary"
+              onClick={() => setSelectedOrderId(null)}
+              className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+            >
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -733,53 +838,92 @@ export default function OrdersPage() {
 
 function CustomerOrderCard({
   order,
-  text,
   onOpenDetail,
   onCancel,
   onReorder,
 }: {
   order: Order;
-  text: PageCopy;
   onOpenDetail: () => void;
   onCancel: () => void;
   onReorder: () => void;
 }) {
   return (
-    <Card className="border-slate-200/80 bg-white/98 shadow-[0_18px_44px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[#131d2b]">
+    <Card className="rounded-[30px] border-slate-200/80 bg-white/98 shadow-[0_18px_44px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-950/90">
       <CardContent className="grid gap-5 p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <div className="section-kicker">{order.market?.code || "ORD"}</div>
-            <div className="font-display theme-ink mt-2 text-4xl font-semibold tracking-[-0.05em]">{order.code}</div>
-            <div className="theme-muted mt-2 text-sm">{order.dropoff_address || text.noAddress}</div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+              {order.market?.code || "ORD"}
+            </div>
+            <div className="mt-2 text-4xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
+              {order.code}
+            </div>
+            <div className="mt-2 text-sm text-slate-500 dark:text-slate-300">
+              {order.dropoff_address || "No address set"}
+            </div>
           </div>
+
           <div className="flex flex-wrap gap-2">
-            <span className={`status-chip ${statusBadgeClass(order.status)}`}>{formatOrderStatus(order.status)}</span>
+            <span className={`status-chip ${statusBadgeClass(order.status)}`}>
+              {formatOrderStatus(order.status)}
+            </span>
             {order.total != null && <Badge className="status-chip status-neutral">{formatMoney(order.total)}</Badge>}
-            {order.eta_summary?.is_late && <Badge className="status-chip status-bad">{text.late}</Badge>}
+            {order.eta_summary?.is_late && <Badge className="status-chip status-bad">Late</Badge>}
           </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <InfoCard icon={Clock3} label={text.createdLabel} value={formatDateTime(order.created_at)} />
-          <InfoCard icon={MapPin} label={text.market} value={order.market?.name || "-"} />
-          <InfoCard icon={Truck} label={text.driver} value={order.assigned_driver?.user?.name || order.offered_driver?.user?.name || text.waitingForDriver} />
-          <InfoCard icon={Wallet} label={text.eta} value={formatDateTime(order.eta_summary?.estimated_delivery_at)} />
+          <InfoCard icon={Clock3} label="Created" value={formatDateTime(order.created_at)} />
+          <InfoCard icon={MapPin} label="Market" value={order.market?.name || "-"} />
+          <InfoCard
+            icon={Truck}
+            label="Driver"
+            value={order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Waiting for driver"}
+          />
+          <InfoCard icon={Wallet} label="ETA" value={formatDateTime(order.eta_summary?.estimated_delivery_at)} />
         </div>
 
         <div className="grid gap-3">
           {(order.timeline ?? []).slice(0, 3).map((step) => (
-            <div key={step.key} className="flex items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/4">
-              <span className="theme-ink font-medium">{step.label}</span>
-              <span className="theme-muted">{formatDateTime(step.at)}</span>
+            <div
+              key={step.key}
+              className="flex items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900"
+            >
+              <span className="font-medium text-slate-950 dark:text-white">{step.label}</span>
+              <span className="text-slate-500 dark:text-slate-300">{formatDateTime(step.at)}</span>
             </div>
           ))}
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={onOpenDetail}><MessageSquareMore className="h-4 w-4" />{text.detail}</Button>
-          <Button variant="secondary" onClick={onReorder} disabled={!order.actions?.can_reorder}><Undo2 className="h-4 w-4" />{text.reorder}</Button>
-          <Button variant="secondary" onClick={onCancel} disabled={!order.actions?.can_cancel}><XCircle className="h-4 w-4" />{text.cancel}</Button>
+          <Button
+            variant="secondary"
+            onClick={onOpenDetail}
+            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+          >
+            <MessageSquareMore className="h-4 w-4" />
+            Open detail
+          </Button>
+
+          <Button
+            variant="secondary"
+            onClick={onReorder}
+            disabled={!order.actions?.can_reorder}
+            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+          >
+            <Undo2 className="h-4 w-4" />
+            Reorder
+          </Button>
+
+          <Button
+            variant="secondary"
+            onClick={onCancel}
+            disabled={!order.actions?.can_cancel}
+            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+          >
+            <XCircle className="h-4 w-4" />
+            Cancel order
+          </Button>
         </div>
       </CardContent>
     </Card>
@@ -788,10 +932,10 @@ function CustomerOrderCard({
 
 function Metric({ title, value, helper }: { title: string; value: number; helper?: string }) {
   return (
-    <div className="metric-block min-h-[132px] p-5">
-      <div className="section-kicker">{title}</div>
-      <div className="font-display theme-ink mt-3 text-5xl font-semibold tracking-[-0.05em]">{value}</div>
-      {helper ? <div className="theme-muted mt-2 text-sm">{helper}</div> : null}
+    <div className="min-h-[132px] rounded-[24px] border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">{title}</div>
+      <div className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-white">{value}</div>
+      {helper ? <div className="mt-2 text-sm text-white/65">{helper}</div> : null}
     </div>
   );
 }
@@ -806,12 +950,14 @@ function InfoCard({
   value: string;
 }) {
   return (
-    <div className="metric-block py-4">
+    <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-2">
         {Icon ? <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" /> : null}
-        <div className="section-kicker">{label}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+          {label}
+        </div>
       </div>
-      <div className="theme-ink mt-3 text-sm font-semibold leading-6">{value}</div>
+      <div className="mt-3 text-sm font-semibold leading-6 text-slate-950 dark:text-white">{value}</div>
     </div>
   );
 }
@@ -831,14 +977,21 @@ function OrderActionRow({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      <Button size="sm" variant="secondary" onClick={onOpenDetail}>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={onOpenDetail}
+        className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+      >
         {detailLabel}
       </Button>
+
       {order.status === "MARKET_PENDING" && (
         <Button size="sm" onClick={onAccept}>
           Accept
         </Button>
       )}
+
       {order.status === "MARKET_ACCEPTED" && (
         <Button size="sm" onClick={onMarkReady}>
           Mark ready
@@ -858,12 +1011,14 @@ function DetailStat({
   value: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0f1825]">
+    <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/90">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-        <div className="section-kicker">{label}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+          {label}
+        </div>
       </div>
-      <div className="theme-ink mt-4 text-base font-semibold leading-7">{value}</div>
+      <div className="mt-4 text-base font-semibold leading-7 text-slate-950 dark:text-white">{value}</div>
     </div>
   );
 }
@@ -880,12 +1035,18 @@ function FlatDetailRow({
   fullWidth?: boolean;
 }) {
   return (
-    <div className={`rounded-[24px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b] ${fullWidth ? "lg:col-span-2" : ""}`}>
+    <div
+      className={`rounded-[24px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/90 ${
+        fullWidth ? "lg:col-span-2" : ""
+      }`}
+    >
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-        <div className="section-kicker">{label}</div>
+        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+          {label}
+        </div>
       </div>
-      <div className="theme-ink mt-3 text-sm font-semibold leading-6">{value}</div>
+      <div className="mt-3 text-sm font-semibold leading-6 text-slate-950 dark:text-white">{value}</div>
     </div>
   );
 }

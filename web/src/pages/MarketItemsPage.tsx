@@ -34,6 +34,7 @@ type Item = {
   sku: string;
   category?: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
   ingredients?: ItemIngredient[] | null;
@@ -51,6 +52,20 @@ type Item = {
   };
 };
 
+type ItemVariant = {
+  name: string;
+  value: string;
+  price_delta?: number | string;
+};
+
+type AvailabilitySlot = {
+  day: string;
+  from: string;
+  to: string;
+};
+
+const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
 function emptyIngredient(): ItemIngredient {
   return {
     name: "",
@@ -63,6 +78,22 @@ function emptyComboOffer(): ComboOffer {
     name: "",
     description: "",
     combo_price: 0,
+  };
+}
+
+function emptyVariant(): ItemVariant {
+  return {
+    name: "",
+    value: "",
+    price_delta: 0,
+  };
+}
+
+function emptyAvailabilitySlot(): AvailabilitySlot {
+  return {
+    day: "Mon",
+    from: "",
+    to: "",
   };
 }
 
@@ -83,6 +114,65 @@ function normalizeComboOffers(comboOffers: ComboOffer[]) {
       combo_price: Number(comboOffer.combo_price || 0),
     }))
     .filter((comboOffer) => comboOffer.name.length > 0);
+}
+
+function normalizeVariants(variants: ItemVariant[]) {
+  const normalized = variants
+    .map((variant) => ({
+      name: variant.name.trim(),
+      value: variant.value.trim(),
+      price_delta: Number(variant.price_delta || 0),
+    }))
+    .filter((variant) => variant.name.length > 0 && variant.value.length > 0);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeAvailabilitySchedule(schedule: AvailabilitySlot[]) {
+  const normalized = schedule
+    .map((slot) => ({
+      day: slot.day.trim(),
+      from: slot.from.trim(),
+      to: slot.to.trim(),
+    }))
+    .filter((slot) => slot.day && slot.from && slot.to);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolveMediaUrl(url?: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
+    const parsed = new URL(url, apiOrigin);
+
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getItemImageUrls(item?: Item | null) {
+  const urls = [...(item?.image_urls ?? [])];
+
+  if (item?.image_url) {
+    urls.push(item.image_url);
+  }
+
+  return Array.from(
+    new Set(
+      urls
+        .map((url) => resolveMediaUrl(url))
+        .filter((url): url is string => typeof url === "string" && url.length > 0),
+    ),
+  );
 }
 
 function IngredientEditor({
@@ -282,6 +372,203 @@ function ComboSummary({ comboOffers }: { comboOffers?: ComboOffer[] | null }) {
   );
 }
 
+function VariantEditor({
+  variants,
+  onChange,
+}: {
+  variants: ItemVariant[];
+  onChange: (variants: ItemVariant[]) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      {variants.map((variant, index) => (
+        <div key={`variant-${index}`} className="rounded-xl border p-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-2">
+              <Label className="field-label">Option group</Label>
+              <Input
+                value={variant.name}
+                onChange={(event) => {
+                  const next = variants.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, name: event.target.value } : entry,
+                  );
+                  onChange(next);
+                }}
+                className="input-shell"
+                placeholder="Size"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label className="field-label">Option value</Label>
+              <Input
+                value={variant.value}
+                onChange={(event) => {
+                  const next = variants.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, value: event.target.value } : entry,
+                  );
+                  onChange(next);
+                }}
+                className="input-shell"
+                placeholder="Large"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label className="field-label">Price delta</Label>
+              <Input
+                value={String(variant.price_delta ?? 0)}
+                onChange={(event) => {
+                  const next = variants.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, price_delta: event.target.value } : entry,
+                  );
+                  onChange(next);
+                }}
+                className="input-shell"
+                placeholder="0 or 1.50"
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onChange(variants.filter((_, entryIndex) => entryIndex !== index))}
+            >
+              Remove variant
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      <Button type="button" variant="secondary" onClick={() => onChange([...variants, emptyVariant()])}>
+        Add variant
+      </Button>
+    </div>
+  );
+}
+
+function VariantSummary({ variants }: { variants?: ItemVariant[] | null }) {
+  const normalized = normalizeVariants(variants ?? []);
+
+  if (!normalized?.length) {
+    return <span className="text-sm text-muted-foreground">No variants</span>;
+  }
+
+  return (
+    <div className="grid gap-1">
+      <span className="text-sm font-medium">{normalized.length} options</span>
+      <span className="text-xs text-muted-foreground">
+        {normalized.slice(0, 2).map((variant) => `${variant.name}: ${variant.value}`).join(", ")}
+      </span>
+    </div>
+  );
+}
+
+function ScheduleEditor({
+  schedule,
+  onChange,
+}: {
+  schedule: AvailabilitySlot[];
+  onChange: (schedule: AvailabilitySlot[]) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      {schedule.map((slot, index) => (
+        <div key={`schedule-${index}`} className="rounded-xl border p-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-2">
+              <Label className="field-label">Day</Label>
+              <Select
+                value={slot.day}
+                onValueChange={(value) => {
+                  const next = schedule.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, day: value } : entry,
+                  );
+                  onChange(next);
+                }}
+              >
+                <SelectTrigger className="input-shell w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SCHEDULE_DAYS.map((day) => (
+                    <SelectItem key={day} value={day}>
+                      {day}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label className="field-label">From</Label>
+              <Input
+                value={slot.from}
+                onChange={(event) => {
+                  const next = schedule.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, from: event.target.value } : entry,
+                  );
+                  onChange(next);
+                }}
+                className="input-shell"
+                placeholder="09:00"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label className="field-label">To</Label>
+              <Input
+                value={slot.to}
+                onChange={(event) => {
+                  const next = schedule.map((entry, entryIndex) =>
+                    entryIndex === index ? { ...entry, to: event.target.value } : entry,
+                  );
+                  onChange(next);
+                }}
+                className="input-shell"
+                placeholder="18:00"
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => onChange(schedule.filter((_, entryIndex) => entryIndex !== index))}
+            >
+              Remove slot
+            </Button>
+          </div>
+        </div>
+      ))}
+
+      <Button type="button" variant="secondary" onClick={() => onChange([...schedule, emptyAvailabilitySlot()])}>
+        Add schedule row
+      </Button>
+    </div>
+  );
+}
+
+function ScheduleSummary({ schedule }: { schedule?: AvailabilitySlot[] | null }) {
+  const normalized = normalizeAvailabilitySchedule(schedule ?? []);
+
+  if (!normalized?.length) {
+    return <span className="text-sm text-muted-foreground">Always available</span>;
+  }
+
+  return (
+    <div className="grid gap-1">
+      <span className="text-sm font-medium">{normalized.length} slots</span>
+      <span className="text-xs text-muted-foreground">
+        {normalized.slice(0, 2).map((slot) => `${slot.day} ${slot.from}-${slot.to}`).join(", ")}
+      </span>
+    </div>
+  );
+}
+
 export default function MarketItemsPage() {
   const { marketId } = useParams();
   const id = Number(marketId);
@@ -305,9 +592,9 @@ export default function MarketItemsPage() {
   const [isActive, setIsActive] = useState(true);
   const [category, setCategory] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [createImageFile, setCreateImageFile] = useState<File | null>(null);
-  const [variants, setVariants] = useState("");
-  const [availabilitySchedule, setAvailabilitySchedule] = useState("");
+  const [createImageFiles, setCreateImageFiles] = useState<File[]>([]);
+  const [variants, setVariants] = useState<ItemVariant[]>([]);
+  const [availabilitySchedule, setAvailabilitySchedule] = useState<AvailabilitySlot[]>([]);
   const [createIngredients, setCreateIngredients] = useState<ItemIngredient[]>([]);
   const [createComboOffers, setCreateComboOffers] = useState<ComboOffer[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState("5");
@@ -322,8 +609,8 @@ export default function MarketItemsPage() {
         sku,
         category: category || null,
         image_url: imageUrl || null,
-        variants: variants ? JSON.parse(variants) : null,
-        availability_schedule: availabilitySchedule ? JSON.parse(availabilitySchedule) : null,
+        variants: normalizeVariants(variants),
+        availability_schedule: normalizeAvailabilitySchedule(availabilitySchedule),
         ingredients: normalizeIngredients(createIngredients),
         combo_offers: normalizeComboOffers(createComboOffers),
         price: Number(price),
@@ -336,12 +623,14 @@ export default function MarketItemsPage() {
 
       const created = (await api.post(`/api/markets/${id}/items`, payload)).data as Item;
 
-      if (!createImageFile) {
+      if (createImageFiles.length === 0) {
         return created;
       }
 
       const formData = new FormData();
-      formData.append("image", createImageFile);
+      createImageFiles.forEach((file) => {
+        formData.append("images[]", file);
+      });
 
       return (
         await api.post(`/api/markets/${id}/items/${created.id}/image`, formData, {
@@ -361,9 +650,9 @@ export default function MarketItemsPage() {
       setIsActive(true);
       setCategory("");
       setImageUrl("");
-      setCreateImageFile(null);
-      setVariants("");
-      setAvailabilitySchedule("");
+      setCreateImageFiles([]);
+      setVariants([]);
+      setAvailabilitySchedule([]);
       setCreateIngredients([]);
       setCreateComboOffers([]);
       setLowStockThreshold("5");
@@ -372,7 +661,7 @@ export default function MarketItemsPage() {
 
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Item | null>(null);
-  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
 
   const updateM = useMutation({
     mutationFn: async () => {
@@ -387,8 +676,8 @@ export default function MarketItemsPage() {
         stock_qty: Number(editItem.stock_qty || 0),
         category: editItem.category ?? null,
         image_url: editItem.image_url ?? null,
-        variants: editItem.variants ?? null,
-        availability_schedule: editItem.availability_schedule ?? null,
+        variants: normalizeVariants((editItem.variants as ItemVariant[] | null) ?? []),
+        availability_schedule: normalizeAvailabilitySchedule((editItem.availability_schedule as AvailabilitySlot[] | null) ?? []),
         ingredients: normalizeIngredients(editItem.ingredients ?? []),
         combo_offers: normalizeComboOffers(editItem.combo_offers ?? []),
         low_stock_threshold: Number(editItem.low_stock_threshold || 5),
@@ -399,12 +688,14 @@ export default function MarketItemsPage() {
         await api.patch(`/api/markets/${id}/items/${editItem.id}`, payload)
       ).data as Item;
 
-      if (!editImageFile) {
+      if (editImageFiles.length === 0) {
         return updated;
       }
 
       const formData = new FormData();
-      formData.append("image", editImageFile);
+      editImageFiles.forEach((file) => {
+        formData.append("images[]", file);
+      });
 
       return (
         await api.post(`/api/markets/${id}/items/${editItem.id}/image`, formData, {
@@ -416,7 +707,47 @@ export default function MarketItemsPage() {
       await qc.invalidateQueries({ queryKey: ["market-items", id] });
       setEditOpen(false);
       setEditItem(null);
-      setEditImageFile(null);
+      setEditImageFiles([]);
+    },
+  });
+
+  const deleteImageM = useMutation({
+    mutationFn: async (imageIndex: number) => {
+      if (!editItem) {
+        throw new Error("No item selected");
+      }
+
+      return (await api.delete(`/api/markets/${id}/items/${editItem.id}/images/${imageIndex}`)).data as Item;
+    },
+    onSuccess: async (updatedItem) => {
+      await qc.invalidateQueries({ queryKey: ["market-items", id] });
+      setEditItem({
+        ...updatedItem,
+        variants: updatedItem.variants ?? [],
+        availability_schedule: updatedItem.availability_schedule ?? [],
+        ingredients: updatedItem.ingredients ?? [],
+        combo_offers: updatedItem.combo_offers ?? [],
+      });
+    },
+  });
+
+  const clearImagesM = useMutation({
+    mutationFn: async () => {
+      if (!editItem) {
+        throw new Error("No item selected");
+      }
+
+      return (await api.delete(`/api/markets/${id}/items/${editItem.id}/images`)).data as Item;
+    },
+    onSuccess: async (updatedItem) => {
+      await qc.invalidateQueries({ queryKey: ["market-items", id] });
+      setEditItem({
+        ...updatedItem,
+        variants: updatedItem.variants ?? [],
+        availability_schedule: updatedItem.availability_schedule ?? [],
+        ingredients: updatedItem.ingredients ?? [],
+        combo_offers: updatedItem.combo_offers ?? [],
+      });
     },
   });
 
@@ -530,13 +861,19 @@ export default function MarketItemsPage() {
                       </div>
 
                       <div className="grid gap-2">
-                        <Label className="field-label">Upload Image</Label>
+                        <Label className="field-label">Upload Images</Label>
                         <Input
                           type="file"
                           accept="image/*"
-                          onChange={(event) => setCreateImageFile(event.target.files?.[0] ?? null)}
+                          multiple
+                          onChange={(event) => setCreateImageFiles(Array.from(event.target.files ?? []))}
                           className="input-shell"
                         />
+                        {createImageFiles.length > 0 ? (
+                          <div className="text-xs text-muted-foreground">
+                            {createImageFiles.length} image{createImageFiles.length === 1 ? "" : "s"} selected
+                          </div>
+                        ) : null}
                       </div>
 
                       <div className="grid gap-2">
@@ -549,24 +886,26 @@ export default function MarketItemsPage() {
                         />
                       </div>
 
-                      <div className="grid gap-2 md:col-span-2">
-                        <Label className="field-label">Variants JSON</Label>
-                        <Input
-                          value={variants}
-                          onChange={(event) => setVariants(event.target.value)}
-                          className="input-shell"
-                          placeholder='[{"name":"Size","value":"L"}]'
-                        />
+                      <div className="md:col-span-2 rounded-xl border p-4">
+                        <div className="mb-3">
+                          <Label className="field-label">Variants</Label>
+                          <div className="text-sm text-muted-foreground">
+                            Add customer choices like size, color, or pack type without writing JSON.
+                          </div>
+                        </div>
+
+                        <VariantEditor variants={variants} onChange={setVariants} />
                       </div>
 
-                      <div className="grid gap-2 md:col-span-2">
-                        <Label className="field-label">Availability Schedule JSON</Label>
-                        <Input
-                          value={availabilitySchedule}
-                          onChange={(event) => setAvailabilitySchedule(event.target.value)}
-                          className="input-shell"
-                          placeholder='[{"day":"Mon","from":"09:00","to":"18:00"}]'
-                        />
+                      <div className="md:col-span-2 rounded-xl border p-4">
+                        <div className="mb-3">
+                          <Label className="field-label">Availability schedule</Label>
+                          <div className="text-sm text-muted-foreground">
+                            Leave this empty if the item is always available, or add day and time rows below.
+                          </div>
+                        </div>
+
+                        <ScheduleEditor schedule={availabilitySchedule} onChange={setAvailabilitySchedule} />
                       </div>
 
                       <div className="md:col-span-2 rounded-xl border p-4">
@@ -636,6 +975,8 @@ export default function MarketItemsPage() {
                     <TableHead>Item</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Price</TableHead>
+                    <TableHead>Variants</TableHead>
+                    <TableHead>Schedule</TableHead>
                     <TableHead>Ingredients</TableHead>
                     <TableHead>Combos</TableHead>
                     <TableHead>Stock</TableHead>
@@ -651,8 +992,8 @@ export default function MarketItemsPage() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="h-12 w-12 overflow-hidden rounded-xl border bg-muted">
-                            {item.image_url ? (
-                              <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+                            {getItemImageUrls(item)[0] ? (
+                              <img src={getItemImageUrls(item)[0]} alt={item.name} className="h-full w-full object-cover" />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
                                 No image
@@ -675,6 +1016,12 @@ export default function MarketItemsPage() {
                         </div>
                       </TableCell>
                       <TableCell>
+                        <VariantSummary variants={item.variants as ItemVariant[] | null} />
+                      </TableCell>
+                      <TableCell>
+                        <ScheduleSummary schedule={item.availability_schedule as AvailabilitySlot[] | null} />
+                      </TableCell>
+                      <TableCell>
                         <IngredientSummary ingredients={item.ingredients} />
                       </TableCell>
                       <TableCell>
@@ -689,10 +1036,12 @@ export default function MarketItemsPage() {
                           onClick={() => {
                             setEditItem({
                               ...item,
+                              variants: item.variants ?? [],
+                              availability_schedule: item.availability_schedule ?? [],
                               ingredients: item.ingredients ?? [],
                               combo_offers: item.combo_offers ?? [],
                             });
-                            setEditImageFile(null);
+                            setEditImageFiles([]);
                             setEditOpen(true);
                           }}
                         >
@@ -704,7 +1053,7 @@ export default function MarketItemsPage() {
 
                   {items.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-sm text-muted-foreground">
+                      <TableCell colSpan={12} className="text-sm text-muted-foreground">
                         No items yet.
                       </TableCell>
                     </TableRow>
@@ -809,13 +1158,19 @@ export default function MarketItemsPage() {
                   </div>
 
                   <div className="grid gap-2">
-                    <Label className="field-label">Upload New Image</Label>
+                    <Label className="field-label">Upload New Images</Label>
                     <Input
                       type="file"
                       accept="image/*"
-                      onChange={(event) => setEditImageFile(event.target.files?.[0] ?? null)}
+                      multiple
+                      onChange={(event) => setEditImageFiles(Array.from(event.target.files ?? []))}
                       className="input-shell"
                     />
+                    {editImageFiles.length > 0 ? (
+                      <div className="text-xs text-muted-foreground">
+                        {editImageFiles.length} new image{editImageFiles.length === 1 ? "" : "s"} selected
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-2">
@@ -824,6 +1179,34 @@ export default function MarketItemsPage() {
                       value={editItem.image_url ?? ""}
                       onChange={(event) => setEditItem({ ...editItem, image_url: event.target.value })}
                       className="input-shell"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 rounded-xl border p-4">
+                    <div className="mb-3">
+                      <Label className="field-label">Variants</Label>
+                      <div className="text-sm text-muted-foreground">
+                        Add customer-selectable options here instead of raw JSON.
+                      </div>
+                    </div>
+
+                    <VariantEditor
+                      variants={(editItem.variants as ItemVariant[] | null) ?? []}
+                      onChange={(variants) => setEditItem({ ...editItem, variants })}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2 rounded-xl border p-4">
+                    <div className="mb-3">
+                      <Label className="field-label">Availability schedule</Label>
+                      <div className="text-sm text-muted-foreground">
+                        Add rows for limited windows, or leave it empty to keep the item available all day.
+                      </div>
+                    </div>
+
+                    <ScheduleEditor
+                      schedule={(editItem.availability_schedule as AvailabilitySlot[] | null) ?? []}
+                      onChange={(availability_schedule) => setEditItem({ ...editItem, availability_schedule })}
                     />
                   </div>
 
@@ -867,10 +1250,34 @@ export default function MarketItemsPage() {
                   </div>
                 </div>
 
-                {editItem.image_url ? (
+                {getItemImageUrls(editItem).length > 0 ? (
                   <div className="rounded-xl border p-4">
-                    <div className="mb-2 text-sm font-medium">Current image</div>
-                    <img src={editItem.image_url} alt={editItem.name} className="h-40 w-full rounded-xl object-cover" />
+                    <div className="mb-2 text-sm font-medium">Current gallery</div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {getItemImageUrls(editItem).map((url, index) => (
+                        <div key={`${url}-${index}`} className="grid gap-2">
+                          <img src={url} alt={`${editItem.name} ${index + 1}`} className="h-40 w-full rounded-xl object-cover" />
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => void deleteImageM.mutate(index)}
+                            disabled={deleteImageM.isPending || clearImagesM.isPending}
+                          >
+                            Delete this image
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => void clearImagesM.mutate()}
+                        disabled={deleteImageM.isPending || clearImagesM.isPending}
+                      >
+                        Delete all images
+                      </Button>
+                    </div>
                   </div>
                 ) : null}
 

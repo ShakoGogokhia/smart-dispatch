@@ -246,6 +246,7 @@ export type Item = {
   sku: string;
   category?: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
   ingredients?: Array<{ name: string; removable: boolean }> | null;

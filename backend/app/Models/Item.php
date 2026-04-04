@@ -13,7 +13,7 @@ class Item extends Model
         'market_id','name','sku','price',
         'discount_type','discount_value',
         'stock_qty','is_active',
-        'category','image_url','image_path',
+        'category','image_url','image_path','image_paths',
         'variants','availability_schedule',
         'ingredients','combo_offers',
         'low_stock_threshold',
@@ -23,6 +23,7 @@ class Item extends Model
         'price' => 'decimal:2',
         'discount_value' => 'decimal:2',
         'is_active' => 'boolean',
+        'image_paths' => 'array',
         'variants' => 'array',
         'availability_schedule' => 'array',
         'ingredients' => 'array',
@@ -31,8 +32,14 @@ class Item extends Model
 
     public function getImageUrlAttribute(?string $value): ?string
     {
+        $gallery = $this->image_paths ?? [];
+
+        if (is_array($gallery) && !empty($gallery[0])) {
+            return url(Storage::disk('public')->url($gallery[0]));
+        }
+
         if ($this->image_path) {
-            return Storage::disk('public')->url($this->image_path);
+            return url(Storage::disk('public')->url($this->image_path));
         }
 
         return $value;

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Image } from "expo-image";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
@@ -22,6 +23,95 @@ type StaffUser = UserLite & {
   is_owner?: boolean;
   pivot?: { role?: string };
 };
+
+type ItemVariant = {
+  name: string;
+  value: string;
+  price_delta?: number | string;
+};
+
+type AvailabilitySlot = {
+  day: string;
+  from: string;
+  to: string;
+};
+
+const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function emptyVariant(): ItemVariant {
+  return {
+    name: "",
+    value: "",
+    price_delta: 0,
+  };
+}
+
+function emptyScheduleSlot(): AvailabilitySlot {
+  return {
+    day: "Mon",
+    from: "",
+    to: "",
+  };
+}
+
+function normalizeVariants(variants: ItemVariant[]) {
+  const normalized = variants
+    .map((variant) => ({
+      name: variant.name.trim(),
+      value: variant.value.trim(),
+      price_delta: Number(variant.price_delta || 0),
+    }))
+    .filter((variant) => variant.name.length > 0 && variant.value.length > 0);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeAvailabilitySchedule(slots: AvailabilitySlot[]) {
+  const normalized = slots
+    .map((slot) => ({
+      day: slot.day.trim(),
+      from: slot.from.trim(),
+      to: slot.to.trim(),
+    }))
+    .filter((slot) => slot.day && slot.from && slot.to);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolveMediaUrl(url?: string | null) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const apiOrigin = new URL(api.defaults.baseURL ?? "http://127.0.0.1:8000").origin;
+    const parsed = new URL(url, apiOrigin);
+
+    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function getItemImageUrls(item?: Item | null) {
+  const urls = [...(item?.image_urls ?? [])];
+
+  if (item?.image_url) {
+    urls.push(item.image_url);
+  }
+
+  return Array.from(
+    new Set(
+      urls
+        .map((url) => resolveMediaUrl(url))
+        .filter((url): url is string => typeof url === "string" && url.length > 0),
+    ),
+  );
+}
 
 function OptionPicker<T extends { id: number }>({
   options,
@@ -75,6 +165,103 @@ function ChoiceRow({
   );
 }
 
+function VariantEditor({
+  variants,
+  onChange,
+}: {
+  variants: ItemVariant[];
+  onChange: (variants: ItemVariant[]) => void;
+}) {
+  return (
+    <View style={uiStyles.listGap}>
+      {variants.map((variant, index) => (
+        <SectionCard key={`variant-${index}`} title={`Variant ${index + 1}`}>
+          <InputField
+            label="Option group"
+            value={variant.name}
+            onChangeText={(value) =>
+              onChange(variants.map((entry, entryIndex) => (entryIndex === index ? { ...entry, name: value } : entry)))
+            }
+            placeholder="Size"
+          />
+          <InputField
+            label="Option value"
+            value={variant.value}
+            onChangeText={(value) =>
+              onChange(variants.map((entry, entryIndex) => (entryIndex === index ? { ...entry, value } : entry)))
+            }
+            placeholder="Large"
+          />
+          <InputField
+            label="Price delta"
+            value={String(variant.price_delta ?? 0)}
+            onChangeText={(value) =>
+              onChange(variants.map((entry, entryIndex) => (entryIndex === index ? { ...entry, price_delta: value } : entry)))
+            }
+            placeholder="0 or 1.50"
+            keyboardType="numeric"
+          />
+          <AppButton variant="secondary" onPress={() => onChange(variants.filter((_, entryIndex) => entryIndex !== index))}>
+            Remove variant
+          </AppButton>
+        </SectionCard>
+      ))}
+
+      <AppButton variant="secondary" onPress={() => onChange([...variants, emptyVariant()])}>
+        Add variant
+      </AppButton>
+    </View>
+  );
+}
+
+function ScheduleEditor({
+  schedule,
+  onChange,
+}: {
+  schedule: AvailabilitySlot[];
+  onChange: (schedule: AvailabilitySlot[]) => void;
+}) {
+  return (
+    <View style={uiStyles.listGap}>
+      {schedule.map((slot, index) => (
+        <SectionCard key={`schedule-${index}`} title={`Schedule ${index + 1}`}>
+          <HelperText>Day</HelperText>
+          <ChoiceRow
+            value={slot.day}
+            onChange={(value) =>
+              onChange(schedule.map((entry, entryIndex) => (entryIndex === index ? { ...entry, day: value } : entry)))
+            }
+            options={SCHEDULE_DAYS}
+          />
+          <InputField
+            label="From"
+            value={slot.from}
+            onChangeText={(value) =>
+              onChange(schedule.map((entry, entryIndex) => (entryIndex === index ? { ...entry, from: value } : entry)))
+            }
+            placeholder="09:00"
+          />
+          <InputField
+            label="To"
+            value={slot.to}
+            onChangeText={(value) =>
+              onChange(schedule.map((entry, entryIndex) => (entryIndex === index ? { ...entry, to: value } : entry)))
+            }
+            placeholder="18:00"
+          />
+          <AppButton variant="secondary" onPress={() => onChange(schedule.filter((_, entryIndex) => entryIndex !== index))}>
+            Remove slot
+          </AppButton>
+        </SectionCard>
+      ))}
+
+      <AppButton variant="secondary" onPress={() => onChange([...schedule, emptyScheduleSlot()])}>
+        Add schedule row
+      </AppButton>
+    </View>
+  );
+}
+
 export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps) {
   const { marketId } = route.params;
   const access = useProtectedAccess("MarketSettings", { marketId });
@@ -84,6 +271,7 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
   const [address, setAddress] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [selectedLogo, setSelectedLogo] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [selectedBanner, setSelectedBanner] = useState<{ uri: string; name: string; type: string } | null>(null);
   const [staffUserId, setStaffUserId] = useState("");
 
   const id = Number(marketId);
@@ -149,6 +337,31 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
     },
   });
 
+  const uploadBannerM = useMutation({
+    mutationFn: async () => {
+      if (!selectedBanner) {
+        throw new Error("Select a banner first");
+      }
+
+      const formData = new FormData();
+      formData.append("banner", {
+        uri: selectedBanner.uri,
+        type: selectedBanner.type,
+        name: selectedBanner.name,
+      } as never);
+
+      return (
+        await api.post(`/api/markets/${id}/banner`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: async () => {
+      setSelectedBanner(null);
+      await queryClient.invalidateQueries({ queryKey: ["market-settings-source"] });
+    },
+  });
+
   const staffQ = useQuery({
     queryKey: ["market-staff", id],
     queryFn: async () => (await api.get(`/api/markets/${id}/staff`)).data as StaffUser[],
@@ -203,6 +416,29 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
     });
   }
 
+  async function pickBanner() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    setSelectedBanner({
+      uri: asset.uri,
+      name: asset.fileName || "market-banner.jpg",
+      type: asset.mimeType || "image/jpeg",
+    });
+  }
+
   if (!access.ready) {
     return access.fallback;
   }
@@ -242,6 +478,7 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
                 {updateMarketM.isPending ? "Saving..." : "Save changes"}
               </AppButton>
               <HelperText>{market.logo_url ? "A logo already exists on the backend." : "Upload a market logo here."}</HelperText>
+              {resolveMediaUrl(market.logo_url) ? <Image source={resolveMediaUrl(market.logo_url)} style={styles.marketBrandLogo} contentFit="cover" /> : null}
               <AppButton variant="secondary" onPress={() => void pickLogo()}>
                 Choose logo
               </AppButton>
@@ -249,6 +486,17 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
               {uploadLogoM.error ? <HelperText tone="danger">{getErrorMessage(uploadLogoM.error)}</HelperText> : null}
               <AppButton onPress={() => uploadLogoM.mutate()} disabled={!selectedLogo || uploadLogoM.isPending}>
                 {uploadLogoM.isPending ? "Uploading..." : "Upload logo"}
+              </AppButton>
+
+              <HelperText>{market.banner_url ? "A banner already exists on the backend." : "Upload a market banner here."}</HelperText>
+              {resolveMediaUrl(market.banner_url) ? <Image source={resolveMediaUrl(market.banner_url)} style={styles.marketBannerPreview} contentFit="cover" /> : null}
+              <AppButton variant="secondary" onPress={() => void pickBanner()}>
+                Choose banner
+              </AppButton>
+              {selectedBanner ? <HelperText>{selectedBanner.name}</HelperText> : null}
+              {uploadBannerM.error ? <HelperText tone="danger">{getErrorMessage(uploadBannerM.error)}</HelperText> : null}
+              <AppButton onPress={() => uploadBannerM.mutate()} disabled={!selectedBanner || uploadBannerM.isPending}>
+                {uploadBannerM.isPending ? "Uploading..." : "Upload banner"}
               </AppButton>
             </SectionCard>
           ) : (
@@ -304,8 +552,17 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
   const [discountType, setDiscountType] = useState<NonNullable<Item["discount_type"]>>("none");
   const [discountValue, setDiscountValue] = useState("");
   const [stockQty, setStockQty] = useState("0");
+  const [category, setCategory] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [lowStockThreshold, setLowStockThreshold] = useState("5");
+  const [createVariants, setCreateVariants] = useState<ItemVariant[]>([]);
+  const [createSchedule, setCreateSchedule] = useState<AvailabilitySlot[]>([]);
+  const [createSelectedImages, setCreateSelectedImages] = useState<{ uri: string; name: string; type: string }[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [editItem, setEditItem] = useState<Item | null>(null);
+  const [editVariants, setEditVariants] = useState<ItemVariant[]>([]);
+  const [editSchedule, setEditSchedule] = useState<AvailabilitySlot[]>([]);
+  const [editSelectedImages, setEditSelectedImages] = useState<{ uri: string; name: string; type: string }[]>([]);
 
   const id = Number(marketId);
   const itemsQ = useQuery({
@@ -315,18 +572,43 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
   });
 
   const createM = useMutation({
-    mutationFn: async () =>
-      (
+    mutationFn: async () => {
+      const created = (
         await api.post(`/api/markets/${id}/items`, {
           name,
           sku,
+          category: category.trim() || null,
+          image_url: imageUrl.trim() || null,
+          variants: normalizeVariants(createVariants),
+          availability_schedule: normalizeAvailabilitySchedule(createSchedule),
           price: Number(price),
           discount_type: discountType,
           discount_value: Number(discountValue || 0),
           stock_qty: Number(stockQty || 0),
+          low_stock_threshold: Number(lowStockThreshold || 5),
           is_active: isActive,
         })
-      ).data as Item,
+      ).data as Item;
+
+      if (createSelectedImages.length === 0) {
+        return created;
+      }
+
+      const formData = new FormData();
+      createSelectedImages.forEach((image) => {
+        formData.append("images[]", {
+          uri: image.uri,
+          type: image.type,
+          name: image.name,
+        } as never);
+      });
+
+      return (
+        await api.post(`/api/markets/${id}/items/${created.id}/image`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data as Item;
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["market-items", id] });
       setCreateOpen(false);
@@ -336,6 +618,12 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
       setDiscountType("none");
       setDiscountValue("");
       setStockQty("0");
+      setCategory("");
+      setImageUrl("");
+      setLowStockThreshold("5");
+      setCreateVariants([]);
+      setCreateSchedule([]);
+      setCreateSelectedImages([]);
       setIsActive(true);
     },
   });
@@ -346,7 +634,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
         throw new Error("No item selected");
       }
 
-      return (
+      const updated = (
         await api.patch(`/api/markets/${id}/items/${editItem.id}`, {
           name: editItem.name,
           sku: editItem.sku,
@@ -354,7 +642,31 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
           discount_type: editItem.discount_type,
           discount_value: Number(editItem.discount_value || 0),
           stock_qty: Number(editItem.stock_qty || 0),
+          category: editItem.category ?? null,
+          image_url: editItem.image_url?.trim() || null,
+          variants: normalizeVariants(editVariants),
+          availability_schedule: normalizeAvailabilitySchedule(editSchedule),
+          low_stock_threshold: Number(editItem.low_stock_threshold || 5),
           is_active: !!editItem.is_active,
+        })
+      ).data as Item;
+
+      if (editSelectedImages.length === 0) {
+        return updated;
+      }
+
+      const formData = new FormData();
+      editSelectedImages.forEach((image) => {
+        formData.append("images[]", {
+          uri: image.uri,
+          type: image.type,
+          name: image.name,
+        } as never);
+      });
+
+      return (
+        await api.post(`/api/markets/${id}/items/${editItem.id}/image`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
         })
       ).data as Item;
     },
@@ -362,8 +674,69 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
       await queryClient.invalidateQueries({ queryKey: ["market-items", id] });
       setEditOpen(false);
       setEditItem(null);
+      setEditVariants([]);
+      setEditSchedule([]);
+      setEditSelectedImages([]);
     },
   });
+
+  const deleteImageM = useMutation({
+    mutationFn: async (imageIndex: number) => {
+      if (!editItem) {
+        throw new Error("No item selected");
+      }
+
+      return (await api.delete(`/api/markets/${id}/items/${editItem.id}/images/${imageIndex}`)).data as Item;
+    },
+    onSuccess: async (updatedItem) => {
+      await queryClient.invalidateQueries({ queryKey: ["market-items", id] });
+      setEditItem(updatedItem);
+    },
+  });
+
+  const clearImagesM = useMutation({
+    mutationFn: async () => {
+      if (!editItem) {
+        throw new Error("No item selected");
+      }
+
+      return (await api.delete(`/api/markets/${id}/items/${editItem.id}/images`)).data as Item;
+    },
+    onSuccess: async (updatedItem) => {
+      await queryClient.invalidateQueries({ queryKey: ["market-items", id] });
+      setEditItem(updatedItem);
+    },
+  });
+
+  async function pickItemImage(mode: "create" | "edit") {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (result.canceled || !result.assets[0]) {
+      return;
+    }
+
+    const selectedImages = result.assets.map((asset) => ({
+      uri: asset.uri,
+      name: asset.fileName || "item-image.jpg",
+      type: asset.mimeType || "image/jpeg",
+    }));
+
+    if (mode === "create") {
+      setCreateSelectedImages(selectedImages);
+      return;
+    }
+
+    setEditSelectedImages(selectedImages);
+  }
 
   if (!access.ready) {
     return access.fallback;
@@ -383,6 +756,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
         <View style={uiStyles.listGap}>
           {(itemsQ.data ?? []).map((item) => (
             <SectionCard key={item.id} title={item.name} subtitle={`${item.sku} • ${formatMoney(item.price, "en")}`}>
+              {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.itemPreview} contentFit="cover" /> : null}
               <HelperText>Discount: {item.discount_type === "none" ? "None" : `${item.discount_type} ${item.discount_value}`}</HelperText>
               <HelperText>Stock: {item.stock_qty}</HelperText>
               <HelperText>Status: {item.is_active ? "Active" : "Inactive"}</HelperText>
@@ -391,6 +765,9 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
                 variant="secondary"
                 onPress={() => {
                   setEditItem({ ...item });
+                  setEditVariants((item.variants as ItemVariant[] | null) ?? []);
+                  setEditSchedule((item.availability_schedule as AvailabilitySlot[] | null) ?? []);
+                  setEditSelectedImages([]);
                   setEditOpen(true);
                 }}
               >
@@ -404,11 +781,24 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
       <AppModal visible={createOpen} title="Add item" onClose={() => setCreateOpen(false)}>
         <InputField label="Name" value={name} onChangeText={setName} placeholder="Item name" />
         <InputField label="SKU" value={sku} onChangeText={setSku} placeholder="SKU" />
+        <InputField label="Category" value={category} onChangeText={setCategory} placeholder="General" />
         <InputField label="Price" value={price} onChangeText={setPrice} keyboardType="numeric" />
         <HelperText>Discount type</HelperText>
         <ChoiceRow value={discountType} onChange={setDiscountType as (value: string) => void} options={["none", "percent", "fixed"]} />
         <InputField label="Discount value" value={discountValue} onChangeText={setDiscountValue} keyboardType="numeric" />
         <InputField label="Stock quantity" value={stockQty} onChangeText={setStockQty} keyboardType="numeric" />
+        <InputField label="Low stock threshold" value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="numeric" />
+        <InputField label="External image URL" value={imageUrl} onChangeText={setImageUrl} placeholder="Optional fallback URL" />
+        <AppButton variant="secondary" onPress={() => void pickItemImage("create")}>
+          Choose item images
+        </AppButton>
+        {createSelectedImages.length > 0 ? <HelperText>{createSelectedImages.length} image(s) selected</HelperText> : null}
+        <SectionCard title="Variants" subtitle="Add choices like size, color, or packaging.">
+          <VariantEditor variants={createVariants} onChange={setCreateVariants} />
+        </SectionCard>
+        <SectionCard title="Availability schedule" subtitle="Show when this item should be available.">
+          <ScheduleEditor schedule={createSchedule} onChange={setCreateSchedule} />
+        </SectionCard>
         <ToggleRow label="Active" value={isActive} onValueChange={setIsActive} />
         {createM.error ? <HelperText tone="danger">{getErrorMessage(createM.error)}</HelperText> : null}
         <AppButton onPress={() => createM.mutate()} disabled={createM.isPending || !name.trim() || !sku.trim() || !price.trim()}>
@@ -421,10 +811,64 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
           <>
             <InputField label="Name" value={editItem.name} onChangeText={(value) => setEditItem({ ...editItem, name: value })} placeholder="Item name" />
             <InputField label="SKU" value={editItem.sku} onChangeText={(value) => setEditItem({ ...editItem, sku: value })} placeholder="SKU" />
+            <InputField
+              label="Category"
+              value={editItem.category ?? ""}
+              onChangeText={(value) => setEditItem({ ...editItem, category: value })}
+              placeholder="General"
+            />
             <InputField label="Price" value={String(editItem.price)} onChangeText={(value) => setEditItem({ ...editItem, price: value })} keyboardType="numeric" />
             <ChoiceRow value={editItem.discount_type ?? "none"} onChange={(value) => setEditItem({ ...editItem, discount_type: value as Item["discount_type"] })} options={["none", "percent", "fixed"]} />
             <InputField label="Discount value" value={String(editItem.discount_value ?? 0)} onChangeText={(value) => setEditItem({ ...editItem, discount_value: value })} keyboardType="numeric" />
             <InputField label="Stock quantity" value={String(editItem.stock_qty)} onChangeText={(value) => setEditItem({ ...editItem, stock_qty: Number(value) })} keyboardType="numeric" />
+            <InputField
+              label="Low stock threshold"
+              value={String(editItem.low_stock_threshold ?? 5)}
+              onChangeText={(value) => setEditItem({ ...editItem, low_stock_threshold: Number(value || 0) })}
+              keyboardType="numeric"
+            />
+            <InputField
+              label="External image URL"
+              value={editItem.image_url ?? ""}
+              onChangeText={(value) => setEditItem({ ...editItem, image_url: value })}
+              placeholder="Optional fallback URL"
+            />
+            <AppButton variant="secondary" onPress={() => void pickItemImage("edit")}>
+              Choose item images
+            </AppButton>
+            {editSelectedImages.length > 0 ? <HelperText>{editSelectedImages.length} new image(s) selected</HelperText> : null}
+            {getItemImageUrls(editItem).length > 0 ? (
+              <SectionCard title="Current gallery" subtitle={`${getItemImageUrls(editItem).length} image(s)`}>
+                <View style={styles.galleryGrid}>
+                  {getItemImageUrls(editItem).map((url, index) => (
+                    <View key={`${url}-${index}`} style={styles.galleryCard}>
+                      <Image source={url} style={styles.galleryImage} contentFit="cover" />
+                      <AppButton
+                        variant="secondary"
+                        compact
+                        onPress={() => deleteImageM.mutate(index)}
+                        disabled={deleteImageM.isPending || clearImagesM.isPending}
+                      >
+                        Delete
+                      </AppButton>
+                    </View>
+                  ))}
+                </View>
+                <AppButton
+                  variant="secondary"
+                  onPress={() => clearImagesM.mutate()}
+                  disabled={deleteImageM.isPending || clearImagesM.isPending}
+                >
+                  Delete all images
+                </AppButton>
+              </SectionCard>
+            ) : null}
+            <SectionCard title="Variants" subtitle="Add customer-selectable options without JSON.">
+              <VariantEditor variants={editVariants} onChange={setEditVariants} />
+            </SectionCard>
+            <SectionCard title="Availability schedule" subtitle="Use rows to control item time slots.">
+              <ScheduleEditor schedule={editSchedule} onChange={setEditSchedule} />
+            </SectionCard>
             <ToggleRow label="Active" value={!!editItem.is_active} onValueChange={(value) => setEditItem({ ...editItem, is_active: value })} />
             {updateM.error ? <HelperText tone="danger">{getErrorMessage(updateM.error)}</HelperText> : null}
             <AppButton onPress={() => updateM.mutate()} disabled={updateM.isPending}>
@@ -589,6 +1033,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+  },
+  itemPreview: {
+    width: "100%",
+    height: 160,
+    borderRadius: 18,
+    marginBottom: 12,
+    backgroundColor: "#e5e7eb",
+  },
+  marketBrandLogo: {
+    width: 88,
+    height: 88,
+    borderRadius: 20,
+    marginBottom: 12,
+    backgroundColor: "#ffffff",
+  },
+  marketBannerPreview: {
+    width: "100%",
+    height: 180,
+    borderRadius: 20,
+    marginBottom: 12,
+    backgroundColor: "#e5e7eb",
+  },
+  galleryGrid: {
+    gap: 12,
+  },
+  galleryCard: {
+    gap: 8,
+  },
+  galleryImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: 18,
+    backgroundColor: "#e5e7eb",
   },
   choiceWrap: {
     flexDirection: "row",

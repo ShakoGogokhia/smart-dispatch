@@ -82,6 +82,8 @@ export type MarketLite = {
   owner_user_id?: number;
   owner?: UserLite;
   logo_url?: string | null;
+  banner_url?: string | null;
+  image_url?: string | null;
   delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
 };
 
@@ -242,6 +244,7 @@ export type Item = {
   sku: string;
   category?: string | null;
   image_url?: string | null;
+  image_urls?: string[] | null;
   variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
   availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
   price: string | number;

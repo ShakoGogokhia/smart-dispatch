@@ -239,7 +239,7 @@ export default function DriversPage() {
 
           <div className="min-h-0 overflow-y-auto">
             <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
-              <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#131d2b]">
+              <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#101927]">
                 <div className="grid gap-4 lg:sticky lg:top-0">
                   <ModalPreviewCard
                     kicker={text.vehicles}
@@ -290,7 +290,7 @@ export default function DriversPage() {
 
           <div className="min-h-0 overflow-y-auto">
             <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
-              <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#131d2b]">
+              <aside className="border-b border-slate-200 bg-white/94 p-5 lg:border-b-0 lg:border-r dark:border-white/10 dark:bg-[#101927]">
                 <div className="grid gap-4 lg:sticky lg:top-0">
                   <ModalPreviewCard
                     kicker={text.title}
@@ -360,7 +360,7 @@ function ModalPreviewCard({
   metaLabel: string;
 }) {
   return (
-    <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0f1825]">
+    <div className="rounded-[26px] border border-slate-200 bg-[#f7f4ec] p-5 dark:border-white/10 dark:bg-[#0c1521]">
       <div className="section-kicker">{kicker}</div>
       <div className="theme-ink mt-3 text-3xl font-semibold">{title}</div>
       <div className="theme-copy mt-2 text-sm leading-6">{subtitle}</div>
@@ -382,7 +382,7 @@ function ModalFieldCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-[#131d2b]">
+    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-white/10 dark:bg-white/[0.055]">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
         <Label className="field-label">{label}</Label>
