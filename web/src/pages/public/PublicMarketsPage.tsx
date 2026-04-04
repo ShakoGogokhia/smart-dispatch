@@ -5,6 +5,7 @@ import {
   ChevronRight,
   MapPin,
   Megaphone,
+  Package,
   Search,
   ShieldCheck,
   Sparkles,
@@ -24,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, toNumber } from "@/lib/format";
 import { getDefaultAuthedPath } from "@/lib/session";
 import {
   calcStorefrontPrice,
@@ -39,6 +40,39 @@ type RailProps = {
   description?: string;
   markets: StorefrontMarket[];
   autoScrollMs?: number;
+};
+
+type DiscoveryItem = {
+  id: number;
+  market_id: number;
+  market?: {
+    id: number;
+    name: string;
+    code: string;
+  } | null;
+  name: string;
+  sku: string;
+  category?: string | null;
+  image_url?: string | null;
+  image_urls?: string[] | null;
+  combo_offers?: Array<{ name: string; description?: string | null; combo_price: number | string }> | null;
+  price: number | string;
+  discount_type?: "none" | "percent" | "fixed";
+  discount_value?: number | string;
+  stock_qty: number;
+  ordered_qty?: number;
+  is_promoted?: boolean;
+  promotion_ends_at?: string | null;
+  review_summary?: {
+    count?: number;
+    average?: number | null;
+  };
+};
+
+type DiscoveryFeed = {
+  popular: DiscoveryItem[];
+  combo: DiscoveryItem[];
+  discounted: DiscoveryItem[];
 };
 
 function resolveMarketMediaUrl(url?: string | null) {
@@ -68,22 +102,59 @@ function getMarketBannerUrl(market: StorefrontMarket) {
   );
 }
 
-function getBadgeTheme(badge?: string | null) {
+function getDiscoveryItemImageUrl(item: DiscoveryItem) {
+  const urls = [...(item.image_urls ?? [])];
+
+  if (item.image_url) {
+    urls.push(item.image_url);
+  }
+
+  const firstUrl = urls.find((url) => typeof url === "string" && url.length > 0);
+  return resolveMarketMediaUrl(firstUrl);
+}
+
+function getBadgeTheme(
+  badge?: string | null,
+  theme?: StorefrontMarket["featured_theme"] | null,
+) {
+  const tone = theme?.tone;
+  const shape = theme?.shape === "soft" ? "rounded-2xl" : "rounded-full";
+
+  if (tone === "amber") {
+    return `${shape} bg-amber-300 text-black border border-amber-200 shadow-sm`;
+  }
+
+  if (tone === "cyan") {
+    return `${shape} bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800`;
+  }
+
+  if (tone === "emerald") {
+    return `${shape} bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800`;
+  }
+
+  if (tone === "rose") {
+    return `${shape} bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800`;
+  }
+
+  if (tone === "slate") {
+    return `${shape} bg-slate-900 text-white border border-slate-800 dark:bg-slate-100 dark:text-slate-950 dark:border-slate-200`;
+  }
+
   const value = (badge ?? "").trim().toLowerCase();
 
   if (value.includes("vip")) {
-    return "bg-amber-300 text-black border border-amber-200 shadow-sm";
+    return `${shape} bg-amber-300 text-black border border-amber-200 shadow-sm`;
   }
 
   if (value.includes("new")) {
-    return "bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800";
+    return `${shape} bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/40 dark:text-cyan-300 dark:border-cyan-800`;
   }
 
   if (value.includes("staff")) {
-    return "bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800";
+    return `${shape} bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/40 dark:text-violet-300 dark:border-violet-800`;
   }
 
-  return "bg-white/85 text-zinc-800 border border-white/70 dark:bg-zinc-900/85 dark:text-zinc-200 dark:border-zinc-700";
+  return `${shape} bg-white/85 text-zinc-800 border border-white/70 dark:bg-zinc-900/85 dark:text-zinc-200 dark:border-zinc-700`;
 }
 
 function MarketCard({ market }: { market: StorefrontMarket }) {
@@ -130,7 +201,8 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
           {market.featured_badge ? (
             <span
               className={`px-3.5 py-1.5 rounded-2xl text-xs font-semibold backdrop-blur-md ${getBadgeTheme(
-                market.featured_badge
+                market.featured_badge,
+                market.featured_theme,
               )}`}
             >
               {market.featured_badge}
@@ -241,10 +313,7 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
 
           <div className="space-y-3">
             {previewItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between gap-3 text-sm"
-              >
+              <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
                 <div className="flex min-w-0 items-center gap-3">
                   <div className="h-10 w-10 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800">
                     {resolveMarketMediaUrl(item.image_url) ? (
@@ -263,9 +332,16 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
                     {item.name}
                   </span>
                 </div>
-                <span className="font-semibold whitespace-nowrap text-emerald-600 dark:text-emerald-400">
-                  {formatMoney(calcStorefrontPrice(item))}
-                </span>
+                <div className="flex flex-col items-end text-right">
+                  <span className="whitespace-nowrap font-semibold text-emerald-600 dark:text-emerald-400">
+                    {formatMoney(calcStorefrontPrice(item))}
+                  </span>
+                  {Math.abs(calcStorefrontPrice(item) - Number(item.price)) > 0.01 ? (
+                    <span className="whitespace-nowrap text-xs line-through text-zinc-400 dark:text-zinc-500">
+                      {formatMoney(item.price)}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             ))}
 
@@ -382,6 +458,171 @@ function MarketRail({
   );
 }
 
+function ItemRail({
+  title,
+  subtitle,
+  description,
+  items,
+}: {
+  title: string;
+  subtitle: string;
+  description?: string;
+  items: DiscoveryItem[];
+}) {
+  const railRef = useRef<HTMLDivElement>(null);
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  const scrollBy = (direction: "left" | "right") => {
+    railRef.current?.scrollBy({
+      left: direction === "left" ? -304 : 304,
+      behavior: "smooth",
+    });
+  };
+
+  return (
+    <section className="py-12 sm:py-14">
+      <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="text-xs font-medium uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
+            {title}
+          </div>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tighter text-zinc-900 dark:text-white sm:text-4xl">
+            {subtitle}
+          </h2>
+          {description ? (
+            <p className="mt-3 leading-relaxed text-zinc-600 dark:text-zinc-400">
+              {description}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-12 w-12 rounded-2xl border-zinc-300 bg-white/90 dark:border-zinc-700 dark:bg-zinc-900/90"
+            onClick={() => scrollBy("left")}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-12 w-12 rounded-2xl border-zinc-300 bg-white/90 dark:border-zinc-700 dark:bg-zinc-900/90"
+            onClick={() => scrollBy("right")}
+          >
+            <ChevronRight className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+
+      <div
+        ref={railRef}
+        className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide"
+      >
+        {items.map((item) => {
+          const imageUrl = getDiscoveryItemImageUrl(item);
+          const reviewAverage = item.review_summary?.average ?? 0;
+          const reviewCount = item.review_summary?.count ?? 0;
+          const comboCount = item.combo_offers?.length ?? 0;
+          const basePrice = toNumber(item.price);
+          const finalPrice = calcStorefrontPrice(item);
+          const isDiscounted = Math.abs(basePrice - finalPrice) > 0.01;
+
+          return (
+            <article
+              key={`${item.market_id}-${item.id}`}
+              className="group flex min-h-[420px] min-w-[280px] max-w-[280px] snap-start flex-col overflow-hidden rounded-[1.8rem] border border-zinc-200/80 bg-white p-4 shadow-sm transition-all duration-300 hover:border-cyan-300/70 hover:shadow-[0_18px_50px_rgba(15,23,42,0.10)] dark:border-zinc-800 dark:bg-zinc-900"
+            >
+              <div className="relative h-44 overflow-hidden rounded-[1.4rem] bg-zinc-100 dark:bg-zinc-800">
+                {imageUrl ? (
+                  <img
+                    src={imageUrl}
+                    alt={item.name}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-zinc-400 dark:text-zinc-600">
+                    <Package className="h-8 w-8" />
+                  </div>
+                )}
+
+                <div className="absolute left-3 top-3 flex flex-wrap gap-2">
+                  {item.discount_type && item.discount_type !== "none" ? (
+                    <span className="rounded-full bg-rose-500 px-3 py-1 text-[11px] font-semibold text-white">
+                      Deal
+                    </span>
+                  ) : null}
+                  {comboCount > 0 ? (
+                    <span className="rounded-full bg-cyan-500 px-3 py-1 text-[11px] font-semibold text-white">
+                      {comboCount} combo{comboCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                  {item.is_promoted ? (
+                    <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold text-white dark:bg-white dark:text-slate-950">
+                      Promoted
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-1 flex-col gap-3">
+                <div className="min-w-0">
+                  <div className="line-clamp-1 text-lg font-semibold tracking-tight text-zinc-950 dark:text-white">
+                    {item.name}
+                  </div>
+                  <div className="mt-1 line-clamp-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    {item.market?.name ?? "Market item"}
+                  </div>
+                </div>
+
+                <div className="flex min-h-[48px] items-start justify-between gap-3">
+                  <div className="flex flex-col">
+                    <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+                      {formatMoney(finalPrice)}
+                    </div>
+                    {isDiscounted ? (
+                      <div className="text-xs line-through text-zinc-400 dark:text-zinc-500">
+                        {formatMoney(basePrice)}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                    <span>{reviewCount ? reviewAverage.toFixed(1) : "New"}</span>
+                  </div>
+                </div>
+
+                <div className="flex min-h-[56px] flex-wrap content-start gap-2">
+                  <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    {item.category || "General"}
+                  </span>
+                  {item.ordered_qty ? (
+                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                      {item.ordered_qty} ordered
+                    </span>
+                  ) : null}
+                </div>
+
+                <Button asChild className="mt-auto h-11 rounded-2xl text-sm font-semibold">
+                  <Link to={`/m/${item.market_id}`}>
+                    Open Market
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function StatsCard({
   label,
   value,
@@ -418,6 +659,11 @@ export default function PublicMarketsPage() {
     queryFn: async () => (await api.get("/api/public/markets")).data as StorefrontMarket[],
   });
 
+  const discoveryQ = useQuery({
+    queryKey: ["public-discovery-items"],
+    queryFn: async () => (await api.get("/api/public/discovery-items")).data as DiscoveryFeed,
+  });
+
   const allMarkets = marketsQ.data ?? [];
   const query = search.trim().toLowerCase();
 
@@ -440,8 +686,9 @@ export default function PublicMarketsPage() {
     );
   }, [allMarkets, query]);
 
-  const promotedMarkets = filteredMarkets.filter((m) => m.is_featured);
-  const regularMarkets = filteredMarkets.filter((m) => !m.is_featured);
+  const promotedMarkets = filteredMarkets.filter((market) => market.is_featured);
+  const promotedMarketIds = new Set(promotedMarkets.map((market) => market.id));
+  const regularMarkets = filteredMarkets.filter((market) => !promotedMarketIds.has(market.id));
 
   const authedPath = getDefaultAuthedPath(meQ.data?.roles);
 
@@ -453,6 +700,7 @@ export default function PublicMarketsPage() {
   );
 
   const hasMarkets = filteredMarkets.length > 0;
+  const discoveryFeed = discoveryQ.data;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-white to-zinc-100/40 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 text-zinc-900 dark:text-zinc-100">
@@ -651,6 +899,31 @@ export default function PublicMarketsPage() {
           </div>
         </div>
 
+        {discoveryQ.isSuccess ? (
+          <>
+            <ItemRail
+              title="Popular"
+              subtitle="Popular Items Right Now"
+              description="Top items based on order activity when available. If there is no order history yet, this row falls back to random live picks."
+              items={discoveryFeed?.popular ?? []}
+            />
+
+            <ItemRail
+              title="Combos"
+              subtitle="Combo Picks"
+              description="Items that already have combo offers configured by their market."
+              items={discoveryFeed?.combo ?? []}
+            />
+
+            <ItemRail
+              title="Deals"
+              subtitle="Discounted Items"
+              description="Live discounted items across all public markets."
+              items={discoveryFeed?.discounted ?? []}
+            />
+          </>
+        ) : null}
+
         {/* Content states */}
         {marketsQ.isLoading ? (
           <div className="rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-24 sm:py-32 text-center shadow-sm">
@@ -675,21 +948,25 @@ export default function PublicMarketsPage() {
           </div>
         ) : (
           <>
-            <MarketRail
-              title="Featured"
-              subtitle="Promoted Markets"
-              description="Highlighted storefronts with premium placement, strong visuals, and featured discovery."
-              markets={promotedMarkets}
-              autoScrollMs={5500}
-            />
+            {promotedMarkets.length > 0 ? (
+              <MarketRail
+                title="Featured"
+                subtitle="Promoted Markets"
+                description="Highlighted storefronts with premium placement, strong visuals, and featured discovery."
+                markets={promotedMarkets}
+                autoScrollMs={5500}
+              />
+            ) : null}
 
-            <MarketRail
-              title="Community"
-              subtitle="All Live Markets"
-              description="Explore the full collection of active markets and discover products across every storefront."
-              markets={regularMarkets}
-              autoScrollMs={8500}
-            />
+            {regularMarkets.length > 0 ? (
+              <MarketRail
+                title="Community"
+                subtitle="All Live Markets"
+                description="Explore the full collection of active markets and discover products across every storefront."
+                markets={regularMarkets}
+                autoScrollMs={8500}
+              />
+            ) : null}
           </>
         )}
 

@@ -49,6 +49,10 @@ export type StorefrontMarket = {
   featured_badge?: string | null;
   featured_headline?: string | null;
   featured_copy?: string | null;
+  featured_theme?: {
+    tone?: "amber" | "cyan" | "emerald" | "rose" | "slate";
+    shape?: "pill" | "soft" | "outline";
+  } | null;
   logo_url?: string | null;
   delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
   active_items_count?: number;

@@ -87,6 +87,22 @@ export type MarketLite = {
   delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
 };
 
+export type ComboOfferApi = {
+  name: string;
+  description?: string | null;
+  combo_price: number | string;
+  item_ids?: number[];
+  items?: Array<{
+    id: number;
+    name: string;
+    sku?: string | null;
+    ingredients?: Array<{
+      name: string;
+      removable: boolean;
+    }>;
+  }>;
+};
+
 export type OrderItem = {
   id?: number;
   item_id?: number | null;

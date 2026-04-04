@@ -103,13 +103,17 @@ export default function MarketSettingsPage() {
         address: address.trim() || null,
         lat: lat.trim() ? Number(lat) : null,
         lng: lng.trim() ? Number(lng) : null,
-        is_active: isActive,
-        is_featured: isFeatured,
-        featured_badge: featuredBadge.trim() || null,
-        featured_headline: featuredHeadline.trim() || null,
-        featured_copy: featuredCopy.trim() || null,
+        ...(isAdmin
+          ? {
+              is_active: isActive,
+              is_featured: isFeatured,
+              featured_badge: featuredBadge.trim() || null,
+              featured_headline: featuredHeadline.trim() || null,
+              featured_copy: featuredCopy.trim() || null,
+            }
+          : {}),
       };
-      const res = await api.patch(`/api/markets/${id}`, payload);
+      const res = await api.patch(`/api/markets/${id}/settings`, payload);
       return res.data as Market;
     },
     onSuccess: async () => {
@@ -327,7 +331,7 @@ export default function MarketSettingsPage() {
                       </div>
                       <div className="field-group">
                         <Label>Featured badge</Label>
-                        <Input value={featuredBadge} onChange={(e) => setFeaturedBadge(e.target.value)} placeholder="Promoted market" />
+                        <Input value={featuredBadge} onChange={(e) => setFeaturedBadge(e.target.value)} placeholder="Promoted market" disabled={!isAdmin} />
                       </div>
                       <div className="field-group">
                         <Label>Featured headline</Label>
@@ -335,6 +339,7 @@ export default function MarketSettingsPage() {
                           value={featuredHeadline}
                           onChange={(e) => setFeaturedHeadline(e.target.value)}
                           placeholder="Fast nightly essentials"
+                          disabled={!isAdmin}
                         />
                       </div>
                       <div className="field-group md:col-span-2">
@@ -343,6 +348,7 @@ export default function MarketSettingsPage() {
                           value={featuredCopy}
                           onChange={(e) => setFeaturedCopy(e.target.value)}
                           placeholder="Shown on the landing page when the storefront is promoted."
+                          disabled={!isAdmin}
                         />
                       </div>
                     </div>
@@ -424,10 +430,19 @@ export default function MarketSettingsPage() {
                     {updateError && <div className="text-sm text-red-600">{updateError}</div>}
 
                     <div className="flex flex-wrap items-center gap-3">
-                      <Button onClick={() => updateMarketM.mutate()} disabled={updateMarketM.isPending || !name.trim() || !isAdmin}>
-                        {updateMarketM.isPending ? "Saving..." : "Save changes"}
+                      <Button onClick={() => updateMarketM.mutate()} disabled={updateMarketM.isPending || !name.trim()}>
+                        {updateMarketM.isPending ? "Saving..." : isAdmin ? "Save changes" : "Save basic details"}
                       </Button>
-                      {!isAdmin && <div className="theme-muted text-sm">Only admins can save market detail and promotion changes.</div>}
+                      {!isAdmin && (
+                        <div className="theme-muted text-sm">
+                          You can update branding and basic storefront details here. Only admins can activate or promote the market.
+                        </div>
+                      )}
+                      {!isAdmin ? (
+                        <Button asChild variant="secondary">
+                          <Link to="/badge-pricing">Open promotion studio</Link>
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 ) : (

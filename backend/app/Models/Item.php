@@ -10,9 +10,10 @@ class Item extends Model
     use HasFactory;
 
     protected $fillable = [
-        'market_id','name','sku','price',
+        'market_id','name','sku','item_kind','price',
         'discount_type','discount_value',
         'stock_qty','is_active',
+        'is_promoted','promotion_starts_at','promotion_ends_at',
         'category','image_url','image_path','image_paths',
         'variants','availability_schedule',
         'ingredients','combo_offers',
@@ -23,11 +24,14 @@ class Item extends Model
         'price' => 'decimal:2',
         'discount_value' => 'decimal:2',
         'is_active' => 'boolean',
+        'is_promoted' => 'boolean',
         'image_paths' => 'array',
         'variants' => 'array',
         'availability_schedule' => 'array',
         'ingredients' => 'array',
         'combo_offers' => 'array',
+        'promotion_starts_at' => 'datetime',
+        'promotion_ends_at' => 'datetime',
     ];
 
     public function getImageUrlAttribute(?string $value): ?string

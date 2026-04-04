@@ -32,6 +32,7 @@ type Item = {
   market_id: number;
   name: string;
   sku: string;
+  item_kind?: "regular" | "combo";
   category?: string | null;
   image_url?: string | null;
   image_urls?: string[] | null;
@@ -64,6 +65,14 @@ type AvailabilitySlot = {
   to: string;
 };
 
+type ComboSelectableItem = {
+  id: number;
+  name: string;
+  sku: string;
+  price: string | number;
+  ingredients: ItemIngredient[];
+};
+
 const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function emptyIngredient(): ItemIngredient {
@@ -78,7 +87,32 @@ function emptyComboOffer(): ComboOffer {
     name: "",
     description: "",
     combo_price: 0,
+    item_ids: [],
+    items: [],
   };
+}
+
+function buildComboPayload(itemKind: "regular" | "combo", comboOffers: ComboOffer[], priceValue: string | number) {
+  const normalized = normalizeComboOffers(comboOffers);
+
+  if (itemKind === "combo") {
+    const primaryCombo = normalized[0];
+
+    if (!primaryCombo) {
+      return [];
+    }
+
+    return [
+      {
+        ...primaryCombo,
+        name: primaryCombo.name || "Combo bundle",
+        description: null,
+        combo_price: Number(priceValue || 0),
+      },
+    ];
+  }
+
+  return normalized;
 }
 
 function emptyVariant(): ItemVariant {
@@ -112,8 +146,70 @@ function normalizeComboOffers(comboOffers: ComboOffer[]) {
       name: comboOffer.name.trim(),
       description: comboOffer.description?.trim() ? comboOffer.description.trim() : null,
       combo_price: Number(comboOffer.combo_price || 0),
+      item_ids: Array.from(
+        new Set(
+          (comboOffer.item_ids ?? [])
+            .map((itemId) => Number(itemId))
+            .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+        ),
+      ),
     }))
-    .filter((comboOffer) => comboOffer.name.length > 0);
+    .filter((comboOffer) => comboOffer.item_ids.length > 0);
+}
+
+function buildComboName(selectedItems: ComboSelectableItem[]) {
+  return selectedItems
+    .map((item) => item.name.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" + ");
+}
+
+function getComboSelectableItems(items: Item[], currentItemId?: number | null) {
+  return items
+    .filter((item) => item.id !== currentItemId)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      sku: item.sku,
+      price: item.price,
+      ingredients: item.ingredients ?? [],
+    }));
+}
+
+function hydrateComboOffers(comboOffers: ComboOffer[] | null | undefined, items: ComboSelectableItem[]) {
+  return (comboOffers ?? []).map((comboOffer) => {
+    const selectedIds = Array.from(
+      new Set(
+        (comboOffer.item_ids ?? comboOffer.items?.map((item) => item.id) ?? [])
+          .map((itemId) => Number(itemId))
+          .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
+      ),
+    );
+    const selectedItems = selectedIds
+      .map((itemId) => items.find((item) => item.id === itemId))
+      .filter((item): item is ComboSelectableItem => Boolean(item));
+
+    return {
+      ...comboOffer,
+      name: comboOffer.name?.trim() || buildComboName(selectedItems),
+      item_ids: selectedIds,
+      items: selectedItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku,
+        ingredients: item.ingredients,
+      })),
+    };
+  });
+}
+
+function getItemIngredientsPayload(itemKind: "regular" | "combo", ingredients: ItemIngredient[]) {
+  if (itemKind === "combo") {
+    return null;
+  }
+
+  return normalizeIngredients(ingredients);
 }
 
 function normalizeVariants(variants: ItemVariant[]) {
@@ -280,83 +376,227 @@ function IngredientSummary({ ingredients }: { ingredients?: ItemIngredient[] | n
 
 function ComboOfferEditor({
   comboOffers,
+  availableItems,
+  itemKind,
   onChange,
 }: {
   comboOffers: ComboOffer[];
+  availableItems: ComboSelectableItem[];
+  itemKind: "regular" | "combo";
   onChange: (comboOffers: ComboOffer[]) => void;
 }) {
+  const visibleComboOffers =
+    itemKind === "combo" ? (comboOffers.length > 0 ? [comboOffers[0]] : [emptyComboOffer()]) : comboOffers;
+
+  const toggleComboItem = (comboIndex: number, item: ComboSelectableItem) => {
+    const sourceOffers = itemKind === "combo" ? visibleComboOffers : comboOffers;
+    const next = sourceOffers.map((entry, entryIndex) => {
+      if (entryIndex !== comboIndex) {
+        return entry;
+      }
+
+      const currentIds = new Set(entry.item_ids ?? []);
+      if (currentIds.has(item.id)) {
+        currentIds.delete(item.id);
+      } else {
+        currentIds.add(item.id);
+      }
+
+      const selectedItems = availableItems.filter((candidate) => currentIds.has(candidate.id));
+
+      return {
+        ...entry,
+        name: entry.name?.trim() || buildComboName(selectedItems),
+        item_ids: selectedItems.map((candidate) => candidate.id),
+        items: selectedItems.map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          sku: candidate.sku,
+          ingredients: candidate.ingredients,
+        })),
+      };
+    });
+
+    onChange(next);
+  };
+
   return (
     <div className="grid gap-3">
-      {comboOffers.map((comboOffer, index) => (
+      {availableItems.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+          Add other market items first, then you can build combos from those items here.
+        </div>
+      ) : null}
+
+      {visibleComboOffers.map((comboOffer, index) => (
         <div key={`combo-offer-${index}`} className="rounded-xl border p-3">
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="grid gap-2">
-              <Label className="field-label">Combo name</Label>
-              <Input
-                value={comboOffer.name}
-                onChange={(event) => {
-                  const next = comboOffers.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, name: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="Lunch combo"
-              />
-            </div>
+          {itemKind === "regular" ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-2">
+                <Label className="field-label">Combo label</Label>
+                <Input
+                  value={comboOffer.name}
+                  onChange={(event) => {
+                    const next = comboOffers.map((entry, entryIndex) =>
+                      entryIndex === index ? { ...entry, name: event.target.value } : entry,
+                    );
+                    onChange(next);
+                  }}
+                  className="input-shell"
+                  placeholder="Auto-filled from selected items"
+                />
+              </div>
 
-            <div className="grid gap-2">
-              <Label className="field-label">Combo price</Label>
-              <Input
-                value={String(comboOffer.combo_price ?? "")}
-                onChange={(event) => {
-                  const next = comboOffers.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, combo_price: Number(event.target.value || 0) } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="12.99"
-              />
-            </div>
+              <div className="grid gap-2">
+                <Label className="field-label">Combo price</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={String(comboOffer.combo_price ?? "")}
+                  onChange={(event) => {
+                    const next = comboOffers.map((entry, entryIndex) =>
+                      entryIndex === index ? { ...entry, combo_price: Number(event.target.value || 0) } : entry,
+                    );
+                    onChange(next);
+                  }}
+                  className="input-shell"
+                  placeholder="12.99"
+                />
+              </div>
 
-            <div className="grid gap-2">
-              <Label className="field-label">Description</Label>
-              <Input
-                value={comboOffer.description ?? ""}
-                onChange={(event) => {
-                  const next = comboOffers.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, description: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="Drink + fries included"
-              />
+              <div className="grid gap-2">
+                <Label className="field-label">Description</Label>
+                <Input
+                  value={comboOffer.description ?? ""}
+                  onChange={(event) => {
+                    const next = comboOffers.map((entry, entryIndex) =>
+                      entryIndex === index ? { ...entry, description: event.target.value } : entry,
+                    );
+                    onChange(next);
+                  }}
+                  className="input-shell"
+                  placeholder="Optional short note"
+                />
+              </div>
             </div>
+          ) : (
+            <div className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+              This combo item uses the main price above as the customer price. Here you only choose which market items are included.
+            </div>
+          )}
+
+          <div className="mt-4 grid gap-2">
+            <Label className="field-label">Select combo items from this market</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {availableItems.map((item) => {
+                const active = (comboOffer.item_ids ?? []).includes(item.id);
+
+                return (
+                  <button
+                    key={`combo-item-${index}-${item.id}`}
+                    type="button"
+                    onClick={() => toggleComboItem(index, item)}
+                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                      active
+                        ? "border-cyan-600 bg-cyan-50 text-cyan-950 dark:border-cyan-400 dark:bg-cyan-950/30 dark:text-cyan-100"
+                        : "border-border bg-background text-foreground hover:bg-muted/60"
+                    }`}
+                  >
+                    <div className="font-medium">{item.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {item.sku} · {Number(item.price).toFixed(2)}
+                    </div>
+                    {item.ingredients.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {item.ingredients.slice(0, 4).map((ingredient) => (
+                          <span
+                            key={`${item.id}-${ingredient.name}`}
+                            className={`rounded-full px-2 py-1 text-[11px] ${
+                              ingredient.removable
+                                ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                            }`}
+                          >
+                            {ingredient.name}
+                            {ingredient.removable ? " removable" : ""}
+                          </span>
+                        ))}
+                        {item.ingredients.length > 4 ? (
+                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                            +{item.ingredients.length - 4} more
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {(comboOffer.items ?? []).length > 0
+                ? `Selected: ${(comboOffer.items ?? []).map((item) => item.name).join(", ")}`
+                : "Choose at least one item for this combo."}
+            </div>
+            {(comboOffer.items ?? []).length > 0 ? (
+              <div className="grid gap-2">
+                {(comboOffer.items ?? []).map((item) => (
+                  <div key={`selected-combo-item-${item.id}`} className="rounded-xl border p-3">
+                    <div className="text-sm font-medium">{item.name}</div>
+                    {(item.ingredients ?? []).length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(item.ingredients ?? []).map((ingredient) => (
+                          <span
+                            key={`${item.id}-${ingredient.name}-selected`}
+                            className={`rounded-full px-2 py-1 text-[11px] ${
+                              ingredient.removable
+                                ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                            }`}
+                          >
+                            {ingredient.name}
+                            {ingredient.removable ? " removable" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-1 text-xs text-muted-foreground">No ingredients listed</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
 
-          <div className="mt-3 flex justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onChange(comboOffers.filter((_, entryIndex) => entryIndex !== index))}
-            >
-              Remove combo
-            </Button>
-          </div>
+          {itemKind === "regular" ? (
+            <div className="mt-3 flex justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onChange(comboOffers.filter((_, entryIndex) => entryIndex !== index))}
+              >
+                Remove combo
+              </Button>
+            </div>
+          ) : null}
         </div>
       ))}
 
-      <Button type="button" variant="secondary" onClick={() => onChange([...comboOffers, emptyComboOffer()])}>
-        Add combo offer
-      </Button>
+      {itemKind === "regular" ? (
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onChange([...comboOffers, emptyComboOffer()])}
+          disabled={availableItems.length === 0}
+        >
+          Add combo offer
+        </Button>
+      ) : null}
     </div>
   );
 }
 
 function ComboSummary({ comboOffers }: { comboOffers?: ComboOffer[] | null }) {
-  const normalized = normalizeComboOffers(comboOffers ?? []);
+  const normalized = comboOffers ?? [];
 
   if (!normalized.length) {
     return <span className="text-sm text-muted-foreground">No combos</span>;
@@ -366,7 +606,7 @@ function ComboSummary({ comboOffers }: { comboOffers?: ComboOffer[] | null }) {
     <div className="grid gap-1">
       <span className="text-sm font-medium">{normalized.length} combo offers</span>
       <span className="text-xs text-muted-foreground">
-        {normalized.map((comboOffer) => comboOffer.name).join(", ")}
+        {normalized.map((comboOffer) => comboOffer.name || buildComboName((comboOffer.items ?? []) as ComboSelectableItem[])).join(", ")}
       </span>
     </div>
   );
@@ -581,6 +821,7 @@ export default function MarketItemsPage() {
   });
 
   const items = itemsQ.data ?? [];
+  const createComboSelectableItems = getComboSelectableItems(items);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
@@ -596,6 +837,7 @@ export default function MarketItemsPage() {
   const [variants, setVariants] = useState<ItemVariant[]>([]);
   const [availabilitySchedule, setAvailabilitySchedule] = useState<AvailabilitySlot[]>([]);
   const [createIngredients, setCreateIngredients] = useState<ItemIngredient[]>([]);
+  const [createItemKind, setCreateItemKind] = useState<"regular" | "combo">("regular");
   const [createComboOffers, setCreateComboOffers] = useState<ComboOffer[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState("5");
   const [csvDraft, setCsvDraft] = useState(
@@ -607,12 +849,13 @@ export default function MarketItemsPage() {
       const payload = {
         name,
         sku,
+        item_kind: createItemKind,
         category: category || null,
         image_url: imageUrl || null,
         variants: normalizeVariants(variants),
         availability_schedule: normalizeAvailabilitySchedule(availabilitySchedule),
-        ingredients: normalizeIngredients(createIngredients),
-        combo_offers: normalizeComboOffers(createComboOffers),
+        ingredients: getItemIngredientsPayload(createItemKind, createIngredients),
+        combo_offers: buildComboPayload(createItemKind, createComboOffers, price),
         price: Number(price),
         discount_type: discountType,
         discount_value: Number(discountValue || 0),
@@ -654,6 +897,7 @@ export default function MarketItemsPage() {
       setVariants([]);
       setAvailabilitySchedule([]);
       setCreateIngredients([]);
+      setCreateItemKind("regular");
       setCreateComboOffers([]);
       setLowStockThreshold("5");
     },
@@ -662,6 +906,8 @@ export default function MarketItemsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
+  const editComboSelectableItems = getComboSelectableItems(items, editItem?.id ?? null);
+  const editItemKind: "regular" | "combo" = editItem?.item_kind === "combo" ? "combo" : "regular";
 
   const updateM = useMutation({
     mutationFn: async () => {
@@ -670,6 +916,7 @@ export default function MarketItemsPage() {
       const payload = {
         name: editItem.name,
         sku: editItem.sku,
+        item_kind: editItem.item_kind ?? "regular",
         price: Number(editItem.price),
         discount_type: editItem.discount_type,
         discount_value: Number(editItem.discount_value || 0),
@@ -678,8 +925,8 @@ export default function MarketItemsPage() {
         image_url: editItem.image_url ?? null,
         variants: normalizeVariants((editItem.variants as ItemVariant[] | null) ?? []),
         availability_schedule: normalizeAvailabilitySchedule((editItem.availability_schedule as AvailabilitySlot[] | null) ?? []),
-        ingredients: normalizeIngredients(editItem.ingredients ?? []),
-        combo_offers: normalizeComboOffers(editItem.combo_offers ?? []),
+        ingredients: getItemIngredientsPayload(editItem.item_kind === "combo" ? "combo" : "regular", editItem.ingredients ?? []),
+        combo_offers: buildComboPayload(editItem.item_kind === "combo" ? "combo" : "regular", editItem.combo_offers ?? [], editItem.price),
         low_stock_threshold: Number(editItem.low_stock_threshold || 5),
         is_active: !!editItem.is_active,
       };
@@ -726,7 +973,7 @@ export default function MarketItemsPage() {
         variants: updatedItem.variants ?? [],
         availability_schedule: updatedItem.availability_schedule ?? [],
         ingredients: updatedItem.ingredients ?? [],
-        combo_offers: updatedItem.combo_offers ?? [],
+        combo_offers: hydrateComboOffers(updatedItem.combo_offers, getComboSelectableItems(items, updatedItem.id)),
       });
     },
   });
@@ -746,7 +993,7 @@ export default function MarketItemsPage() {
         variants: updatedItem.variants ?? [],
         availability_schedule: updatedItem.availability_schedule ?? [],
         ingredients: updatedItem.ingredients ?? [],
-        combo_offers: updatedItem.combo_offers ?? [],
+        combo_offers: hydrateComboOffers(updatedItem.combo_offers, getComboSelectableItems(items, updatedItem.id)),
       });
     },
   });
@@ -768,7 +1015,9 @@ export default function MarketItemsPage() {
     (updateM.error as { message?: string })?.message ??
     null;
 
-  const canCreate = name.trim() && sku.trim() && price.trim();
+  const canCreate =
+    Boolean(name.trim() && sku.trim() && price.trim()) &&
+    (createItemKind === "regular" || buildComboPayload("combo", createComboOffers, price).length > 0);
 
   return (
     <div className="grid gap-6">
@@ -797,6 +1046,40 @@ export default function MarketItemsPage() {
                 <div className="app-modal-body">
                   <div className="app-modal-main">
                     <div className="grid gap-4 md:grid-cols-2">
+                      <div className="md:col-span-2 rounded-xl border p-4">
+                        <div className="mb-3">
+                          <Label className="field-label">Item type</Label>
+                          <div className="text-sm text-muted-foreground">
+                            Pick this first so the form knows whether this new item is regular or combo-enabled.
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant={createItemKind === "regular" ? "default" : "secondary"}
+                            onClick={() => {
+                              setCreateItemKind("regular");
+                              setCreateComboOffers([]);
+                            }}
+                          >
+                            Regular item
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={createItemKind === "combo" ? "default" : "secondary"}
+                            onClick={() => {
+                              setCreateItemKind("combo");
+                              setCreateIngredients([]);
+                              setCreateComboOffers(createComboOffers.length > 0 ? [createComboOffers[0]] : [emptyComboOffer()]);
+                            }}
+                            disabled={createComboSelectableItems.length === 0}
+                          >
+                            Combo item
+                          </Button>
+                        </div>
+                      </div>
+
                       <div className="grid gap-2">
                         <Label className="field-label">Name</Label>
                         <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
@@ -805,6 +1088,7 @@ export default function MarketItemsPage() {
                       <div className="grid gap-2">
                         <Label className="field-label">SKU</Label>
                         <Input value={sku} onChange={(event) => setSku(event.target.value)} className="input-shell" />
+                        <div className="text-xs text-muted-foreground">Must be unique inside this market.</div>
                       </div>
 
                       <div className="grid gap-2">
@@ -813,11 +1097,11 @@ export default function MarketItemsPage() {
                       </div>
 
                       <div className="grid gap-2">
-                        <Label className="field-label">Price</Label>
+                        <Label className="field-label">{createItemKind === "combo" ? "Combo price" : "Price"}</Label>
                         <Input
                           value={price}
                           onChange={(event) => setPrice(event.target.value)}
-                          placeholder="e.g. 10.50"
+                          placeholder={createItemKind === "combo" ? "e.g. 17.50" : "e.g. 10.50"}
                           className="input-shell"
                         />
                       </div>
@@ -908,27 +1192,36 @@ export default function MarketItemsPage() {
                         <ScheduleEditor schedule={availabilitySchedule} onChange={setAvailabilitySchedule} />
                       </div>
 
-                      <div className="md:col-span-2 rounded-xl border p-4">
-                        <div className="mb-3">
-                          <Label className="field-label">Ingredients</Label>
-                          <div className="text-sm text-muted-foreground">
-                            Add every ingredient the market uses in this item and mark the ones customers can remove.
+                      {createItemKind === "regular" ? (
+                        <div className="md:col-span-2 rounded-xl border p-4">
+                          <div className="mb-3">
+                            <Label className="field-label">Ingredients</Label>
+                            <div className="text-sm text-muted-foreground">
+                              Add every ingredient the market uses in this item and mark the ones customers can remove.
+                            </div>
                           </div>
+
+                          <IngredientEditor ingredients={createIngredients} onChange={setCreateIngredients} />
                         </div>
+                      ) : null}
 
-                        <IngredientEditor ingredients={createIngredients} onChange={setCreateIngredients} />
-                      </div>
-
-                      <div className="md:col-span-2 rounded-xl border p-4">
-                        <div className="mb-3">
-                          <Label className="field-label">Combo offers</Label>
-                          <div className="text-sm text-muted-foreground">
-                            Add discount bundles like meal deals, drink combos, or add-on offers.
+                      {createItemKind === "combo" ? (
+                        <div className="md:col-span-2 rounded-xl border p-4">
+                          <div className="mb-3">
+                            <Label className="field-label">Combo offers</Label>
+                            <div className="text-sm text-muted-foreground">
+                              Build combo deals by selecting other items from this market and setting the combo price.
+                            </div>
                           </div>
-                        </div>
 
-                        <ComboOfferEditor comboOffers={createComboOffers} onChange={setCreateComboOffers} />
-                      </div>
+                          <ComboOfferEditor
+                            comboOffers={createComboOffers}
+                            availableItems={createComboSelectableItems}
+                            itemKind={createItemKind}
+                            onChange={setCreateComboOffers}
+                          />
+                        </div>
+                      ) : null}
 
                       <div className="md:col-span-2 flex items-center justify-between rounded-xl border p-4">
                         <div>
@@ -1036,10 +1329,11 @@ export default function MarketItemsPage() {
                           onClick={() => {
                             setEditItem({
                               ...item,
+                              item_kind: item.item_kind ?? "regular",
                               variants: item.variants ?? [],
                               availability_schedule: item.availability_schedule ?? [],
                               ingredients: item.ingredients ?? [],
-                              combo_offers: item.combo_offers ?? [],
+                              combo_offers: hydrateComboOffers(item.combo_offers, getComboSelectableItems(items, item.id)),
                             });
                             setEditImageFiles([]);
                             setEditOpen(true);
@@ -1077,6 +1371,41 @@ export default function MarketItemsPage() {
             {editItem ? (
               <div className="app-modal-main">
                 <div className="grid gap-4 md:grid-cols-2">
+                  <div className="md:col-span-2 rounded-xl border p-4">
+                    <div className="mb-3">
+                      <Label className="field-label">Item type</Label>
+                      <div className="text-sm text-muted-foreground">
+                        Choose whether this item stays regular or should open combo pricing with selected market items.
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant={editItemKind === "regular" ? "default" : "secondary"}
+                        onClick={() => setEditItem({ ...editItem, item_kind: "regular", combo_offers: [] })}
+                      >
+                        Regular item
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={editItemKind === "combo" ? "default" : "secondary"}
+                        onClick={() =>
+                          setEditItem({
+                            ...editItem,
+                            item_kind: "combo",
+                            ingredients: [],
+                            combo_offers:
+                              (editItem.combo_offers ?? []).length > 0 ? [editItem.combo_offers?.[0] ?? emptyComboOffer()] : [emptyComboOffer()],
+                          })
+                        }
+                        disabled={editComboSelectableItems.length === 0}
+                      >
+                        Combo item
+                      </Button>
+                    </div>
+                  </div>
+
                   <div className="grid gap-2">
                     <Label className="field-label">Name</Label>
                     <Input
@@ -1093,6 +1422,7 @@ export default function MarketItemsPage() {
                       onChange={(event) => setEditItem({ ...editItem, sku: event.target.value })}
                       className="input-shell"
                     />
+                    <div className="text-xs text-muted-foreground">Must be unique inside this market.</div>
                   </div>
 
                   <div className="grid gap-2">
@@ -1105,7 +1435,7 @@ export default function MarketItemsPage() {
                   </div>
 
                   <div className="grid gap-2">
-                    <Label className="field-label">Price</Label>
+                    <Label className="field-label">{editItemKind === "combo" ? "Combo price" : "Price"}</Label>
                     <Input
                       value={String(editItem.price)}
                       onChange={(event) => setEditItem({ ...editItem, price: event.target.value })}
@@ -1210,33 +1540,39 @@ export default function MarketItemsPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-2 rounded-xl border p-4">
-                    <div className="mb-3">
-                      <Label className="field-label">Ingredients</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Mark only optional ingredients as removable so customers can order without them.
+                  {editItemKind === "regular" ? (
+                    <div className="md:col-span-2 rounded-xl border p-4">
+                      <div className="mb-3">
+                        <Label className="field-label">Ingredients</Label>
+                        <div className="text-sm text-muted-foreground">
+                          Mark only optional ingredients as removable so customers can order without them.
+                        </div>
                       </div>
+
+                      <IngredientEditor
+                        ingredients={editItem.ingredients ?? []}
+                        onChange={(ingredients) => setEditItem({ ...editItem, ingredients })}
+                      />
                     </div>
+                  ) : null}
 
-                    <IngredientEditor
-                      ingredients={editItem.ingredients ?? []}
-                      onChange={(ingredients) => setEditItem({ ...editItem, ingredients })}
-                    />
-                  </div>
-
-                  <div className="md:col-span-2 rounded-xl border p-4">
-                    <div className="mb-3">
-                      <Label className="field-label">Combo offers</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Add optional bundle prices customers can choose during checkout.
+                  {editItemKind === "combo" ? (
+                    <div className="md:col-span-2 rounded-xl border p-4">
+                      <div className="mb-3">
+                        <Label className="field-label">Combo offers</Label>
+                        <div className="text-sm text-muted-foreground">
+                          Build combo deals by selecting other items from this market and setting the combo price.
+                        </div>
                       </div>
-                    </div>
 
-                    <ComboOfferEditor
-                      comboOffers={editItem.combo_offers ?? []}
-                      onChange={(combo_offers) => setEditItem({ ...editItem, combo_offers })}
-                    />
-                  </div>
+                      <ComboOfferEditor
+                        comboOffers={editItem.combo_offers ?? []}
+                        availableItems={editComboSelectableItems}
+                        itemKind={editItemKind}
+                        onChange={(combo_offers) => setEditItem({ ...editItem, combo_offers })}
+                      />
+                    </div>
+                  ) : null}
 
                   <div className="md:col-span-2 flex items-center justify-between rounded-xl border p-4">
                     <div>

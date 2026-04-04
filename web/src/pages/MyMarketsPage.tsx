@@ -39,7 +39,7 @@ export default function MyMarketsPage() {
             <Button asChild variant="secondary" className="rounded-2xl">
               <Link to="/badge-pricing">
                 <Megaphone className="mr-2 h-4 w-4" />
-                Badge pricing
+                Promotion studio
               </Link>
             </Button>
           </div>

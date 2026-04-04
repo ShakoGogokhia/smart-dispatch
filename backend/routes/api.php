@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\FavoriteController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\WorkflowApprovalController;
+use App\Http\Controllers\Api\StorefrontPromotionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,6 +48,7 @@ Route::post('/register', [AuthController::class, 'register']);
 
 Route::prefix('public')->group(function () {
     Route::get('/markets', [PublicMarketController::class, 'markets']);
+    Route::get('/discovery-items', [PublicMarketController::class, 'discoveryItems']);
     Route::get('/markets/{market}', [PublicMarketController::class, 'market']);
     Route::get('/markets/{market}/items', [PublicMarketController::class, 'items']);
     Route::get('/markets/{market}/active-promo', [PublicMarketController::class, 'activePromo']); // optional
@@ -216,6 +218,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Items
         Route::get('/markets/{market}/items', [ItemController::class, 'index']);
+        Route::patch('/markets/{market}/settings', [MarketController::class, 'updateSettings']);
         Route::post('/markets/{market}/items', [ItemController::class, 'store']);
         Route::patch('/markets/{market}/items/{item}', [ItemController::class, 'update']);
         Route::post('/markets/{market}/items/{item}/image', [ItemController::class, 'uploadImage']);
@@ -235,6 +238,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/markets/{market}/staff/{userId}', [MarketController::class, 'removeStaff']);
         Route::get('/markets/{market}/assignable-users', [UsersController::class, 'assignable']);
         Route::post('/markets/{market}/badge-requests', [MarketBadgeRequestController::class, 'store']);
+        Route::get('/markets/{market}/promotion-purchases', [StorefrontPromotionController::class, 'index']);
+        Route::post('/markets/{market}/promotion-purchases', [StorefrontPromotionController::class, 'store']);
     });
 
 });

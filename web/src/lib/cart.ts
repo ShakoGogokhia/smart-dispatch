@@ -7,6 +7,15 @@ export type ComboOffer = {
   name: string;
   description?: string | null;
   combo_price: number;
+  item_ids?: number[];
+  items?: ComboOfferItem[];
+};
+
+export type ComboOfferItem = {
+  id: number;
+  name: string;
+  sku: string | null;
+  ingredients: ItemIngredient[];
 };
 
 export type CartItem = {
@@ -86,6 +95,35 @@ function normalizeComboOffer(value: unknown): ComboOffer | null {
   const entry = value as Partial<ComboOffer>;
   const name = typeof entry.name === "string" ? entry.name.trim() : "";
   const comboPrice = Number(entry.combo_price);
+  const itemIds = Array.isArray(entry.item_ids)
+    ? entry.item_ids
+        .map((itemId) => Number(itemId))
+        .filter((itemId, index, source) => Number.isInteger(itemId) && itemId > 0 && source.indexOf(itemId) === index)
+    : [];
+  const items: ComboOfferItem[] = Array.isArray(entry.items)
+    ? entry.items
+        .map((item) => {
+          if (!item || typeof item !== "object") {
+            return null;
+          }
+
+          const comboItem = item as { id?: number; name?: string; sku?: string | null; ingredients?: unknown };
+          const itemId = Number(comboItem.id);
+          const itemName = typeof comboItem.name === "string" ? comboItem.name.trim() : "";
+
+          if (!Number.isInteger(itemId) || itemId <= 0 || !itemName) {
+            return null;
+          }
+
+          return {
+            id: itemId,
+            name: itemName,
+            sku: typeof comboItem.sku === "string" && comboItem.sku.trim() ? comboItem.sku.trim() : null,
+            ingredients: normalizeIngredients(comboItem.ingredients),
+          } satisfies ComboOfferItem;
+        })
+        .filter((item): item is ComboOfferItem => item !== null)
+    : [];
 
   if (!name || !Number.isFinite(comboPrice)) {
     return null;
@@ -95,6 +133,8 @@ function normalizeComboOffer(value: unknown): ComboOffer | null {
     name,
     description: typeof entry.description === "string" && entry.description.trim() ? entry.description.trim() : null,
     combo_price: comboPrice,
+    item_ids: itemIds,
+    items,
   };
 }
 

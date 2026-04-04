@@ -25,10 +25,13 @@ class Market extends Model
         'featured_badge',
         'featured_headline',
         'featured_copy',
+        'featured_theme',
         'logo_path',
         'banner_path',
         'delivery_slots',
         'approval_status',
+        'promotion_starts_at',
+        'promotion_ends_at',
     ];
 
     protected $casts = [
@@ -37,6 +40,9 @@ class Market extends Model
         'lat' => 'decimal:7',
         'lng' => 'decimal:7',
         'delivery_slots' => 'array',
+        'featured_theme' => 'array',
+        'promotion_starts_at' => 'datetime',
+        'promotion_ends_at' => 'datetime',
     ];
 
     protected $appends = [

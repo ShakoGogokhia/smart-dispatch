@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Item;
 use App\Models\Market;
 use App\Models\PromoCode;
 use App\Models\ProductReview;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class PublicMarketController extends Controller
@@ -43,9 +45,12 @@ class PublicMarketController extends Controller
                             'combo_offers',
                             'price',
                             'discount_type',
-                            'discount_value',
-                            'stock_qty',
-                        ])
+                        'discount_value',
+                        'stock_qty',
+                        'is_promoted',
+                        'promotion_starts_at',
+                        'promotion_ends_at',
+                    ])
                         ->orderByDesc('stock_qty')
                         ->orderBy('name');
                 },
@@ -85,6 +90,7 @@ class PublicMarketController extends Controller
                 'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
                 'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
                 'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
+                'featured_theme' => Market::hasFeaturedColumns() ? ($market->featured_theme ?? null) : null,
                 'logo_url' => $market->logo_url,
                 'banner_url' => $market->banner_url,
                 'image_url' => $market->image_url,
@@ -106,6 +112,7 @@ class PublicMarketController extends Controller
                         'id' => $item->id,
                         'name' => $item->name,
                         'sku' => $item->sku,
+                        'item_kind' => $item->item_kind ?: 'regular',
                         'image_url' => $item->image_url,
                         'image_urls' => $this->resolveImageUrls($item),
                         'combo_offers' => $item->combo_offers ?? [],
@@ -113,10 +120,98 @@ class PublicMarketController extends Controller
                         'discount_type' => $item->discount_type,
                         'discount_value' => $item->discount_value,
                         'stock_qty' => $item->stock_qty,
+                        'is_promoted' => (bool) ($item->is_promoted ?? false),
+                        'promotion_ends_at' => $item->promotion_ends_at?->toDateTimeString(),
                     ];
                 })->values(),
             ];
         });
+    }
+
+    // GET /api/public/discovery-items
+    public function discoveryItems()
+    {
+        $orderCounts = DB::table('order_items')
+            ->select('item_id', DB::raw('SUM(qty) as ordered_qty'))
+            ->whereNotNull('item_id')
+            ->groupBy('item_id');
+
+        $query = Item::query()
+            ->where('is_active', true)
+            ->whereHas('market', function ($marketQuery) {
+                $marketQuery->where('is_active', true);
+            })
+            ->with([
+                'market:id,name,code,is_active',
+            ])
+            ->leftJoinSub($orderCounts, 'order_counts', function ($join) {
+                $join->on('items.id', '=', 'order_counts.item_id');
+            })
+            ->select([
+                'items.id',
+                'items.market_id',
+                'items.name',
+                'items.sku',
+                'items.category',
+                'items.price',
+                'items.discount_type',
+                'items.discount_value',
+                'items.stock_qty',
+                'items.image_url',
+                'items.image_path',
+                'items.image_paths',
+                'items.combo_offers',
+                DB::raw('COALESCE(order_counts.ordered_qty, 0) as ordered_qty'),
+            ]);
+
+        if (ProductReview::tableExists()) {
+            $query
+                ->withCount('reviews')
+                ->withAvg('reviews', 'rating');
+        }
+
+        $items = $query->get();
+
+        $serializedItems = $items->map(function (Item $item) {
+            return $this->serializeDiscoveryItem($item);
+        })->values();
+
+        $popularItems = $serializedItems
+            ->filter(fn (array $item) => ($item['ordered_qty'] ?? 0) > 0)
+            ->sortByDesc('ordered_qty')
+            ->sortByDesc(fn (array $item) => $item['review_summary']['count'] ?? 0)
+            ->take(10)
+            ->values();
+
+        if ($popularItems->isEmpty()) {
+            $popularItems = $serializedItems
+                ->shuffle()
+                ->take(10)
+                ->values();
+        }
+
+        $comboItems = $serializedItems
+            ->filter(fn (array $item) => !empty($item['combo_offers']))
+            ->sortByDesc('ordered_qty')
+            ->take(10)
+            ->values();
+
+        $discountedItems = $serializedItems
+            ->filter(function (array $item) {
+                $discountType = $item['discount_type'] ?? 'none';
+                $discountValue = (float) ($item['discount_value'] ?? 0);
+
+                return $discountType !== 'none' && $discountValue > 0;
+            })
+            ->sortByDesc('ordered_qty')
+            ->take(10)
+            ->values();
+
+        return response()->json([
+            'popular' => $popularItems,
+            'combo' => $comboItems,
+            'discounted' => $discountedItems,
+        ]);
     }
 
     // GET /api/public/markets/{market}
@@ -149,6 +244,7 @@ class PublicMarketController extends Controller
             'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
             'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
             'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
+            'featured_theme' => Market::hasFeaturedColumns() ? ($market->featured_theme ?? null) : null,
             'logo_url' => $market->logo_url,
             'banner_url' => $market->banner_url,
             'image_url' => $market->image_url,
@@ -187,6 +283,9 @@ class PublicMarketController extends Controller
                 'ingredients',
                 'combo_offers',
                 'low_stock_threshold',
+                'is_promoted',
+                'promotion_starts_at',
+                'promotion_ends_at',
             ])
             ->orderBy('name');
 
@@ -209,6 +308,7 @@ class PublicMarketController extends Controller
                     'market_id' => $item->market_id,
                     'name' => $item->name,
                     'sku' => $item->sku,
+                    'item_kind' => $item->item_kind ?: 'regular',
                     'category' => $item->category,
                     'image_url' => $item->image_url,
                     'image_urls' => $this->resolveImageUrls($item),
@@ -220,6 +320,8 @@ class PublicMarketController extends Controller
                     'discount_type' => $item->discount_type,
                     'discount_value' => $item->discount_value,
                     'is_active' => (bool) $item->is_active,
+                    'is_promoted' => (bool) ($item->is_promoted ?? false),
+                    'promotion_ends_at' => $item->promotion_ends_at?->toDateTimeString(),
                     'stock_qty' => $item->stock_qty,
                     'low_stock_threshold' => $item->low_stock_threshold,
                     'is_low_stock' => $item->stock_qty <= $item->low_stock_threshold,
@@ -346,5 +448,41 @@ class PublicMarketController extends Controller
         }
 
         return collect($urls)->filter()->unique()->values()->all();
+    }
+
+    private function serializeDiscoveryItem(Item $item): array
+    {
+        $reviewCount = ProductReview::tableExists() ? (int) ($item->reviews_count ?? 0) : 0;
+        $reviewAverage = ProductReview::tableExists() && $item->reviews_avg_rating !== null
+            ? round((float) $item->reviews_avg_rating, 1)
+            : null;
+
+        return [
+            'id' => $item->id,
+            'market_id' => $item->market_id,
+            'market' => $item->market ? [
+                'id' => $item->market->id,
+                'name' => $item->market->name,
+                'code' => $item->market->code,
+            ] : null,
+            'name' => $item->name,
+            'sku' => $item->sku,
+            'item_kind' => $item->item_kind ?: 'regular',
+            'category' => $item->category,
+            'image_url' => $item->image_url,
+            'image_urls' => $this->resolveImageUrls($item),
+            'combo_offers' => $item->combo_offers ?? [],
+            'price' => $item->price,
+            'discount_type' => $item->discount_type,
+            'discount_value' => $item->discount_value,
+            'stock_qty' => $item->stock_qty,
+            'is_promoted' => (bool) ($item->is_promoted ?? false),
+            'promotion_ends_at' => $item->promotion_ends_at?->toDateTimeString(),
+            'ordered_qty' => (int) ($item->ordered_qty ?? 0),
+            'review_summary' => [
+                'count' => $reviewCount,
+                'average' => $reviewAverage,
+            ],
+        ];
     }
 }

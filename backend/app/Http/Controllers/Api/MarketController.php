@@ -30,6 +30,7 @@ class MarketController extends Controller
             'featured_badge' => $data['featured_badge'] ?? null,
             'featured_headline' => $data['featured_headline'] ?? null,
             'featured_copy' => $data['featured_copy'] ?? null,
+            'featured_theme' => $data['featured_theme'] ?? null,
         ];
     }
 
@@ -99,6 +100,7 @@ class MarketController extends Controller
             'featured_badge' => ['nullable', 'string', 'max:40'],
             'featured_headline' => ['nullable', 'string', 'max:120'],
             'featured_copy' => ['nullable', 'string', 'max:255'],
+            'featured_theme' => ['nullable', 'array'],
             'delivery_slots' => ['nullable', 'array'],
         ]);
 
@@ -143,6 +145,58 @@ class MarketController extends Controller
             ...collect($data)->except(['is_featured', 'featured_badge', 'featured_headline', 'featured_copy'])->all(),
             ...$this->featuredAttributes($data),
         ]);
+        return $this->serializeMarket(
+            $market
+                ->load([
+                    'owner:id,name,email',
+                    'promoCodes' => function ($query) {
+                        $query
+                            ->activeApplicable()
+                            ->latest()
+                            ->limit(1);
+                    },
+                ])
+                ->loadCount(['items as active_items_count' => function ($query) {
+                    $query->where('is_active', true);
+                }])
+        );
+    }
+
+    public function updateSettings(Request $request, Market $market)
+    {
+        $user = $request->user();
+        $isAdmin = $user->hasRole('admin');
+
+        abort_unless(
+            $isAdmin || (int) $market->owner_user_id === (int) $user->id,
+            403,
+            'You do not have permission to update this market.',
+        );
+
+        $rules = [
+            'name' => ['sometimes', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'lat' => ['nullable', 'numeric', 'between:-90,90'],
+            'lng' => ['nullable', 'numeric', 'between:-180,180'],
+            'delivery_slots' => ['nullable', 'array'],
+        ];
+
+        if ($isAdmin) {
+            $rules['is_active'] = ['sometimes', 'boolean'];
+            $rules['is_featured'] = ['sometimes', 'boolean'];
+            $rules['featured_badge'] = ['nullable', 'string', 'max:40'];
+            $rules['featured_headline'] = ['nullable', 'string', 'max:120'];
+            $rules['featured_copy'] = ['nullable', 'string', 'max:255'];
+            $rules['featured_theme'] = ['nullable', 'array'];
+        }
+
+        $data = $request->validate($rules);
+
+        $market->update([
+            ...collect($data)->except(['is_featured', 'featured_badge', 'featured_headline', 'featured_copy'])->all(),
+            ...($isAdmin ? $this->featuredAttributes($data) : []),
+        ]);
+
         return $this->serializeMarket(
             $market
                 ->load([
@@ -275,6 +329,7 @@ public function addStaff(Request $request, Market $market)
             'featured_badge' => Market::hasFeaturedColumns() ? $market->featured_badge : null,
             'featured_headline' => Market::hasFeaturedColumns() ? $market->featured_headline : null,
             'featured_copy' => Market::hasFeaturedColumns() ? $market->featured_copy : null,
+            'featured_theme' => Market::hasFeaturedColumns() ? ($market->featured_theme ?? null) : null,
             'owner_user_id' => $market->owner_user_id,
             'owner' => $market->owner,
             'logo_path' => $market->logo_path,
@@ -284,6 +339,8 @@ public function addStaff(Request $request, Market $market)
             'image_url' => $market->image_url,
             'delivery_slots' => $market->delivery_slots ?? [],
             'approval_status' => $market->approval_status ?? 'approved',
+            'promotion_starts_at' => $market->promotion_starts_at?->toDateTimeString(),
+            'promotion_ends_at' => $market->promotion_ends_at?->toDateTimeString(),
             'active_items_count' => (int) ($market->active_items_count ?? 0),
             'active_promo' => $activePromo ? [
                 'id' => $activePromo->id,
