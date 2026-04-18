@@ -9,6 +9,8 @@ export type UserLite = {
   id: number;
   name: string;
   email: string;
+  phone?: string | null;
+  address?: string | null;
   language?: "en" | "ka";
   roles?: string[];
 };

@@ -912,6 +912,8 @@ export function LoginScreen({ navigation }: LoginProps) {
   const [email, setEmail] = useState("admin@test.com");
   const [password, setPassword] = useState("123456");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
 
   const authMutation = useMutation({
@@ -924,6 +926,8 @@ export function LoginScreen({ navigation }: LoginProps) {
         await api.post("/api/register", {
           name,
           email,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
           language,
           password,
           password_confirmation: passwordConfirmation,
@@ -967,6 +971,8 @@ export function LoginScreen({ navigation }: LoginProps) {
         </View>
 
         {mode === "register" ? <InputField label="Name" value={name} onChangeText={setName} placeholder="Your name" /> : null}
+        {mode === "register" ? <InputField label="Phone" value={phone} onChangeText={setPhone} placeholder="Optional phone number" /> : null}
+        {mode === "register" ? <InputField label="Address" value={address} onChangeText={setAddress} placeholder="Optional default address" multiline /> : null}
         <InputField label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" />
         <InputField label="Password" value={password} onChangeText={setPassword} placeholder="Password" secureTextEntry />
         {mode === "register" ? (
@@ -1044,6 +1050,20 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
   }, [cart]);
 
   const effectiveCustomerName = customerName || access.me?.name || "";
+  const effectiveCustomerPhone = customerPhone || access.me?.phone || "";
+  const effectiveCustomerAddress = customerAddress || access.me?.address || "";
+
+  useEffect(() => {
+    if (access.me?.phone && !customerPhone) {
+      setCustomerPhone(access.me.phone);
+    }
+  }, [access.me?.phone, customerPhone]);
+
+  useEffect(() => {
+    if (access.me?.address && !customerAddress) {
+      setCustomerAddress(access.me.address);
+    }
+  }, [access.me?.address, customerAddress]);
 
   const createOrderM = useMutation({
     mutationFn: async () => {
@@ -1059,8 +1079,8 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
         await api.post("/api/orders", {
           market_id: Number(marketId),
           customer_name: effectiveCustomerName.trim(),
-          customer_phone: customerPhone.trim(),
-          dropoff_address: customerAddress.trim(),
+          customer_phone: effectiveCustomerPhone.trim(),
+          dropoff_address: effectiveCustomerAddress.trim(),
           dropoff_lat: toNumber(dropoffLat),
           dropoff_lng: toNumber(dropoffLng),
           priority: toNumber(priority, 2),
@@ -1113,8 +1133,8 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
     cart.length > 0 &&
     !!marketId &&
     effectiveCustomerName.trim().length >= 2 &&
-    customerPhone.trim().length >= 6 &&
-    customerAddress.trim().length >= 5 &&
+    effectiveCustomerPhone.trim().length >= 6 &&
+    effectiveCustomerAddress.trim().length >= 5 &&
     Number.isFinite(Number(dropoffLat)) &&
     Number.isFinite(Number(dropoffLng));
 
@@ -1130,10 +1150,11 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
       </SectionCard>
 
       <SectionCard title="Customer and delivery details">
+        <InputField label="Email" value={access.me?.email || ""} onChangeText={() => {}} editable={false} placeholder="Email" />
         <InputField label="Name" value={effectiveCustomerName} onChangeText={setCustomerName} placeholder="Customer name" />
-        <InputField label="Phone" value={customerPhone} onChangeText={setCustomerPhone} placeholder="Phone" />
+        <InputField label="Phone" value={effectiveCustomerPhone} onChangeText={setCustomerPhone} placeholder="Phone" />
         <InputField label="Priority" value={priority} onChangeText={setPriority} placeholder="2" keyboardType="numeric" />
-        <InputField label="Address" value={customerAddress} onChangeText={setCustomerAddress} placeholder="Delivery address" multiline />
+        <InputField label="Address" value={effectiveCustomerAddress} onChangeText={setCustomerAddress} placeholder="Delivery address" multiline />
         <InputField label="Dropoff latitude" value={dropoffLat} onChangeText={setDropoffLat} placeholder="41.7151" keyboardType="numeric" />
         <InputField label="Dropoff longitude" value={dropoffLng} onChangeText={setDropoffLng} placeholder="44.8271" keyboardType="numeric" />
         <InputField label="Promo code" value={promoCode} onChangeText={setPromoCode} placeholder="Optional" />

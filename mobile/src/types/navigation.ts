@@ -4,6 +4,7 @@ export type RootStackParamList = {
   PublicMarket: { marketId: string };
   Login: undefined;
   Checkout: undefined;
+  Profile: undefined;
   Orders: undefined;
   Routes: undefined;
   LiveMap: undefined;

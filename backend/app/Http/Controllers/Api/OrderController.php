@@ -170,18 +170,23 @@ class OrderController extends Controller
         $nextId = (int) (Order::max('id') ?? 0) + 1;
 
         $order = DB::transaction(function () use ($request, $data, $market, $itemsPayload, $subtotal, $discountTotal, $total, $nextId, $promo) {
+            $user = $request->user();
+            $customerName = trim((string) ($data['customer_name'] ?? '')) ?: $user?->name;
+            $customerPhone = trim((string) ($data['customer_phone'] ?? '')) ?: $user?->phone;
+            $dropoffAddress = trim((string) ($data['dropoff_address'] ?? '')) ?: $user?->address;
+
             $order = Order::create([
                 'market_id' => $market?->id,
-                'customer_user_id' => $request->user()?->id,
+                'customer_user_id' => $user?->id,
                 'code' => 'ORD-' . str_pad((string) $nextId, 6, '0', STR_PAD_LEFT),
                 'pickup_lat' => $data['pickup_lat'] ?? $market?->lat,
                 'pickup_lng' => $data['pickup_lng'] ?? $market?->lng,
                 'dropoff_lat' => $data['dropoff_lat'],
                 'dropoff_lng' => $data['dropoff_lng'],
                 'pickup_address' => $data['pickup_address'] ?? $market?->address ?? $market?->name,
-                'dropoff_address' => $data['dropoff_address'] ?? null,
-                'customer_name' => $data['customer_name'] ?? $request->user()?->name,
-                'customer_phone' => $data['customer_phone'] ?? null,
+                'dropoff_address' => $dropoffAddress,
+                'customer_name' => $customerName,
+                'customer_phone' => $customerPhone,
                 'promo_code' => $data['promo_code'] ?? null,
                 'notes' => $data['notes'] ?? null,
                 'weather_condition' => $data['weather_condition'] ?? 'clear',

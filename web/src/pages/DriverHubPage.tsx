@@ -45,6 +45,9 @@ const text = {
   notProvided: "Not provided",
   deliveryNotes: "Delivery notes",
   items: "Items",
+  potentialEarning: "Potential earning",
+  distance: "Distance",
+  weather: "Weather",
   onlyDrivers: "Only drivers can view this page.",
   title: "Driver hub",
   statusTitle: "Driver status",
@@ -133,6 +136,20 @@ function OrderCard({
         <div>{text.customer}: {order.customer_name || order.customer?.name || text.unknown}</div>
         <div>{text.phone}: {order.customer_phone || text.notProvided}</div>
         {order.notes && <div>{text.deliveryNotes}: {order.notes}</div>}
+        {order.driver_compensation?.earning_amount != null ? (
+          <div className="rounded-[18px] border border-emerald-200 bg-emerald-50 px-3 py-3 text-emerald-900 dark:border-emerald-300/15 dark:bg-emerald-300/10 dark:text-emerald-100">
+            <div className="font-semibold">
+              {text.potentialEarning}: {formatMoney(order.driver_compensation.earning_amount)}
+            </div>
+            <div className="mt-1 text-xs opacity-80">
+              {text.distance}: {order.driver_compensation.distance_km ?? 0} km
+              {" · "}
+              {text.weather}: {order.driver_compensation.weather_condition || "clear"}
+              {" · "}
+              x{order.driver_compensation.weather_multiplier ?? 1}
+            </div>
+          </div>
+        ) : null}
         {order.items?.length ? (
           <div>
             {text.items}: {order.items.map((item) => {

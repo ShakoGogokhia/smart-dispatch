@@ -321,6 +321,9 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
           </View>
           <View style={styles.metaRow}>
             <Pill tone="warning">{latestOfferAlert.total != null ? formatMoney(latestOfferAlert.total, language) : text.total}</Pill>
+            {latestOfferAlert.driver_compensation?.earning_amount != null ? (
+              <Pill tone="success">{formatMoney(latestOfferAlert.driver_compensation.earning_amount, language)}</Pill>
+            ) : null}
             <Pill tone="success">
               {latestOfferAlert.eta_summary?.estimated_delivery_at
                 ? formatDateTime(latestOfferAlert.eta_summary.estimated_delivery_at, language)

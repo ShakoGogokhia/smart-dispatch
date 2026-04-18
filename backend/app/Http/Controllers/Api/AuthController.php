@@ -17,6 +17,8 @@ class AuthController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
+            'phone' => $user->phone,
+            'address' => $user->address,
             'language' => $user->language,
             'roles' => $user->getRoleNames()->values(),
         ];
@@ -27,6 +29,8 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'address' => ['nullable', 'string', 'max:255'],
             'language' => ['nullable', 'string', 'in:en,ka'],
             'password' => ['required', 'confirmed', Password::min(6)],
         ]);
@@ -34,6 +38,8 @@ class AuthController extends Controller
         $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
+            'phone' => $data['phone'] ?? null,
+            'address' => $data['address'] ?? null,
             'language' => $data['language'] ?? 'en',
             'password' => $data['password'],
         ]);
@@ -96,6 +102,8 @@ class AuthController extends Controller
             'id' => $u->id,
             'name' => $u->name,
             'email' => $u->email,
+            'phone' => $u->phone,
+            'address' => $u->address,
             'language' => $u->language,
             'roles' => $u->getRoleNames()->values(),
             'permissions' => $this->permissionsForRoles($u->getRoleNames()->values()->all()),
@@ -146,6 +154,44 @@ class AuthController extends Controller
         return response()->json([
             'language' => $user->language,
             'user' => $this->serializeUser($user),
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'current_password' => ['nullable', 'required_with:password', 'current_password'],
+            'password' => ['nullable', 'confirmed', Password::min(6)],
+        ]);
+
+        $user = $request->user();
+        $updates = [];
+
+        if (array_key_exists('name', $data)) {
+            $updates['name'] = trim((string) $data['name']);
+        }
+
+        if (array_key_exists('phone', $data)) {
+            $updates['phone'] = trim((string) ($data['phone'] ?? '')) ?: null;
+        }
+
+        if (array_key_exists('address', $data)) {
+            $updates['address'] = trim((string) ($data['address'] ?? '')) ?: null;
+        }
+
+        if (!empty($data['password'])) {
+            $updates['password'] = $data['password'];
+        }
+
+        if ($updates) {
+            $user->update($updates);
+        }
+
+        return response()->json([
+            'user' => $this->serializeUser($user->fresh()),
         ]);
     }
 

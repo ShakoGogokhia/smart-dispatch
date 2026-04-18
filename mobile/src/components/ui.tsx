@@ -294,6 +294,7 @@ export function InputField({
   secureTextEntry,
   multiline,
   keyboardType,
+  editable = true,
 }: {
   label?: string;
   value: string;
@@ -302,6 +303,7 @@ export function InputField({
   secureTextEntry?: boolean;
   multiline?: boolean;
   keyboardType?: "default" | "email-address" | "numeric";
+  editable?: boolean;
 }) {
   const palette = usePalette();
 
@@ -316,13 +318,14 @@ export function InputField({
         secureTextEntry={secureTextEntry}
         multiline={multiline}
         keyboardType={keyboardType}
+        editable={editable}
         style={[
           styles.input,
           multiline && styles.inputMultiline,
           {
-            backgroundColor: `${palette.backgroundAlt}ea`,
+            backgroundColor: editable ? `${palette.backgroundAlt}ea` : `${palette.backgroundAlt}b8`,
             borderColor: `${palette.border}c9`,
-            color: palette.text,
+            color: editable ? palette.text : palette.muted,
           },
         ]}
       />

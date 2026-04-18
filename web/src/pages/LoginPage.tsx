@@ -30,6 +30,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState("admin@test.com");
   const [password, setPassword] = useState("123456");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,6 +69,8 @@ export default function LoginPage() {
       const res = await api.post("/api/register", {
         name,
         email,
+        phone: phone.trim() || null,
+        address: address.trim() || null,
         password,
         password_confirmation: passwordConfirmation,
       });
@@ -191,6 +195,20 @@ export default function LoginPage() {
                 <div className="field-group">
                   <Label className="field-label">Name</Label>
                   <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
+                </div>
+              )}
+
+              {mode === "register" && (
+                <div className="field-group">
+                  <Label className="field-label">Phone</Label>
+                  <Input value={phone} onChange={(event) => setPhone(event.target.value)} className="input-shell" placeholder="Optional phone number" />
+                </div>
+              )}
+
+              {mode === "register" && (
+                <div className="field-group">
+                  <Label className="field-label">Address</Label>
+                  <Input value={address} onChange={(event) => setAddress(event.target.value)} className="input-shell" placeholder="Optional default address" />
                 </div>
               )}
 

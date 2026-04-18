@@ -27,7 +27,7 @@ class DriverEarningsService
 
             $distanceKm = $this->calculateDistanceKm($order);
             $weatherMultiplier = $this->weatherMultiplier($order->weather_condition);
-            $amount = round((self::BASE_FEE + ($distanceKm * self::PER_KM_RATE)) * $weatherMultiplier, 2);
+            $amount = $this->calculatePayoutAmount($distanceKm, $weatherMultiplier);
 
             $transaction = DriverTransaction::create([
                 'driver_id' => $driver->id,
@@ -72,6 +72,11 @@ class DriverEarningsService
             'fog' => 1.10,
             default => 1.00,
         };
+    }
+
+    public function calculatePayoutAmount(float $distanceKm, float $weatherMultiplier): float
+    {
+        return round((self::BASE_FEE + ($distanceKm * self::PER_KM_RATE)) * $weatherMultiplier, 2);
     }
 
     private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float

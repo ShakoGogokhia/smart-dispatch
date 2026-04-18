@@ -150,6 +150,7 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
           <Text style={[styles.sectionTitle, { color: palette.text }]}>Account</Text>
           <SectionCard>
             <Text style={[styles.sectionLead, { color: palette.text }]}>{meQ.data?.name || "Workspace member"}</Text>
+            <Text style={[styles.sectionHint, { color: palette.muted }]}>{meQ.data?.email || "No email loaded"}</Text>
             <View style={styles.pillRow}>
               {roles.map((role: string) => (
                 <Pill key={role}>{role}</Pill>
@@ -159,6 +160,14 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
               ))}
             </View>
           </SectionCard>
+          <SettingRow
+            label="Profile settings"
+            value="Name, phone, address, password"
+            onPress={() => {
+              setMenuOpen(false);
+              navigation.navigate("Profile");
+            }}
+          />
         </View>
 
         {currentMarket ? (

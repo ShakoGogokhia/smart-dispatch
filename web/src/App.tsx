@@ -17,6 +17,7 @@ const MarketSettingsPage = lazy(() => import("@/pages/MarketSettingsPage"));
 const MarketsPage = lazy(() => import("@/pages/MarketsPage"));
 const MyMarketsPage = lazy(() => import("@/pages/MyMarketsPage"));
 const OrdersPage = lazy(() => import("@/pages/OrdersPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const RoutesPage = lazy(() => import("@/pages/RoutesPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const PublicMarketPage = lazy(() => import("@/pages/public/PublicMarketPage"));
@@ -67,6 +68,7 @@ export default function App() {
 
       <Route element={<ProtectedLayout />}>
         <Route path="/orders" element={withSuspense(<OrdersPage />)} />
+        <Route path="/profile" element={withSuspense(<ProfilePage />)} />
         <Route path="/routes" element={withSuspense(<RoutesPage />)} />
         <Route path="/live-map" element={withSuspense(<LiveMapPage />)} />
         <Route path="/analytics" element={withSuspense(<AnalyticsPage />)} />

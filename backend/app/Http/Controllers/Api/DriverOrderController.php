@@ -38,14 +38,16 @@ class DriverOrderController extends Controller
             ->where('offered_driver_id', $driver->id)
             ->where('status', 'OFFERED')
             ->latest()
-            ->get();
+            ->get()
+            ->map(fn (Order $order) => $this->decorateDriverOrder($order));
 
         $assigned = Order::query()
             ->with(['market', 'items', 'customer', 'assignedDriver.user', 'assignedDriver.latestPing'])
             ->where('assigned_driver_id', $driver->id)
             ->whereIn('status', ['ASSIGNED', 'PICKED_UP'])
             ->latest()
-            ->get();
+            ->get()
+            ->map(fn (Order $order) => $this->decorateDriverOrder($order));
 
         return response()->json([
             'driver' => $driver->load(['vehicle', 'activeShift', 'latestPing', 'transactions' => fn ($query) => $query->latest()->limit(10)]),
@@ -256,5 +258,22 @@ class DriverOrderController extends Controller
         $this->dispatchService->refreshPendingOrders();
 
         return response()->json($order->fresh(['market', 'items', 'customer', 'assignedDriver.user']));
+    }
+
+    private function decorateDriverOrder(Order $order): Order
+    {
+        $distanceKm = $order->driver_distance_km ?? $this->driverEarningsService->calculateDistanceKm($order);
+        $weatherMultiplier = $order->driver_weather_multiplier ?? $this->driverEarningsService->weatherMultiplier($order->weather_condition);
+        $earningAmount = $order->driver_earning_amount
+            ?? $this->driverEarningsService->calculatePayoutAmount($distanceKm, $weatherMultiplier);
+
+        $order->setAttribute('driver_compensation', [
+            'distance_km' => $distanceKm,
+            'weather_multiplier' => $weatherMultiplier,
+            'earning_amount' => $earningAmount,
+            'weather_condition' => $order->weather_condition,
+        ]);
+
+        return $order;
     }
 }

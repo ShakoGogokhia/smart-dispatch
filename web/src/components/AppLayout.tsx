@@ -3,6 +3,7 @@ import {
   Activity,
   BarChart3,
   Compass,
+  Cog,
   Home,
   LogOut,
   Map,
@@ -292,6 +293,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
           ))}
         </div>
+
+        <Button
+          variant="secondary"
+          className="mt-4 h-11 w-full justify-start rounded-[18px] border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
+          onClick={() => navigate("/profile")}
+        >
+          <Cog className="mr-2 h-4 w-4" />
+          Profile settings
+        </Button>
 
         {currentMarket && (
           <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">

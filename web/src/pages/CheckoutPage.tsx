@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -102,6 +102,20 @@ export default function CheckoutPage() {
   const discountTotal = promoPreview?.valid ? toNumber(promoPreview.discount_total) : 0;
   const finalTotal = promoPreview?.valid ? toNumber(promoPreview.total) : totals.subtotal;
   const effectiveCustomerName = customerName || meQ.data?.name || "";
+  const effectiveCustomerPhone = customerPhone || meQ.data?.phone || "";
+  const effectiveCustomerAddress = customerAddress || meQ.data?.address || "";
+
+  useEffect(() => {
+    if (meQ.data?.phone && !customerPhone) {
+      setCustomerPhone(meQ.data.phone);
+    }
+  }, [customerPhone, meQ.data?.phone]);
+
+  useEffect(() => {
+    if (meQ.data?.address && !customerAddress) {
+      setCustomerAddress(meQ.data.address);
+    }
+  }, [customerAddress, meQ.data?.address]);
 
   const createOrderM = useMutation({
     mutationFn: async () => {
@@ -116,8 +130,8 @@ export default function CheckoutPage() {
       const payload = {
         market_id: Number(marketId),
         customer_name: effectiveCustomerName.trim(),
-        customer_phone: customerPhone.trim(),
-        dropoff_address: customerAddress.trim(),
+        customer_phone: effectiveCustomerPhone.trim(),
+        dropoff_address: effectiveCustomerAddress.trim(),
         dropoff_lat: toNumber(dropoffLat),
         dropoff_lng: toNumber(dropoffLng),
         priority: toNumber(priority, 2),
@@ -178,8 +192,8 @@ export default function CheckoutPage() {
     cart.length > 0 &&
     !!marketId &&
     effectiveCustomerName.trim().length >= 2 &&
-    customerPhone.trim().length >= 6 &&
-    customerAddress.trim().length >= 5 &&
+    effectiveCustomerPhone.trim().length >= 6 &&
+    effectiveCustomerAddress.trim().length >= 5 &&
     Number.isFinite(Number(dropoffLat)) &&
     Number.isFinite(Number(dropoffLng));
 
@@ -314,6 +328,15 @@ export default function CheckoutPage() {
 
                 <div className="grid gap-5">
                   <div className="grid gap-2">
+                    <Label className="text-sm font-medium">Email</Label>
+                    <Input
+                      value={meQ.data?.email || ""}
+                      readOnly
+                      className="h-14 rounded-2xl border-zinc-300 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300"
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
                     <Label className="text-sm font-medium">Name</Label>
                     <Input
                       value={effectiveCustomerName}
@@ -326,9 +349,10 @@ export default function CheckoutPage() {
                     <div className="grid gap-2">
                       <Label className="text-sm font-medium">Phone</Label>
                       <Input
-                        value={customerPhone}
+                        value={effectiveCustomerPhone}
                         onChange={(event) => setCustomerPhone(event.target.value)}
                         className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
+                        placeholder="Phone number"
                       />
                     </div>
 
@@ -345,9 +369,10 @@ export default function CheckoutPage() {
                   <div className="grid gap-2">
                     <Label className="text-sm font-medium">Address</Label>
                     <Input
-                      value={customerAddress}
+                      value={effectiveCustomerAddress}
                       onChange={(event) => setCustomerAddress(event.target.value)}
                       className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
+                      placeholder="Delivery address"
                     />
                   </div>
 
