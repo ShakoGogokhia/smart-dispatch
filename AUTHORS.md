@@ -8,5 +8,4 @@ If you use, share, study, or reference this project, please keep visible credit 
 
 **Shako Gogokhia**
 
-
 This repository is a test/demo project and includes original work authored by Shako Gogokhia.
