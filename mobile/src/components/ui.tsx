@@ -25,23 +25,23 @@ export function usePalette() {
 
   return {
     dark,
-    background: dark ? "#07111f" : "#f4efe7",
-    backgroundAlt: dark ? "#0d1a2b" : "#fbf7f1",
-    surface: dark ? "#10233a" : "#fffdf8",
-    surfaceStrong: dark ? "#163252" : "#fef5e9",
-    surfaceMuted: dark ? "#18314e" : "#f3eadf",
-    border: dark ? "#29507a" : "#d8c8b5",
-    text: dark ? "#f8fbff" : "#1f2933",
-    muted: dark ? "#9bb3ca" : "#716458",
-    primary: dark ? "#59d0ff" : "#0e7490",
-    primaryStrong: dark ? "#7ce7d7" : "#0f766e",
+    background: dark ? "#020617" : "#f1f5f9",
+    backgroundAlt: dark ? "#08111b" : "#ffffff",
+    surface: dark ? "#0b1220" : "#ffffff",
+    surfaceStrong: dark ? "#0f172a" : "#111827",
+    surfaceMuted: dark ? "#111827" : "#f8fafc",
+    border: dark ? "#26364d" : "#e2e8f0",
+    text: dark ? "#f8fafc" : "#0f172a",
+    muted: dark ? "#94a3b8" : "#64748b",
+    primary: dark ? "#67e8f9" : "#0891b2",
+    primaryStrong: dark ? "#a5f3fc" : "#0e7490",
     primaryText: "#ffffff",
-    accent: dark ? "#f7b267" : "#c36a1e",
-    accentSoft: dark ? "rgba(247, 178, 103, 0.18)" : "rgba(195, 106, 30, 0.12)",
-    danger: dark ? "#ff8a80" : "#b42318",
-    warning: dark ? "#ffd166" : "#b7791f",
-    shadow: dark ? "#000000" : "#7c5c37",
-    overlay: dark ? "rgba(2, 6, 23, 0.74)" : "rgba(84, 56, 20, 0.22)",
+    accent: dark ? "#fcd34d" : "#d97706",
+    accentSoft: dark ? "rgba(252, 211, 77, 0.12)" : "rgba(217, 119, 6, 0.10)",
+    danger: dark ? "#fda4af" : "#e11d48",
+    warning: dark ? "#facc15" : "#b45309",
+    shadow: dark ? "#000000" : "#0f172a",
+    overlay: dark ? "rgba(2, 6, 23, 0.78)" : "rgba(15, 23, 42, 0.28)",
   };
 }
 
@@ -82,68 +82,12 @@ function useEntranceAnimation(delay = 0) {
   };
 }
 
-function usePulseAnimation() {
-  const value = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(value, {
-          toValue: 1,
-          duration: 2200,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(value, {
-          toValue: 0,
-          duration: 2200,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, [value]);
-
-  return value;
-}
-
 function AmbientBackground() {
   const palette = usePalette();
-  const pulse = usePulseAnimation();
-  const drift = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -14],
-  });
-  const glow = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.76, 1],
-  });
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <View style={[styles.backgroundLayer, { backgroundColor: palette.background }]} />
-      <Animated.View
-        style={[
-          styles.orb,
-          styles.orbTop,
-          {
-            backgroundColor: palette.accentSoft,
-            opacity: glow,
-            transform: [{ translateY: drift }],
-          },
-        ]}
-      />
-      <Animated.View
-        style={[
-          styles.orb,
-          styles.orbBottom,
-          {
-            backgroundColor: `${palette.primary}22`,
-            opacity: glow,
-            transform: [{ translateY: Animated.multiply(drift, -0.6) }],
-          },
-        ]}
-      />
       <View style={[styles.gridOverlay, { borderColor: `${palette.border}35` }]} />
     </View>
   );
@@ -190,14 +134,13 @@ export function SectionCard({
       style={[
         styles.card,
         {
-          backgroundColor: palette.surface,
+          backgroundColor: `${palette.surface}f2`,
           borderColor: `${palette.border}bb`,
           shadowColor: palette.shadow,
         },
         animatedStyle,
       ]}
     >
-      <View style={[styles.cardGlow, { backgroundColor: `${palette.primary}10` }]} />
       {(title || subtitle || right) && (
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderText}>
@@ -227,16 +170,15 @@ export function HeroCard({
         styles.heroCard,
         {
           backgroundColor: palette.surfaceStrong,
-          borderColor: `${palette.border}aa`,
+          borderColor: palette.dark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.12)",
           shadowColor: palette.shadow,
         },
         animatedStyle,
       ]}
     >
-      <View style={[styles.heroAccent, { backgroundColor: `${palette.primary}1c` }]} />
-      {eyebrow ? <Text style={[styles.heroEyebrow, { color: palette.primaryStrong }]}>{eyebrow}</Text> : null}
-      <Text style={[styles.heroTitle, { color: palette.text }]}>{title}</Text>
-      <Text style={[styles.heroSubtitle, { color: palette.muted }]}>{subtitle}</Text>
+      {eyebrow ? <Text style={styles.heroEyebrow}>{eyebrow}</Text> : null}
+      <Text style={styles.heroTitle}>{title}</Text>
+      <Text style={styles.heroSubtitle}>{subtitle}</Text>
       {children}
     </Animated.View>
   );
@@ -532,31 +474,15 @@ const styles = StyleSheet.create({
   backgroundLayer: {
     ...StyleSheet.absoluteFillObject,
   },
-  orb: {
-    position: "absolute",
-    borderRadius: 999,
-  },
-  orbTop: {
-    width: 240,
-    height: 240,
-    top: -40,
-    right: -70,
-  },
-  orbBottom: {
-    width: 280,
-    height: 280,
-    bottom: 70,
-    left: -120,
-  },
   gridOverlay: {
     position: "absolute",
-    top: 24,
-    left: 20,
-    right: 20,
-    bottom: 20,
+    top: 12,
+    left: 12,
+    right: 12,
+    bottom: 12,
     borderWidth: 1,
-    borderRadius: 36,
-    opacity: 0.24,
+    borderRadius: 34,
+    opacity: 0.18,
   },
   card: {
     overflow: "hidden",
@@ -564,51 +490,38 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: 18,
     gap: 12,
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
     elevation: 4,
-  },
-  cardGlow: {
-    position: "absolute",
-    top: -40,
-    right: -40,
-    width: 120,
-    height: 120,
-    borderRadius: 999,
   },
   heroCard: {
     overflow: "hidden",
     borderWidth: 1,
-    borderRadius: 32,
+    borderRadius: 34,
     padding: 22,
     gap: 10,
-    shadowOpacity: 0.18,
-    shadowRadius: 26,
+    shadowOpacity: 0.2,
+    shadowRadius: 28,
     shadowOffset: { width: 0, height: 16 },
     elevation: 6,
   },
-  heroAccent: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 999,
-    top: -46,
-    right: -44,
-  },
   heroEyebrow: {
+    color: "rgba(255,255,255,0.78)",
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1.4,
   },
   heroTitle: {
+    color: "#ffffff",
     fontSize: 34,
     lineHeight: 38,
     fontWeight: "900",
     flexShrink: 1,
   },
   heroSubtitle: {
+    color: "rgba(255,255,255,0.72)",
     fontSize: 15,
     lineHeight: 23,
     flexShrink: 1,
@@ -640,7 +553,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 2,

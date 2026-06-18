@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
-import { AppButton, EmptyBlock, HelperText, HeroCard, InputField, LoadingBlock, Pill, Screen, SectionCard, StatCard, StatGrid, uiStyles } from "@/src/components/ui";
+import { AppButton, EmptyBlock, HelperText, HeroCard, InputField, LoadingBlock, Pill, Screen, SectionCard, StatCard, StatGrid, uiStyles, usePalette } from "@/src/components/ui";
 import { getErrorMessage } from "@/src/lib/errors";
 import { api } from "@/src/lib/api";
 import { formatMoney, toNumber } from "@/src/lib/format";
@@ -167,6 +168,88 @@ function formatPromoLabel(promo?: MarketLite["active_promo"] | PromoCode | null,
   return `${promo.code} · ${formatMoney(promo.value ?? 0, language)} OFF`;
 }
 
+function RatingStars({
+  rating,
+  count,
+  size = 14,
+}: {
+  rating?: number | string | null;
+  count?: number | string | null;
+  size?: number;
+}) {
+  const palette = usePalette();
+  const numericRating = toNumber(rating, 0);
+  const roundedRating = Math.round(numericRating * 2) / 2;
+  const label = numericRating > 0 ? numericRating.toFixed(1) : "New";
+
+  return (
+    <View style={styles.ratingRow}>
+      <View style={styles.starRow}>
+        {[1, 2, 3, 4, 5].map((index) => {
+          const icon = roundedRating >= index ? "star" : roundedRating >= index - 0.5 ? "star-half" : "star-outline";
+
+          return <Ionicons key={index} name={icon} size={size} color={palette.warning} />;
+        })}
+      </View>
+      <Text style={[styles.ratingText, { color: palette.text }]}>{label}</Text>
+      {count != null ? <Text style={[styles.ratingCount, { color: palette.muted }]}>({count})</Text> : null}
+    </View>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: string | number }) {
+  const palette = usePalette();
+
+  return (
+    <View style={[styles.miniMetric, { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` }]}>
+      <Text style={[styles.miniMetricLabel, { color: palette.muted }]}>{label}</Text>
+      <Text style={[styles.miniMetricValue, { color: palette.text }]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function QuantityStepper({
+  qty,
+  onDecrease,
+  onIncrease,
+}: {
+  qty: number;
+  onDecrease: () => void;
+  onIncrease: () => void;
+}) {
+  const palette = usePalette();
+
+  return (
+    <View style={[styles.stepper, { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` }]}>
+      <Pressable onPress={onDecrease} style={[styles.stepperButton, { backgroundColor: palette.surface }]}>
+        <Ionicons name="remove" size={16} color={palette.text} />
+      </Pressable>
+      <Text style={[styles.stepperQty, { color: palette.text }]}>{qty}</Text>
+      <Pressable onPress={onIncrease} style={[styles.stepperButton, { backgroundColor: palette.primary }]}>
+        <Ionicons name="add" size={16} color="#ffffff" />
+      </Pressable>
+    </View>
+  );
+}
+
+function ReviewCard({ name, rating, comment }: { name: string; rating: number | string; comment?: string | null }) {
+  const palette = usePalette();
+
+  return (
+    <View style={[styles.reviewCard, { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` }]}>
+      <View style={styles.reviewHeader}>
+        <Text style={[styles.reviewName, { color: palette.text }]} numberOfLines={1}>
+          {name}
+        </Text>
+        <RatingStars rating={rating} size={13} />
+      </View>
+      <Text style={[styles.reviewComment, { color: palette.muted }]}>{comment || "No comment provided."}</Text>
+    </View>
+  );
+}
+
 function MarketRail({
   title,
   subtitle,
@@ -178,6 +261,8 @@ function MarketRail({
   markets: MarketLite[];
   onOpen: (marketId: string) => void;
 }) {
+  const palette = usePalette();
+
   if (markets.length === 0) {
     return null;
   }
@@ -186,21 +271,43 @@ function MarketRail({
     <SectionCard title={title} subtitle={subtitle}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.railContent}>
         {markets.map((market) => (
-          <View key={market.id} style={styles.railCard}>
-            {getMarketBannerUrl(market) ? <Image source={getMarketBannerUrl(market)} style={styles.railHeroImage} contentFit="cover" /> : null}
+          <View
+            key={market.id}
+            style={[
+              styles.railCard,
+              {
+                backgroundColor: `${palette.surface}f2`,
+                borderColor: `${palette.border}cc`,
+                shadowColor: palette.shadow,
+              },
+            ]}
+          >
+            {getMarketBannerUrl(market) ? (
+              <Image source={getMarketBannerUrl(market)} style={[styles.railHeroImage, { backgroundColor: palette.surfaceMuted }]} contentFit="cover" />
+            ) : null}
             <View style={styles.railCardBody}>
               <View style={styles.marketHeaderRow}>
                 {resolveMarketMediaUrl(market.logo_url) ? (
-                  <Image source={resolveMarketMediaUrl(market.logo_url)} style={styles.railLogo} contentFit="cover" />
+                  <Image
+                    source={resolveMarketMediaUrl(market.logo_url)}
+                    style={[styles.railLogo, { backgroundColor: palette.surface, borderColor: `${palette.border}cc` }]}
+                    contentFit="cover"
+                  />
                 ) : null}
                 {market.featured_badge ? <Pill tone="warning">{market.featured_badge}</Pill> : null}
               </View>
-              <Text style={styles.railTitle}>{market.name}</Text>
-              <HelperText>{market.address || "Marketplace location"}</HelperText>
+              <Text style={[styles.railTitle, { color: palette.text }]}>{market.name}</Text>
+              <RatingStars rating={market.review_summary?.average} count={market.review_summary?.count ?? 0} />
+              <Text style={[styles.addressText, { color: palette.muted }]} numberOfLines={2}>
+                {market.address || "Marketplace location"}
+              </Text>
               <HelperText>
                 Rating: {market.review_summary?.average ? Number(market.review_summary.average).toFixed(1) : "New"} · {market.review_summary?.count ?? 0} reviews
               </HelperText>
-              <HelperText>{market.active_items_count ?? 0} items live</HelperText>
+              <View style={styles.metricRow}>
+                <MiniMetric label="Items" value={market.active_items_count ?? 0} />
+                <MiniMetric label="Status" value={market.is_active === false ? "Closed" : "Open"} />
+              </View>
               {formatPromoLabel(market.active_promo) ? <HelperText>{formatPromoLabel(market.active_promo)}</HelperText> : null}
               <AppButton onPress={() => onOpen(String(market.id))}>Open Market</AppButton>
             </View>
@@ -224,6 +331,8 @@ function DiscoveryRail({
   language: "en" | "ka";
   onOpenMarket: (marketId: string) => void;
 }) {
+  const palette = usePalette();
+
   if (items.length === 0) {
     return null;
   }
@@ -237,12 +346,25 @@ function DiscoveryRail({
           const discounted = Math.abs(basePrice - finalPrice) > 0.0001;
 
           return (
-            <View key={`discovery-${item.market_id}-${item.id}`} style={styles.discoveryCard}>
-              {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.discoveryImage} contentFit="cover" /> : null}
+            <View
+              key={`discovery-${item.market_id}-${item.id}`}
+              style={[
+                styles.discoveryCard,
+                {
+                  backgroundColor: `${palette.surface}f2`,
+                  borderColor: `${palette.border}cc`,
+                  shadowColor: palette.shadow,
+                },
+              ]}
+            >
+              {getItemImageUrls(item)[0] ? (
+                <Image source={getItemImageUrls(item)[0]} style={[styles.discoveryImage, { backgroundColor: palette.surfaceMuted }]} contentFit="cover" />
+              ) : null}
               <View style={styles.discoveryBody}>
-                <Text style={styles.discoveryTitle}>{item.name}</Text>
+                <Text style={[styles.discoveryTitle, { color: palette.text }]}>{item.name}</Text>
                 <HelperText>{item.market?.name ?? "Market item"}</HelperText>
-                <Text style={styles.discoveryPrice}>{formatMoney(finalPrice, language)}</Text>
+                <RatingStars rating={item.review_summary?.average} count={item.review_summary?.count ?? 0} size={13} />
+                <Text style={[styles.discoveryPrice, { color: palette.primaryStrong }]}>{formatMoney(finalPrice, language)}</Text>
                 {discounted ? <HelperText>{formatMoney(basePrice, language)} regular</HelperText> : null}
                 <View style={styles.discoveryBadges}>
                   <Pill>{item.category || "General"}</Pill>
@@ -301,7 +423,9 @@ export function HomeScreen({ navigation }: HomeProps) {
 }
 
 export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
-  const { language, setLanguage, theme, toggleTheme } = usePreferences();
+  const { language, theme, toggleTheme } = usePreferences();
+  const { token } = useAuth();
+  const palette = usePalette();
 
   const marketsQ = useQuery({
     queryKey: ["public-markets"],
@@ -318,48 +442,61 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
   const promotedMarkets = markets.filter((market) => market.is_featured);
   const promotedIds = new Set(promotedMarkets.map((market) => market.id));
   const regularMarkets = markets.filter((market) => !promotedIds.has(market.id));
+  const firstMarketId = markets[0] ? String(markets[0].id) : null;
 
   return (
     <Screen>
-      <HeroCard
-        eyebrow="Premium Marketplace"
-        title="Discover exceptional markets"
-        subtitle="Explore premium storefronts, promoted markets, and discovery rails for popular, combo, and discounted items."
+      <View
+        style={[
+          styles.publicHeader,
+          {
+            backgroundColor: `${palette.surface}f2`,
+            borderColor: `${palette.border}cc`,
+            shadowColor: palette.shadow,
+          },
+        ]}
       >
-        <View style={styles.heroActions}>
-          <AppButton
-            onPress={() => {
-              if (markets[0]) {
-                navigation.navigate("PublicMarket", { marketId: String(markets[0].id) });
-                return;
-              }
-
-              navigation.navigate("PublicMarkets");
-            }}
-          >
-            Open a market
-          </AppButton>
-          <AppButton variant="secondary" onPress={() => navigation.navigate("Login")}>
-            Staff login
-          </AppButton>
+        <View style={styles.publicBrandRow}>
+          <View style={[styles.publicBrandIcon, { backgroundColor: palette.dark ? `${palette.primary}24` : "#0f172a" }]}>
+            <Ionicons name="sparkles-outline" size={20} color={palette.dark ? palette.primaryStrong : "#ffffff"} />
+          </View>
+          <View style={styles.publicBrandText}>
+            <Text style={[styles.publicBrandName, { color: palette.text }]}>Smart Dispatch</Text>
+            <Text style={[styles.publicBrandMeta, { color: palette.muted }]}>Markets and orders</Text>
+          </View>
         </View>
 
-        <View style={styles.preferenceRow}>
-          <AppButton variant={language === "en" ? "primary" : "secondary"} compact onPress={() => void setLanguage("en")}>
-            English
-          </AppButton>
-          <AppButton variant={language === "ka" ? "primary" : "secondary"} compact onPress={() => void setLanguage("ka")}>
-            Georgian
-          </AppButton>
+        <View style={styles.publicHeaderActions}>
+          {token ? (
+            <>
+              {firstMarketId ? (
+                <AppButton compact onPress={() => navigation.navigate("PublicMarket", { marketId: firstMarketId })}>
+                  Order
+                </AppButton>
+              ) : null}
+              <AppButton compact variant="secondary" onPress={() => navigation.navigate("Home")}>
+                Workspace
+              </AppButton>
+            </>
+          ) : (
+            <>
+              <AppButton compact onPress={() => navigation.navigate("Login", { mode: "login" })}>
+                Login
+              </AppButton>
+              <AppButton compact variant="secondary" onPress={() => navigation.navigate("Login", { mode: "register" })}>
+                Register
+              </AppButton>
+            </>
+          )}
           <AppButton variant="secondary" compact onPress={() => void toggleTheme()}>
             Theme: {theme}
           </AppButton>
         </View>
-      </HeroCard>
+      </View>
 
       <StatGrid>
-        <StatCard label="Available markets" value={markets.length} note="Public storefronts use the same backend data as the web app." />
-        <StatCard label="Open now" value={activeMarkets} note="Markets currently marked active." />
+        <StatCard label="Markets" value={markets.length} />
+        <StatCard label="Open now" value={activeMarkets} />
       </StatGrid>
 
       {marketsQ.isLoading ? (
@@ -368,12 +505,6 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
         <EmptyBlock message={`Could not load markets from ${api.defaults.baseURL}.`} actionLabel="Retry" onAction={() => void marketsQ.refetch()} />
       ) : (
         <View style={uiStyles.listGap}>
-          <SectionCard title="Campaign" subtitle="Smart Dispatch Boost Week">
-            <HelperText>
-              Limited time storefront boost for selected markets with premium placement, stronger visibility, and cleaner discovery.
-            </HelperText>
-          </SectionCard>
-
           <DiscoveryRail
             title="Popular"
             subtitle="Popular Items Right Now"
@@ -418,6 +549,7 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
 }
 
 export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
+  const palette = usePalette();
   const { token, setPendingRoute } = useAuth();
   const { language } = usePreferences();
   const queryClient = useQueryClient();
@@ -563,6 +695,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
     () => (itemsQ.data ?? []).find((item) => item.id === selectedItemId) ?? null,
     [itemsQ.data, selectedItemId],
   );
+  const selectedCartEntry = selectedItem ? cart.find((entry) => entry.item_id === selectedItem.id) : null;
 
   const selectedItemImageUrls = useMemo(() => getItemImageUrls(selectedItem), [selectedItem]);
   const marketReviewAverage = useMemo(() => {
@@ -617,8 +750,16 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   return (
     <Screen>
       <SectionCard title={marketQ.data?.name || `Market #${marketId}`} subtitle={marketQ.data?.address || "No address set yet."}>
-        {getMarketBannerUrl(marketQ.data) ? <Image source={getMarketBannerUrl(marketQ.data)} style={styles.marketHeroImage} contentFit="cover" /> : null}
-        {resolveMarketMediaUrl(marketQ.data?.logo_url) ? <Image source={resolveMarketMediaUrl(marketQ.data?.logo_url)} style={styles.marketLogoImageLarge} contentFit="cover" /> : null}
+        {getMarketBannerUrl(marketQ.data) ? (
+          <Image source={getMarketBannerUrl(marketQ.data)} style={[styles.marketHeroImage, { backgroundColor: palette.surfaceMuted }]} contentFit="cover" />
+        ) : null}
+        {resolveMarketMediaUrl(marketQ.data?.logo_url) ? (
+          <Image
+            source={resolveMarketMediaUrl(marketQ.data?.logo_url)}
+            style={[styles.marketLogoImageLarge, { backgroundColor: palette.surface, borderColor: `${palette.border}cc` }]}
+            contentFit="cover"
+          />
+        ) : null}
         <View style={styles.heroActions}>
           <AppButton variant="secondary" onPress={() => navigation.goBack()}>
             Back
@@ -652,6 +793,20 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           </HelperText>
         ) : null}
 
+        <View style={[styles.orderSummaryPanel, { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` }]}>
+          <View style={styles.orderSummaryTop}>
+            <View style={styles.orderSummaryText}>
+              <Text style={[styles.orderSummaryTitle, { color: palette.text }]}>Ready to order</Text>
+              <Text style={[styles.orderSummaryCopy, { color: palette.muted }]}>Choose items below, adjust the cart, then checkout when you are ready.</Text>
+            </View>
+            <RatingStars rating={marketReviewAverage} count={marketReviewCount} />
+          </View>
+          <View style={styles.metricRow}>
+            <MiniMetric label="Menu" value={`${itemsQ.data?.length ?? marketQ.data?.active_items_count ?? 0} items`} />
+            <MiniMetric label="Cart" value={`${totals.quantity} selected`} />
+          </View>
+        </View>
+
         <StatGrid>
           <StatCard label="Rating" value={marketReviewAverage ? marketReviewAverage.toFixed(1) : "New"} />
           <StatCard label="Reviews" value={marketReviewCount} />
@@ -681,8 +836,16 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
         <HelperText>Categories</HelperText>
         <View style={styles.filterRow}>
           {categories.map((entry) => (
-            <Pressable key={entry} onPress={() => setCategory(entry)} style={[styles.filterChip, category === entry && styles.filterChipActive]}>
-              <Text style={styles.filterChipText}>{entry}</Text>
+            <Pressable
+              key={entry}
+              onPress={() => setCategory(entry)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` },
+                category === entry && { backgroundColor: `${palette.primary}22`, borderColor: `${palette.primary}88` },
+              ]}
+            >
+              <Text style={[styles.filterChipText, { color: category === entry ? palette.primaryStrong : palette.text }]}>{entry}</Text>
             </Pressable>
           ))}
         </View>
@@ -713,13 +876,9 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           <View style={uiStyles.listGap}>
             {cart.map((item) => (
               <SectionCard key={item.item_id} title={item.name} subtitle={`${item.qty} x ${formatMoney(item.price, language)}`}>
-                <View style={styles.heroActions}>
-                  <AppButton variant="secondary" compact onPress={() => adjustQty(item.item_id, -1)}>
-                    -
-                  </AppButton>
-                  <AppButton variant="secondary" compact onPress={() => adjustQty(item.item_id, 1)}>
-                    +
-                  </AppButton>
+                <View style={styles.cartLine}>
+                  <Text style={[styles.cartLineTotal, { color: palette.text }]}>{formatMoney(item.price * item.qty, language)}</Text>
+                  <QuantityStepper qty={item.qty} onDecrease={() => adjustQty(item.item_id, -1)} onIncrease={() => adjustQty(item.item_id, 1)} />
                 </View>
               </SectionCard>
             ))}
@@ -736,7 +895,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
         {(marketReviewsQ.data ?? []).length > 0 ? (
           <View style={uiStyles.listGap}>
             {(marketReviewsQ.data ?? []).map((review) => (
-              <SectionCard key={`market-review-${review.id}`} title={`${review.user?.name || "Anonymous"} · ${review.rating}/5`} subtitle={review.comment || "No comment provided."} />
+              <ReviewCard key={`market-review-${review.id}`} name={review.user?.name || "Anonymous"} rating={review.rating} comment={review.comment} />
             ))}
           </View>
         ) : marketReviewsQ.isLoading ? (
@@ -772,6 +931,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
             const comboIncludedItems = getComboIncludedItems(item);
             const comboRemovableCount = getComboRemovableCount(item);
             const needsDetails = item.item_kind === "combo" || removableCount > 0 || (item.combo_offers?.length ?? 0) > 0;
+            const cartEntry = cart.find((entry) => entry.item_id === item.id);
 
             return (
               <SectionCard
@@ -780,11 +940,20 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
                 subtitle={`${item.sku} • ${item.category || "General"} • ${item.stock_qty} in stock`}
                 right={<Pill tone={outOfStock ? "danger" : "success"}>{outOfStock ? "Out of stock" : "Ready"}</Pill>}
               >
-                {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.itemImage} contentFit="cover" /> : null}
-                <Text style={styles.price}>{formatMoney(finalPrice, language)}</Text>
-                {discounted ? <HelperText>{formatMoney(basePrice, language)} regular</HelperText> : null}
+                {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={[styles.itemImage, { backgroundColor: palette.surfaceMuted }]} contentFit="cover" /> : null}
+                <View style={styles.itemPriceRow}>
+                  <View>
+                    <Text style={[styles.price, { color: palette.text }]}>{formatMoney(finalPrice, language)}</Text>
+                    {discounted ? <Text style={[styles.strikePrice, { color: palette.muted }]}>{formatMoney(basePrice, language)} regular</Text> : null}
+                  </View>
+                  <RatingStars rating={item.review_summary?.average} count={item.review_summary?.count ?? 0} />
+                </View>
                 {getItemImageUrls(item).length > 1 ? <HelperText>{getItemImageUrls(item).length} photos available</HelperText> : null}
-                <HelperText>Type: {item.item_kind === "combo" ? "Combo item" : "Regular item"}</HelperText>
+                <View style={styles.discoveryBadges}>
+                  <Pill>{item.category || "General"}</Pill>
+                  <Pill tone={item.item_kind === "combo" ? "success" : "neutral"}>{item.item_kind === "combo" ? "Combo" : "Regular"}</Pill>
+                  {cartEntry ? <Pill tone="warning">In cart x{cartEntry.qty}</Pill> : null}
+                </View>
                 {item.item_kind === "combo" && comboIncludedItems.length > 0 ? (
                   <HelperText>Includes {comboIncludedItems.length} items</HelperText>
                 ) : null}
@@ -794,19 +963,23 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
                 {item.item_kind !== "combo" && removableCount > 0 ? <HelperText>{removableCount} removable</HelperText> : null}
                 <HelperText>Reviews: {item.review_summary?.average ?? "-"} / {item.review_summary?.count ?? 0}</HelperText>
                 <View style={styles.heroActions}>
-                  <AppButton
-                    onPress={() => {
-                      if (needsDetails) {
-                        setSelectedItemId(item.id);
-                        return;
-                      }
+                  {cartEntry ? (
+                    <QuantityStepper qty={cartEntry.qty} onDecrease={() => adjustQty(item.id, -1)} onIncrease={() => adjustQty(item.id, 1)} />
+                  ) : (
+                    <AppButton
+                      onPress={() => {
+                        if (needsDetails) {
+                          setSelectedItemId(item.id);
+                          return;
+                        }
 
-                      addToCart(item);
-                    }}
-                    disabled={outOfStock || !item.is_active}
-                  >
-                    {outOfStock ? "Out of Stock" : needsDetails ? "View Details" : "Add to Cart"}
-                  </AppButton>
+                        addToCart(item);
+                      }}
+                      disabled={outOfStock || !item.is_active}
+                    >
+                      {outOfStock ? "Out of Stock" : needsDetails ? "Choose Options" : "Add to Cart"}
+                    </AppButton>
+                  )}
                   <AppButton compact variant="secondary" onPress={() => setSelectedItemId(item.id)}>
                     Details
                   </AppButton>
@@ -827,7 +1000,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           {selectedItemImageUrls[0] ? (
             <Image
               source={selectedItemImageUrls[selectedImageIndex] ?? selectedItemImageUrls[0]}
-              style={styles.selectedImage}
+              style={[styles.selectedImage, { backgroundColor: palette.surfaceMuted }]}
               contentFit="cover"
             />
           ) : null}
@@ -837,9 +1010,13 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
                 <Pressable
                   key={`${url}-${index}`}
                   onPress={() => setSelectedImageIndex(index)}
-                  style={[styles.galleryThumbWrap, selectedImageIndex === index && styles.galleryThumbWrapActive]}
+                  style={[
+                    styles.galleryThumbWrap,
+                    { borderColor: `${palette.border}cc` },
+                    selectedImageIndex === index && { borderColor: palette.primary, backgroundColor: `${palette.primary}22` },
+                  ]}
                 >
-                  <Image source={url} style={styles.galleryThumb} contentFit="cover" />
+                  <Image source={url} style={[styles.galleryThumb, { backgroundColor: palette.surfaceMuted }]} contentFit="cover" />
                 </Pressable>
               ))}
             </View>
@@ -847,8 +1024,17 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
 
           {selectedItem ? (
             <>
-              <Text style={styles.price}>{formatMoney(calcItemFinalPrice(selectedItem), language)}</Text>
-              <HelperText>Type: {selectedItem.item_kind === "combo" ? "Combo item" : "Regular item"}</HelperText>
+              <View style={styles.itemPriceRow}>
+                <Text style={[styles.price, { color: palette.text }]}>{formatMoney(calcItemFinalPrice(selectedItem), language)}</Text>
+                <RatingStars rating={selectedItem.review_summary?.average} count={selectedItem.review_summary?.count ?? 0} />
+              </View>
+              <View style={styles.discoveryBadges}>
+                <Pill>{selectedItem.category || "General"}</Pill>
+                <Pill tone={selectedItem.item_kind === "combo" ? "success" : "neutral"}>
+                  {selectedItem.item_kind === "combo" ? "Combo item" : "Regular item"}
+                </Pill>
+                {selectedCartEntry ? <Pill tone="warning">In cart x{selectedCartEntry.qty}</Pill> : null}
+              </View>
 
               {selectedItem.item_kind === "combo" && getComboIncludedItems(selectedItem).length > 0 ? (
                 <SectionCard title="Included in this combo" subtitle="This combo item already uses the combo price shown above.">
@@ -877,9 +1063,13 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
               ) : null}
 
               <View style={styles.heroActions}>
-                <AppButton onPress={() => addToCart(selectedItem)} disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active}>
-                  {selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add to Cart"}
-                </AppButton>
+                {selectedCartEntry ? (
+                  <QuantityStepper qty={selectedCartEntry.qty} onDecrease={() => adjustQty(selectedItem.id, -1)} onIncrease={() => adjustQty(selectedItem.id, 1)} />
+                ) : (
+                  <AppButton onPress={() => addToCart(selectedItem)} disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active}>
+                    {selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add to Cart"}
+                  </AppButton>
+                )}
                 <AppButton variant="secondary" onPress={() => setSelectedItemId(null)}>
                   Close
                 </AppButton>
@@ -888,7 +1078,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
           ) : null}
 
           {(reviewsQ.data ?? []).map((review) => (
-            <SectionCard key={review.id} title={`${review.user?.name || "Customer"} - ${review.rating}/5`} subtitle={review.comment || "No comment"} />
+            <ReviewCard key={review.id} name={review.user?.name || "Customer"} rating={review.rating} comment={review.comment} />
           ))}
           {token ? (
             <>
@@ -905,10 +1095,10 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   );
 }
 
-export function LoginScreen({ navigation }: LoginProps) {
+export function LoginScreen({ navigation, route }: LoginProps) {
   const { language, setLanguage, theme, toggleTheme } = usePreferences();
   const { pendingRoute, setPendingRoute, signIn } = useAuth();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">(route.params?.mode ?? "login");
   const [email, setEmail] = useState("admin@test.com");
   const [password, setPassword] = useState("123456");
   const [name, setName] = useState("");
@@ -945,6 +1135,12 @@ export function LoginScreen({ navigation }: LoginProps) {
       });
     },
   });
+
+  useEffect(() => {
+    if (route.params?.mode) {
+      setMode(route.params.mode);
+    }
+  }, [route.params?.mode]);
 
   return (
     <Screen>
@@ -1002,6 +1198,7 @@ export function LoginScreen({ navigation }: LoginProps) {
 export function CheckoutScreen({ navigation }: CheckoutProps) {
   const access = useProtectedAccess("Checkout");
   const { language } = usePreferences();
+  const palette = usePalette();
   const [marketId, setMarketIdState] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -1167,8 +1364,16 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
                 const label = typeof slot === "string" ? slot : slot.label || `${slot.from} - ${slot.to}`;
                 const value = typeof slot === "string" ? `${slot}|${slot}|${slot}` : `${label}|${slot.from}|${slot.to}`;
                 return (
-                  <Pressable key={`${label}-${index}`} onPress={() => setDeliverySlot(value)} style={[styles.filterChip, deliverySlot === value && styles.filterChipActive]}>
-                    <Text style={styles.filterChipText}>{label}</Text>
+                  <Pressable
+                    key={`${label}-${index}`}
+                    onPress={() => setDeliverySlot(value)}
+                    style={[
+                      styles.filterChip,
+                      { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` },
+                      deliverySlot === value && { backgroundColor: `${palette.primary}22`, borderColor: `${palette.primary}88` },
+                    ]}
+                  >
+                    <Text style={[styles.filterChipText, { color: deliverySlot === value ? palette.primaryStrong : palette.text }]}>{label}</Text>
                   </Pressable>
                 );
               })}
@@ -1197,13 +1402,9 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
           <View style={uiStyles.listGap}>
             {cart.map((item) => (
               <SectionCard key={item.item_id} title={item.name} subtitle={`${item.qty} x ${formatMoney(item.price, language)}`}>
-                <View style={styles.heroActions}>
-                  <AppButton variant="secondary" compact onPress={() => void adjustQty(item.item_id, -1)}>
-                    -
-                  </AppButton>
-                  <AppButton variant="secondary" compact onPress={() => void adjustQty(item.item_id, 1)}>
-                    +
-                  </AppButton>
+                <View style={styles.cartLine}>
+                  <Text style={[styles.cartLineTotal, { color: palette.text }]}>{formatMoney(item.price * item.qty, language)}</Text>
+                  <QuantityStepper qty={item.qty} onDecrease={() => void adjustQty(item.item_id, -1)} onIncrease={() => void adjustQty(item.item_id, 1)} />
                 </View>
               </SectionCard>
             ))}
@@ -1215,6 +1416,184 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
 }
 
 const styles = StyleSheet.create({
+  publicHeader: {
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 14,
+    gap: 14,
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 4,
+  },
+  publicBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  publicBrandIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  publicBrandText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  publicBrandName: {
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  publicBrandMeta: {
+    marginTop: 2,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  publicHeaderActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 5,
+  },
+  starRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  ratingCount: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  metricRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  miniMetric: {
+    minWidth: 92,
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 3,
+  },
+  miniMetricLabel: {
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  miniMetricValue: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  stepper: {
+    minHeight: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    padding: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    alignSelf: "flex-start",
+  },
+  stepperButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepperQty: {
+    minWidth: 22,
+    textAlign: "center",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  reviewCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    gap: 8,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  reviewName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  reviewComment: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  addressText: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600",
+  },
+  orderSummaryPanel: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 14,
+    gap: 12,
+  },
+  orderSummaryTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  orderSummaryText: {
+    flex: 1,
+    gap: 4,
+  },
+  orderSummaryTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  orderSummaryCopy: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  itemPriceRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  strikePrice: {
+    fontSize: 12,
+    fontWeight: "700",
+    textDecorationLine: "line-through",
+  },
+  cartLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  cartLineTotal: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "900",
+  },
   heroActions: {
     flexDirection: "row",
     flexWrap: "wrap",

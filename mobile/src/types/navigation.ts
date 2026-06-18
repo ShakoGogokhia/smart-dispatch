@@ -2,7 +2,7 @@ export type RootStackParamList = {
   Home: undefined;
   PublicMarkets: undefined;
   PublicMarket: { marketId: string };
-  Login: undefined;
+  Login: { mode?: "login" | "register" } | undefined;
   Checkout: undefined;
   Profile: undefined;
   Orders: undefined;

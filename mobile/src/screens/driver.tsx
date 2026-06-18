@@ -28,104 +28,112 @@ import type { RootStackParamList } from "@/src/types/navigation";
 
 type DriverHubProps = NativeStackScreenProps<RootStackParamList, "DriverHub">;
 
+const OFFER_TIMEOUT_SECONDS = 300;
+
 const copy = {
-  en: {
-    title: "Driver Hub",
-    subtitle: "Incoming offers, live shift controls, and delivery proof in one mobile-first screen.",
-    onlyDrivers: "This workspace is only available for driver accounts.",
-    status: "Status",
-    offers: "Offers",
-    assigned: "Assigned",
-    liveNow: "Live now",
-    driverStatus: "Driver status",
-    dispatchPulse: "Dispatch pulse",
-    dispatchPulseCopy: "Stay online, share your location, and react quickly when fresh work lands.",
-    startShift: "Start shift",
-    endShift: "End shift",
-    sendLocation: "Send location ping",
-    locationTitle: "Location sync",
-    locationCopy: "Keep dispatch updated so ETAs and live tracking stay accurate.",
-    incomingOffers: "Incoming offers",
-    incomingOffersCopy: "Fresh jobs appear here first. Accept quickly before the offer expires.",
-    assignedDeliveries: "Assigned deliveries",
-    assignedDeliveriesCopy: "Your current jobs with proof-of-delivery actions kept close by.",
-    proofNote: "Proof note",
-    proofPhoto: "Proof photo URL",
-    proofSignature: "Proof signature",
-    markDelivered: "Mark delivered",
-    markPickedUp: "Mark picked up",
-    accept: "Accept",
-    decline: "Decline",
-    latestOffer: "Latest offer",
-    latestOfferCopy: "A new delivery just arrived with sound and vibration.",
-    liveOfferReady: "Offer ready now",
-    noOffers: "No live offers right now.",
-    noAssigned: "No assigned deliveries yet.",
-    activeShift: "Active shift",
-    noActiveShift: "No active shift",
-    lastPing: "Last ping",
-    total: "Total",
-    eta: "ETA",
-    customer: "Customer",
-    phone: "Phone",
-    market: "Market",
-    earningHint: "Potential earning",
-    tapDismiss: "Dismiss",
-  },
-  ka: {
-    title: "áƒ›áƒ«áƒ¦áƒáƒšáƒ˜áƒ¡ áƒ°áƒáƒ‘áƒ˜",
-    subtitle: "áƒ¨áƒ”áƒ›áƒáƒ¡áƒ£áƒšáƒ˜ áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ”áƒ‘áƒ˜, áƒªáƒ•áƒšáƒ˜áƒ¡ áƒ™áƒáƒœáƒ¢áƒ áƒáƒšáƒ˜ áƒ“áƒ áƒ›áƒ˜áƒ¬áƒáƒ“áƒ”áƒ‘áƒ˜áƒ¡ áƒ“áƒáƒ“áƒáƒ¡áƒ¢áƒ£áƒ áƒ”áƒ‘áƒ áƒ”áƒ áƒ— áƒ›áƒáƒ‘áƒáƒ˜áƒš-áƒ”áƒ™áƒ áƒáƒœáƒ–áƒ”.",
-    onlyDrivers: "áƒ”áƒ¡ áƒ¡áƒ˜áƒ•áƒ áƒªáƒ” áƒ›áƒ®áƒáƒšáƒáƒ“ áƒ›áƒ«áƒ¦áƒáƒšáƒ˜áƒ¡ áƒáƒœáƒ’áƒáƒ áƒ˜áƒ¨áƒ”áƒ‘áƒ˜áƒ¡áƒ—áƒ•áƒ˜áƒ¡áƒáƒ.",
-    status: "áƒ¡áƒ¢áƒáƒ¢áƒ£áƒ¡áƒ˜",
-    offers: "áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ”áƒ‘áƒ˜",
-    assigned: "áƒ›áƒ˜áƒœáƒ˜áƒ­áƒ”áƒ‘áƒ£áƒšáƒ˜",
-    liveNow: "áƒáƒ®áƒšáƒ",
-    driverStatus: "áƒ›áƒ«áƒ¦áƒáƒšáƒ˜áƒ¡ áƒ¡áƒ¢áƒáƒ¢áƒ£áƒ¡áƒ˜",
-    dispatchPulse: "áƒ“áƒ˜áƒ¡áƒžáƒ”áƒ¢áƒ©áƒ”áƒ áƒ˜áƒ¡ áƒ áƒ˜áƒ—áƒ›áƒ˜",
-    dispatchPulseCopy: "áƒ“áƒáƒ áƒ©áƒ˜ áƒáƒœáƒšáƒáƒ˜áƒœ, áƒ’áƒáƒáƒ–áƒ˜áƒáƒ áƒ” áƒšáƒáƒ™áƒáƒªáƒ˜áƒ áƒ“áƒ áƒ¡áƒ¬áƒ áƒáƒ¤áƒáƒ“ áƒ’áƒáƒ˜áƒ¦áƒ” áƒáƒ®áƒáƒš áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ”áƒ‘áƒ–áƒ”.",
-    startShift: "áƒªáƒ•áƒšáƒ˜áƒ¡ áƒ“áƒáƒ¬áƒ§áƒ”áƒ‘áƒ",
-    endShift: "áƒªáƒ•áƒšáƒ˜áƒ¡ áƒ“áƒáƒ¡áƒ áƒ£áƒšáƒ”áƒ‘áƒ",
-    sendLocation: "áƒšáƒáƒ™áƒáƒªáƒ˜áƒ˜áƒ¡ áƒžáƒ˜áƒœáƒ’áƒ˜",
-    locationTitle: "áƒšáƒáƒ™áƒáƒªáƒ˜áƒ˜áƒ¡ áƒ¡áƒ˜áƒœáƒ¥áƒ˜",
-    locationCopy: "áƒ“áƒ˜áƒ¡áƒžáƒ”áƒ¢áƒ©áƒ”áƒ áƒ¡ áƒ›áƒ˜áƒáƒ¬áƒáƒ“áƒ” áƒáƒ¥áƒ¢áƒ£áƒáƒšáƒ£áƒ áƒ˜ áƒ›áƒ“áƒ”áƒ‘áƒáƒ áƒ”áƒáƒ‘áƒ, áƒ áƒáƒ—áƒ ETA áƒ“áƒ áƒ¢áƒ áƒ”áƒ™áƒ˜áƒœáƒ’áƒ˜ áƒ¡áƒ¬áƒáƒ áƒ˜ áƒ“áƒáƒ áƒ©áƒ”áƒ¡.",
-    incomingOffers: "áƒ¨áƒ”áƒ›áƒáƒ›áƒáƒ•áƒáƒšáƒ˜ áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ”áƒ‘áƒ˜",
-    incomingOffersCopy: "áƒáƒ®áƒáƒšáƒ˜ áƒ¨áƒ”áƒ™áƒ•áƒ”áƒ—áƒ”áƒ‘áƒ˜ áƒžáƒ˜áƒ áƒ•áƒ”áƒšáƒáƒ“ áƒáƒ¥ áƒ©áƒœáƒ“áƒ”áƒ‘áƒ. áƒ“áƒ áƒáƒ£áƒšáƒáƒ“ áƒ“áƒáƒ”áƒ—áƒáƒœáƒ®áƒ›áƒ” áƒ¡áƒáƒœáƒáƒ› áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ áƒ’áƒáƒ¥áƒ áƒ”áƒ¡.",
-    assignedDeliveries: "áƒ›áƒ˜áƒœáƒ˜áƒ­áƒ”áƒ‘áƒ£áƒšáƒ˜ áƒ›áƒ˜áƒ¬áƒáƒ“áƒ”áƒ‘áƒ”áƒ‘áƒ˜",
-    assignedDeliveriesCopy: "áƒ›áƒ˜áƒ›áƒ“áƒ˜áƒœáƒáƒ áƒ” áƒ¨áƒ”áƒ™áƒ•áƒ”áƒ—áƒ”áƒ‘áƒ˜ áƒ“áƒ áƒ›áƒ˜áƒ¬áƒáƒ“áƒ”áƒ‘áƒ˜áƒ¡ áƒ“áƒáƒ“áƒáƒ¡áƒ¢áƒ£áƒ áƒ”áƒ‘áƒáƒ¡ áƒ¥áƒ›áƒ”áƒ“áƒ”áƒ‘áƒ”áƒ‘áƒ˜ áƒ”áƒ áƒ—áƒáƒ“.",
-    proofNote: "áƒ“áƒáƒ“áƒáƒ¡áƒ¢áƒ£áƒ áƒ”áƒ‘áƒ˜áƒ¡ áƒ©áƒáƒœáƒáƒ¬áƒ”áƒ áƒ˜",
-    proofPhoto: "áƒ¤áƒáƒ¢áƒáƒ¡ URL",
-    proofSignature: "áƒ®áƒ”áƒšáƒ›áƒáƒ¬áƒ”áƒ áƒ",
-    markDelivered: "áƒ›áƒ˜áƒ¢áƒáƒœáƒ",
-    markPickedUp: "áƒáƒ§áƒ•áƒáƒœáƒ˜áƒšáƒ˜áƒ",
-    accept: "áƒ“áƒáƒ—áƒáƒœáƒ®áƒ›áƒ”áƒ‘áƒ",
-    decline: "áƒ£áƒáƒ áƒ§áƒáƒ¤áƒ",
-    latestOffer: "áƒ‘áƒáƒšáƒ áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ",
-    latestOfferCopy: "áƒáƒ®áƒáƒšáƒ˜ áƒ›áƒ˜áƒ¬áƒáƒ“áƒ”áƒ‘áƒ áƒ®áƒ›áƒáƒ— áƒ“áƒ áƒ•áƒ˜áƒ‘áƒ áƒáƒªáƒ˜áƒ˜áƒ— áƒ¨áƒ”áƒ›áƒáƒ•áƒ˜áƒ“áƒ.",
-    liveOfferReady: "áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ áƒ›áƒ–áƒáƒ“ áƒáƒ áƒ˜áƒ¡",
-    noOffers: "áƒáƒ®áƒšáƒ áƒªáƒáƒªáƒ®áƒáƒšáƒ˜ áƒ¨áƒ”áƒ—áƒáƒ•áƒáƒ–áƒ”áƒ‘áƒ áƒáƒ  áƒáƒ áƒ˜áƒ¡.",
-    noAssigned: "áƒ›áƒ˜áƒœáƒ˜áƒ­áƒ”áƒ‘áƒ£áƒšáƒ˜ áƒ›áƒ˜áƒ¬áƒáƒ“áƒ”áƒ‘áƒ áƒ¯áƒ”áƒ  áƒáƒ  áƒáƒ áƒ˜áƒ¡.",
-    activeShift: "áƒáƒ¥áƒ¢áƒ˜áƒ£áƒ áƒ˜ áƒªáƒ•áƒšáƒ",
-    noActiveShift: "áƒáƒ¥áƒ¢áƒ˜áƒ£áƒ áƒ˜ áƒªáƒ•áƒšáƒ áƒáƒ  áƒáƒ áƒ˜áƒ¡",
-    lastPing: "áƒ‘áƒáƒšáƒ áƒžáƒ˜áƒœáƒ’áƒ˜",
-    total: "áƒ¯áƒáƒ›áƒ˜",
-    eta: "ETA",
-    customer: "áƒ›áƒáƒ›áƒ®áƒ›áƒáƒ áƒ”áƒ‘áƒ”áƒšáƒ˜",
-    phone: "áƒ¢áƒ”áƒšáƒ”áƒ¤áƒáƒœáƒ˜",
-    market: "áƒ‘áƒáƒ–áƒáƒ áƒ˜",
-    earningHint: "áƒ¡áƒáƒ•áƒáƒ áƒáƒ£áƒ“áƒ áƒ¨áƒ”áƒ›áƒáƒ¡áƒáƒ•áƒáƒšáƒ˜",
-    tapDismiss: "áƒ“áƒáƒ®áƒ£áƒ áƒ”",
-  },
+  title: "Driver hub",
+  subtitle: "Status, offers, assigned drops, and earnings tuned for mobile dispatch work.",
+  onlyDrivers: "This workspace is only available for driver accounts.",
+  driverStatus: "Driver status",
+  currentState: "Current state",
+  activeShift: "Active shift",
+  noActiveShift: "No active shift",
+  currentBalance: "Current balance",
+  totalEarned: "Total earned",
+  offers: "Offers",
+  assigned: "Assigned",
+  liveNow: "Live now",
+  liveOfferReady: "Offer ready now",
+  assignedDeliveries: "Assigned deliveries",
+  lastPing: "Last ping",
+  dispatchPulse: "Dispatch pulse",
+  dispatchPulseCopy: "Stay online, share your location, and react quickly when fresh work lands.",
+  startShift: "Start shift",
+  starting: "Starting...",
+  endShift: "End shift",
+  ending: "Ending...",
+  locationTitle: "Location sync",
+  locationCopy: "Keep dispatch updated so ETAs and live tracking stay accurate.",
+  latitude: "Latitude",
+  longitude: "Longitude",
+  sendLocation: "Send location ping",
+  sending: "Sending...",
+  recentEarnings: "Recent earnings",
+  delivered: "Delivered",
+  activeDrops: "Active drops",
+  noEarnings: "No earnings yet.",
+  deliveryEarning: "Delivery earning",
+  incomingOffers: "Incoming offers",
+  incomingOffersCopy: "Fresh jobs appear here first. Accept quickly before the offer expires.",
+  noOffers: "No live offers right now.",
+  assignedDeliveriesCopy: "Your current jobs with proof-of-delivery actions kept close by.",
+  noAssigned: "No assigned deliveries yet.",
+  proofNote: "Proof note",
+  proofPhoto: "Proof photo URL",
+  proofSignature: "Proof signature",
+  markDelivered: "Mark delivered",
+  markPickedUp: "Mark picked up",
+  accept: "Accept",
+  decline: "Decline",
+  latestOffer: "Latest offer",
+  latestOfferCopy: "A new delivery just arrived with sound and vibration.",
+  total: "Total",
+  eta: "ETA",
+  customer: "Customer",
+  phone: "Phone",
+  market: "Market",
+  earningHint: "Potential earning",
+  distance: "Distance",
+  weather: "Weather",
+  items: "Items",
+  deliveryNotes: "Delivery notes",
+  timeLeftToAccept: "Time left to accept",
+  offerExpired: "Time expired. This offer is being reassigned.",
+  offerExpiresSoon: "If the timer runs out, the order is automatically offered to another driver.",
+  tapDismiss: "Dismiss",
 } as const;
+
+function getOfferSecondsRemaining(offerSentAt: string | null | undefined, nowMs: number) {
+  if (!offerSentAt) {
+    return OFFER_TIMEOUT_SECONDS;
+  }
+
+  const sentAtMs = new Date(offerSentAt).getTime();
+  if (Number.isNaN(sentAtMs)) {
+    return OFFER_TIMEOUT_SECONDS;
+  }
+
+  return Math.max(0, OFFER_TIMEOUT_SECONDS - Math.floor((nowMs - sentAtMs) / 1000));
+}
+
+function formatCountdown(secondsRemaining: number) {
+  const minutes = Math.floor(secondsRemaining / 60);
+  const seconds = secondsRemaining % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 function DriverOrderCard({
   order,
   language,
+  nowMs,
   actions,
 }: {
   order: Order;
   language: "en" | "ka";
+  nowMs?: number;
   actions?: React.ReactNode;
 }) {
+  const palette = usePalette();
+  const secondsRemaining = nowMs == null ? null : getOfferSecondsRemaining(order.offer_sent_at, nowMs);
+  const isExpired = secondsRemaining === 0;
+  const itemSummary = order.items
+    ?.map((item) => {
+      const combo = item.combo_offer?.name ? ` [combo: ${item.combo_offer.name}]` : "";
+      const removed = item.removed_ingredients?.length ? ` (without ${item.removed_ingredients.join(", ")})` : "";
+      return `${item.name} x${item.qty}${combo}${removed}`;
+    })
+    .join(", ");
+
   return (
     <SectionCard
       title={order.code}
@@ -139,19 +147,56 @@ function DriverOrderCard({
       </View>
 
       <View style={styles.detailList}>
-        <DetailLine label={language === "ka" ? copy.ka.customer : copy.en.customer} value={order.customer_name || order.customer?.name || "Unknown"} />
-        <DetailLine label={language === "ka" ? copy.ka.phone : copy.en.phone} value={order.customer_phone || "Not provided"} />
-        <DetailLine label={language === "ka" ? copy.ka.market : copy.en.market} value={order.market?.name || "Direct order"} />
-        {order.driver_compensation?.earning_amount ? (
-          <DetailLine
-            label={language === "ka" ? copy.ka.earningHint : copy.en.earningHint}
-            value={formatMoney(order.driver_compensation.earning_amount, language)}
-            emphasize
-          />
-        ) : null}
+        <DetailLine label={copy.customer} value={order.customer_name || order.customer?.name || "Unknown"} />
+        <DetailLine label={copy.phone} value={order.customer_phone || "Not provided"} />
+        <DetailLine label={copy.market} value={order.market?.name || "Direct order"} />
       </View>
 
-      {order.notes ? <HelperText>{order.notes}</HelperText> : null}
+      {order.driver_compensation?.earning_amount != null ? (
+        <View
+          style={[
+            styles.earningPanel,
+            {
+              backgroundColor: `${palette.primaryStrong}16`,
+              borderColor: `${palette.primaryStrong}55`,
+            },
+          ]}
+        >
+          <Text style={[styles.earningTitle, { color: palette.primaryStrong }]}>
+            {copy.earningHint}: {formatMoney(order.driver_compensation.earning_amount, language)}
+          </Text>
+          <Text style={[styles.earningMeta, { color: palette.muted }]}>
+            {copy.distance}: {order.driver_compensation.distance_km ?? 0} km - {copy.weather}:{" "}
+            {order.driver_compensation.weather_condition || "clear"} - x{order.driver_compensation.weather_multiplier ?? 1}
+          </Text>
+        </View>
+      ) : null}
+
+      {itemSummary ? <HelperText>{copy.items}: {itemSummary}</HelperText> : null}
+      {order.notes ? <HelperText>{copy.deliveryNotes}: {order.notes}</HelperText> : null}
+
+      {secondsRemaining != null ? (
+        <View
+          style={[
+            styles.timerPanel,
+            {
+              backgroundColor: isExpired ? `${palette.danger}18` : secondsRemaining <= 60 ? `${palette.warning}18` : `${palette.primary}16`,
+              borderColor: isExpired ? `${palette.danger}66` : secondsRemaining <= 60 ? `${palette.warning}66` : `${palette.primary}55`,
+            },
+          ]}
+        >
+          <View style={styles.timerHeader}>
+            <Text style={[styles.timerLabel, { color: isExpired ? palette.danger : palette.text }]}>{copy.timeLeftToAccept}</Text>
+            <Text style={[styles.timerValue, { color: isExpired ? palette.danger : palette.text }]}>
+              {formatCountdown(secondsRemaining)}
+            </Text>
+          </View>
+          <Text style={[styles.timerCopy, { color: isExpired ? palette.danger : palette.muted }]}>
+            {isExpired ? copy.offerExpired : copy.offerExpiresSoon}
+          </Text>
+        </View>
+      ) : null}
+
       {actions}
     </SectionCard>
   );
@@ -160,7 +205,6 @@ function DriverOrderCard({
 export function DriverHubScreen({ navigation }: DriverHubProps) {
   const access = useProtectedAccess("DriverHub");
   const { language } = usePreferences();
-  const text = copy[language];
   const palette = usePalette();
   const queryClient = useQueryClient();
   const [lat, setLat] = useState("41.7151");
@@ -169,6 +213,7 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
   const [proofPhoto, setProofPhoto] = useState("");
   const [proofSignature, setProofSignature] = useState("");
   const [latestOfferAlert, setLatestOfferAlert] = useState<Order | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const seenOfferIdsRef = useRef<Set<number> | null>(null);
   const alertTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const roles = access.me?.roles ?? [];
@@ -183,8 +228,12 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
 
   useEffect(() => {
     void prepareLocalNotifications();
+    const timerId = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
 
     return () => {
+      clearInterval(timerId);
       if (alertTimeoutRef.current) {
         clearTimeout(alertTimeoutRef.current);
       }
@@ -277,8 +326,8 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
 
   if (!isDriver) {
     return (
-      <AppShell navigation={navigation} screenName="DriverHub" title={text.title} subtitle={text.subtitle}>
-        <EmptyBlock message={text.onlyDrivers} />
+      <AppShell navigation={navigation} screenName="DriverHub" title={copy.title} subtitle={copy.subtitle}>
+        <EmptyBlock message={copy.onlyDrivers} />
       </AppShell>
     );
   }
@@ -287,16 +336,27 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
   const driverStatus = feedQ.data?.driver?.status ?? "OFFLINE";
   const offeredOrders = feedQ.data?.offered_orders ?? [];
   const assignedOrders = feedQ.data?.assigned_orders ?? [];
+  const transactions = feedQ.data?.driver?.transactions ?? [];
   const lastPingAt = feedQ.data?.driver?.latest_ping?.updated_at;
 
   return (
-    <AppShell navigation={navigation} screenName="DriverHub" title={text.title} subtitle={text.subtitle}>
-      <StatGrid>
-        <StatCard label={text.status} value={driverStatus} note={activeShift ? text.activeShift : text.noActiveShift} />
-        <StatCard label={text.offers} value={offeredOrders.length} note={text.liveOfferReady} />
-        <StatCard label={text.assigned} value={assignedOrders.length} note={text.assignedDeliveries} />
-        <StatCard label={text.liveNow} value={lastPingAt ? formatDateTime(lastPingAt, language) : "-"} note={text.lastPing} />
-      </StatGrid>
+    <AppShell navigation={navigation} screenName="DriverHub" title={copy.title} subtitle={copy.subtitle}>
+      <SectionCard title={copy.driverStatus}>
+        <View style={[styles.statusHero, { backgroundColor: palette.dark ? "#06111f" : "#111827" }]}>
+          <Text style={styles.statusHeroLabel}>{copy.currentState}</Text>
+          <Text style={styles.statusHeroValue}>{driverStatus}</Text>
+          <Text style={styles.statusHeroNote}>
+            {activeShift ? `${copy.activeShift}: ${formatDateTime(activeShift.started_at, language)}` : copy.noActiveShift}
+          </Text>
+        </View>
+        <StatGrid>
+          <StatCard label={copy.currentBalance} value={formatMoney(feedQ.data?.driver?.balance ?? 0, language)} />
+          <StatCard label={copy.totalEarned} value={formatMoney(feedQ.data?.driver?.total_earned ?? 0, language)} />
+          <StatCard label={copy.offers} value={offeredOrders.length} note={copy.liveOfferReady} />
+          <StatCard label={copy.assigned} value={assignedOrders.length} note={copy.assignedDeliveries} />
+          <StatCard label={copy.liveNow} value={lastPingAt ? formatDateTime(lastPingAt, language) : "-"} note={copy.lastPing} />
+        </StatGrid>
+      </SectionCard>
 
       {latestOfferAlert ? (
         <View
@@ -311,99 +371,144 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
         >
           <View style={styles.alertHeader}>
             <View style={styles.alertText}>
-              <Text style={[styles.alertEyebrow, { color: palette.primaryStrong }]}>{text.latestOffer}</Text>
+              <Text style={[styles.alertEyebrow, { color: palette.primaryStrong }]}>{copy.latestOffer}</Text>
               <Text style={[styles.alertTitle, { color: palette.text }]}>{latestOfferAlert.code}</Text>
-              <Text style={[styles.alertCopy, { color: palette.muted }]}>{text.latestOfferCopy}</Text>
+              <Text style={[styles.alertCopy, { color: palette.muted }]}>{copy.latestOfferCopy}</Text>
             </View>
             <Pressable onPress={() => setLatestOfferAlert(null)} style={[styles.dismissButton, { borderColor: `${palette.border}aa` }]}>
-              <Text style={[styles.dismissButtonText, { color: palette.text }]}>{text.tapDismiss}</Text>
+              <Text style={[styles.dismissButtonText, { color: palette.text }]}>{copy.tapDismiss}</Text>
             </Pressable>
           </View>
           <View style={styles.metaRow}>
-            <Pill tone="warning">{latestOfferAlert.total != null ? formatMoney(latestOfferAlert.total, language) : text.total}</Pill>
+            <Pill tone="warning">{latestOfferAlert.total != null ? formatMoney(latestOfferAlert.total, language) : copy.total}</Pill>
             {latestOfferAlert.driver_compensation?.earning_amount != null ? (
               <Pill tone="success">{formatMoney(latestOfferAlert.driver_compensation.earning_amount, language)}</Pill>
             ) : null}
             <Pill tone="success">
               {latestOfferAlert.eta_summary?.estimated_delivery_at
                 ? formatDateTime(latestOfferAlert.eta_summary.estimated_delivery_at, language)
-                : text.eta}
+                : copy.eta}
             </Pill>
           </View>
           <HelperText>{latestOfferAlert.dropoff_address || "No address set"}</HelperText>
         </View>
       ) : null}
 
-      <SectionCard title={text.dispatchPulse} subtitle={text.dispatchPulseCopy}>
+      <SectionCard title={copy.dispatchPulse} subtitle={copy.dispatchPulseCopy}>
         <View style={styles.actionTray}>
           <View style={[styles.actionPill, { backgroundColor: `${palette.surfaceMuted}ef`, borderColor: `${palette.border}bf` }]}>
-            <Text style={[styles.actionPillLabel, { color: palette.muted }]}>{text.driverStatus}</Text>
+            <Text style={[styles.actionPillLabel, { color: palette.muted }]}>{copy.driverStatus}</Text>
             <Text style={[styles.actionPillValue, { color: palette.text }]}>{driverStatus}</Text>
           </View>
           <View style={[styles.actionPill, { backgroundColor: `${palette.surfaceMuted}ef`, borderColor: `${palette.border}bf` }]}>
-            <Text style={[styles.actionPillLabel, { color: palette.muted }]}>{text.activeShift}</Text>
+            <Text style={[styles.actionPillLabel, { color: palette.muted }]}>{copy.activeShift}</Text>
             <Text style={[styles.actionPillValue, { color: palette.text }]}>
-              {activeShift ? formatDateTime(activeShift.started_at, language) : text.noActiveShift}
+              {activeShift ? formatDateTime(activeShift.started_at, language) : copy.noActiveShift}
             </Text>
           </View>
         </View>
 
         <View style={styles.row}>
           <AppButton onPress={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
-            {text.startShift}
+            {startShiftM.isPending ? copy.starting : copy.startShift}
           </AppButton>
           <AppButton variant="secondary" onPress={() => endShiftM.mutate()} disabled={!activeShift || endShiftM.isPending}>
-            {text.endShift}
+            {endShiftM.isPending ? copy.ending : copy.endShift}
           </AppButton>
         </View>
       </SectionCard>
 
-      <SectionCard title={text.locationTitle} subtitle={text.locationCopy}>
-        <InputField label="Latitude" value={lat} onChangeText={setLat} keyboardType="numeric" />
-        <InputField label="Longitude" value={lng} onChangeText={setLng} keyboardType="numeric" />
+      <SectionCard title={copy.locationTitle} subtitle={copy.locationCopy}>
+        <InputField label={copy.latitude} value={lat} onChangeText={setLat} keyboardType="numeric" />
+        <InputField label={copy.longitude} value={lng} onChangeText={setLng} keyboardType="numeric" />
         <AppButton variant="secondary" onPress={() => pingM.mutate()} disabled={pingM.isPending}>
-          {text.sendLocation}
+          {pingM.isPending ? copy.sending : copy.sendLocation}
         </AppButton>
         {mutationError ? <HelperText tone="danger">{mutationError}</HelperText> : null}
       </SectionCard>
 
-      <SectionCard title={text.incomingOffers} subtitle={text.incomingOffersCopy}>
-        {feedQ.isLoading ? (
-          <LoadingBlock message="Loading driver feed..." />
-        ) : offeredOrders.length === 0 ? (
-          <EmptyBlock message={text.noOffers} />
+      <SectionCard title={copy.recentEarnings}>
+        <View style={styles.summaryGrid}>
+          <View style={[styles.summaryTile, { backgroundColor: `${palette.surfaceMuted}ef`, borderColor: `${palette.border}bf` }]}>
+            <Text style={[styles.summaryLabel, { color: palette.muted }]}>{copy.delivered}</Text>
+            <Text style={[styles.summaryValue, { color: palette.text }]}>{transactions.length}</Text>
+          </View>
+          <View style={[styles.summaryTile, { backgroundColor: `${palette.surfaceMuted}ef`, borderColor: `${palette.border}bf` }]}>
+            <Text style={[styles.summaryLabel, { color: palette.muted }]}>{copy.offers}</Text>
+            <Text style={[styles.summaryValue, { color: palette.text }]}>{offeredOrders.length}</Text>
+          </View>
+          <View style={[styles.summaryTile, { backgroundColor: `${palette.surfaceMuted}ef`, borderColor: `${palette.border}bf` }]}>
+            <Text style={[styles.summaryLabel, { color: palette.muted }]}>{copy.activeDrops}</Text>
+            <Text style={[styles.summaryValue, { color: palette.text }]}>{assignedOrders.length}</Text>
+          </View>
+        </View>
+        {transactions.length === 0 ? (
+          <EmptyBlock message={copy.noEarnings} />
         ) : (
           <View style={uiStyles.listGap}>
-            {offeredOrders.map((order) => (
-              <DriverOrderCard
-                key={order.id}
-                order={order}
-                language={language}
-                actions={
-                  <View style={styles.row}>
-                    <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "accept" })}>
-                      {text.accept}
-                    </AppButton>
-                    <AppButton variant="secondary" compact onPress={() => actionM.mutate({ orderId: order.id, action: "decline" })}>
-                      {text.decline}
-                    </AppButton>
-                  </View>
-                }
-              />
+            {transactions.map((transaction) => (
+              <View key={transaction.id} style={[styles.transactionRow, { backgroundColor: `${palette.surfaceMuted}ef`, borderColor: `${palette.border}bf` }]}>
+                <View style={styles.transactionText}>
+                  <Text style={[styles.transactionTitle, { color: palette.text }]}>{transaction.description || copy.deliveryEarning}</Text>
+                  <Text style={[styles.transactionMeta, { color: palette.muted }]}>
+                    {transaction.distance_km ?? 0} km - {transaction.weather_condition || "clear"} -{" "}
+                    {formatDateTime(transaction.created_at, language)}
+                  </Text>
+                </View>
+                <Pill tone="success">{formatMoney(transaction.amount, language)}</Pill>
+              </View>
             ))}
           </View>
         )}
       </SectionCard>
 
-      <SectionCard title={text.assignedDeliveries} subtitle={text.assignedDeliveriesCopy}>
+      <SectionCard title={copy.incomingOffers} subtitle={copy.incomingOffersCopy}>
+        {feedQ.isLoading ? (
+          <LoadingBlock message="Loading driver feed..." />
+        ) : offeredOrders.length === 0 ? (
+          <EmptyBlock message={copy.noOffers} />
+        ) : (
+          <View style={uiStyles.listGap}>
+            {offeredOrders.map((order) => {
+              const isExpired = getOfferSecondsRemaining(order.offer_sent_at, nowMs) === 0;
+
+              return (
+                <DriverOrderCard
+                  key={order.id}
+                  order={order}
+                  language={language}
+                  nowMs={nowMs}
+                  actions={
+                    <View style={styles.row}>
+                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "accept" })} disabled={actionM.isPending || isExpired}>
+                        {copy.accept}
+                      </AppButton>
+                      <AppButton
+                        variant="secondary"
+                        compact
+                        onPress={() => actionM.mutate({ orderId: order.id, action: "decline" })}
+                        disabled={actionM.isPending || isExpired}
+                      >
+                        {copy.decline}
+                      </AppButton>
+                    </View>
+                  }
+                />
+              );
+            })}
+          </View>
+        )}
+      </SectionCard>
+
+      <SectionCard title={copy.assignedDeliveries} subtitle={copy.assignedDeliveriesCopy}>
         <View style={[styles.proofPanel, { backgroundColor: `${palette.surfaceMuted}ee`, borderColor: `${palette.border}bf` }]}>
-          <InputField label={text.proofNote} value={proofNote} onChangeText={setProofNote} />
-          <InputField label={text.proofPhoto} value={proofPhoto} onChangeText={setProofPhoto} />
-          <InputField label={text.proofSignature} value={proofSignature} onChangeText={setProofSignature} />
+          <InputField label={copy.proofNote} value={proofNote} onChangeText={setProofNote} />
+          <InputField label={copy.proofPhoto} value={proofPhoto} onChangeText={setProofPhoto} />
+          <InputField label={copy.proofSignature} value={proofSignature} onChangeText={setProofSignature} />
         </View>
 
         {assignedOrders.length === 0 ? (
-          <EmptyBlock message={text.noAssigned} />
+          <EmptyBlock message={copy.noAssigned} />
         ) : (
           <View style={uiStyles.listGap}>
             {assignedOrders.map((order) => (
@@ -414,13 +519,13 @@ export function DriverHubScreen({ navigation }: DriverHubProps) {
                 actions={
                   <View style={styles.row}>
                     {order.status === "ASSIGNED" ? (
-                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "picked-up" })}>
-                        {text.markPickedUp}
+                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "picked-up" })} disabled={actionM.isPending}>
+                        {copy.markPickedUp}
                       </AppButton>
                     ) : null}
                     {order.status === "PICKED_UP" ? (
-                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "delivered" })}>
-                        {text.markDelivered}
+                      <AppButton compact onPress={() => actionM.mutate({ orderId: order.id, action: "delivered" })} disabled={actionM.isPending}>
+                        {copy.markDelivered}
                       </AppButton>
                     ) : null}
                   </View>
@@ -557,5 +662,109 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 14,
     gap: 12,
+  },
+  statusHero: {
+    borderRadius: 24,
+    padding: 18,
+    gap: 5,
+  },
+  statusHeroLabel: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  statusHeroValue: {
+    color: "#ffffff",
+    fontSize: 32,
+    fontWeight: "900",
+  },
+  statusHeroNote: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  earningPanel: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 4,
+  },
+  earningTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  earningMeta: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  timerPanel: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 5,
+  },
+  timerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  timerLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  timerValue: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  timerCopy: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  summaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  summaryTile: {
+    minWidth: "30%",
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 12,
+    gap: 4,
+  },
+  summaryLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  transactionRow: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  transactionText: {
+    flex: 1,
+    gap: 4,
+  },
+  transactionTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  transactionMeta: {
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

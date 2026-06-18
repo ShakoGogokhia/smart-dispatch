@@ -144,6 +144,10 @@ export type OrderItem = {
   unit_price?: number | string;
   line_total?: number | string;
   price?: number | string;
+  combo_offer?: {
+    name?: string | null;
+  } | null;
+  removed_ingredients?: string[] | null;
 };
 
 export type Order = {
@@ -158,6 +162,7 @@ export type Order = {
   market_accepted_at?: string | null;
   ready_for_pickup_at?: string | null;
   accepted_at?: string | null;
+  offer_sent_at?: string | null;
   picked_up_at?: string | null;
   delivered_at?: string | null;
   customer_name?: string | null;
@@ -328,8 +333,18 @@ export type DriverFeed = {
   driver: {
     id: number;
     status: string;
+    balance?: number | string;
+    total_earned?: number | string;
     active_shift?: { id: number; started_at: string } | null;
     latest_ping?: { lat: number | string; lng: number | string; updated_at?: string } | null;
+    transactions?: {
+      id: number;
+      amount: number | string;
+      distance_km?: number | string | null;
+      weather_condition?: string | null;
+      created_at?: string;
+      description?: string | null;
+    }[];
   };
   offered_orders: Order[];
   assigned_orders: Order[];
