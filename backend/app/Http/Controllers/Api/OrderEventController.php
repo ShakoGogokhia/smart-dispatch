@@ -19,16 +19,15 @@ class OrderEventController extends Controller
         }
 
         $data = $request->validate([
-            'type' => ['required','string'], // arrived, picked_up, delivered, failed
+            'type' => ['required','string'], 
             'payload' => ['nullable','array'],
         ]);
 
         $type = strtoupper($data['type']);
         $payload = $data['payload'] ?? [];
 
-        // Map event -> order status
         $statusMap = [
-            'ARRIVED' => null,          // optional: keep status same
+            'ARRIVED' => null,         
             'PICKED_UP' => 'PICKED_UP',
             'DELIVERED' => 'DELIVERED',
             'FAILED' => 'FAILED',
@@ -38,20 +37,17 @@ class OrderEventController extends Controller
             return response()->json(['message' => 'Invalid event type'], 422);
         }
 
-        // Save event
         OrderEvent::create([
             'order_id' => $order->id,
             'type' => $type,
             'payload' => $payload,
         ]);
 
-        // Update order status if needed
         $newStatus = $statusMap[$type];
         if ($newStatus) {
             $order->update(['status' => $newStatus]);
         }
 
-        // Update route stop status for today's route if exists
         $today = now()->toDateString();
 
         $route = RoutePlan::query()

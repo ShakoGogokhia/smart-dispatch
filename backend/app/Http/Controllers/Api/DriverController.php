@@ -15,7 +15,6 @@ class DriverController extends Controller
         );
     }
 
-    // creates driver user + driver record (MVP)
     public function store(Request $request)
     {
         $data = $request->validate([

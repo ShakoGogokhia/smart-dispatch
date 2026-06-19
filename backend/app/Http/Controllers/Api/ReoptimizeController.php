@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 class ReoptimizeController extends Controller
 {
-    // POST /api/routes/{routePlan}/reoptimize
     public function reoptimize(RoutePlan $routePlan)
     {
         return DB::transaction(function () use ($routePlan) {
@@ -23,10 +22,8 @@ class ReoptimizeController extends Controller
             $done = $stops->whereIn('status', ['DONE'])->values();
             $pending = $stops->where('status', 'PENDING')->values();
 
-            // nearest neighbor reorder pending only
             $orderedPending = $this->nearestNeighbor($pending->all());
 
-            // rewrite sequences: DONE keep same relative order first, then pending
             $seq = 1;
 
             foreach ($done as $s) {
