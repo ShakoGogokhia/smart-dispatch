@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -19,6 +20,7 @@ class AuthController extends Controller
             'email' => $user->email,
             'phone' => $user->phone,
             'address' => $user->address,
+            'profile_photo_url' => $user->profile_photo_url,
             'language' => $user->language,
             'roles' => $user->getRoleNames()->values(),
         ];
@@ -104,6 +106,7 @@ class AuthController extends Controller
             'email' => $u->email,
             'phone' => $u->phone,
             'address' => $u->address,
+            'profile_photo_url' => $u->profile_photo_url,
             'language' => $u->language,
             'roles' => $u->getRoleNames()->values(),
             'permissions' => $this->permissionsForRoles($u->getRoleNames()->values()->all()),
@@ -189,6 +192,34 @@ class AuthController extends Controller
         if ($updates) {
             $user->update($updates);
         }
+
+        return response()->json([
+            'user' => $this->serializeUser($user->fresh()),
+        ]);
+    }
+
+    public function uploadProfilePhoto(Request $request)
+    {
+        $request->validate([
+            'photo' => ['required', 'image', 'max:2048'],
+        ]);
+
+        $user = $request->user();
+        $path = $request->file('photo')->store('profile-photos', 'public');
+        $oldUrl = $user->profile_photo_url;
+
+        if ($oldUrl) {
+            $publicPath = parse_url($oldUrl, PHP_URL_PATH);
+            $storagePrefix = '/storage/';
+
+            if (is_string($publicPath) && str_starts_with($publicPath, $storagePrefix)) {
+                Storage::disk('public')->delete(substr($publicPath, strlen($storagePrefix)));
+            }
+        }
+
+        $user->forceFill([
+            'profile_photo_url' => Storage::disk('public')->url($path),
+        ])->save();
 
         return response()->json([
             'user' => $this->serializeUser($user->fresh()),

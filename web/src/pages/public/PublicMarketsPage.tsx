@@ -20,6 +20,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
+import PublicAccountMenu from "@/components/PublicAccountMenu";
 import ThemeToggle from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +30,7 @@ import { formatMoney, toNumber } from "@/lib/format";
 import { getDefaultAuthedPath } from "@/lib/session";
 import {
   calcStorefrontPrice,
+  formatMarketHours,
   formatPromoLabel,
   type StorefrontMarket,
 } from "@/lib/storefront";
@@ -39,6 +41,7 @@ type RailProps = {
   subtitle: string;
   description?: string;
   markets: StorefrontMarket[];
+  href?: string;
   autoScrollMs?: number;
 };
 
@@ -49,6 +52,8 @@ type DiscoveryItem = {
     id: number;
     name: string;
     code: string;
+    is_active?: boolean;
+    operating_status?: StorefrontMarket["operating_status"];
   } | null;
   name: string;
   sku: string;
@@ -166,6 +171,9 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
   const reviewCount = market.review_summary?.count ?? 0;
   const heroImage = getMarketBannerUrl(market);
   const logoImage = resolveMarketMediaUrl(market.logo_url);
+  const operatingStatus = market.operating_status;
+  const isOpen = operatingStatus?.is_open ?? market.is_active;
+  const hoursLabel = formatMarketHours(market);
 
   return (
     <article className="group min-h-[680px] min-w-[330px] sm:min-w-[370px] lg:min-w-[390px] flex-shrink-0 snap-start overflow-hidden rounded-[2rem] border border-zinc-200/80 bg-white transition-all duration-500 hover:border-cyan-300/70 hover:shadow-[0_25px_80px_rgba(0,0,0,0.12)] dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-cyan-700 flex flex-col">
@@ -244,10 +252,19 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
               </div>
 
               <div className="shrink-0 rounded-full bg-zinc-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                {market.is_active ? "Open" : "Closed"}
+                {isOpen ? "Open" : "Closed"}
               </div>
             </div>
           </div>
+        </div>
+
+        <div className={`mt-5 rounded-[1.5rem] border px-4 py-3 text-sm ${
+          isOpen
+            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+            : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300"
+        }`}>
+          <div className="font-semibold">{operatingStatus?.label ?? (isOpen ? "Open now" : "Closed now")}</div>
+          {hoursLabel ? <div className="mt-1 text-xs opacity-80">{hoursLabel}</div> : null}
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3">
@@ -360,9 +377,9 @@ function MarketCard({ market }: { market: StorefrontMarket }) {
         </div>
 
         <div className="mt-auto pt-6">
-          <Button asChild className="w-full h-14 rounded-2xl text-base font-semibold">
+          <Button asChild className={`w-full h-14 rounded-2xl text-base font-semibold ${isOpen ? "" : "bg-rose-600 hover:bg-rose-700"}`}>
             <Link to={`/m/${market.id}`}>
-              Open Market
+              {isOpen ? "Open Market" : "View Menu - Closed"}
               <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </Button>
@@ -377,6 +394,7 @@ function MarketRail({
   subtitle,
   description,
   markets,
+  href,
   autoScrollMs = 7000,
 }: RailProps) {
   const railRef = useRef<HTMLDivElement>(null);
@@ -426,6 +444,15 @@ function MarketRail({
         </div>
 
         <div className="flex gap-3">
+          {href ? (
+            <Button asChild variant="outline" className="h-12 rounded-2xl border-zinc-300 bg-white/90 px-5 dark:border-zinc-700 dark:bg-zinc-900/90">
+              <Link to={href}>
+                View all
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          ) : null}
+
           <Button
             variant="outline"
             size="icon"
@@ -463,11 +490,13 @@ function ItemRail({
   subtitle,
   description,
   items,
+  href,
 }: {
   title: string;
   subtitle: string;
   description?: string;
   items: DiscoveryItem[];
+  href?: string;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
 
@@ -486,12 +515,26 @@ function ItemRail({
     <section className="py-12 sm:py-14">
       <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-2xl">
-          <div className="text-xs font-medium uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
-            {title}
-          </div>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tighter text-zinc-900 dark:text-white sm:text-4xl">
-            {subtitle}
-          </h2>
+          {href ? (
+            <Link to={href} className="group/header block">
+              <div className="text-xs font-medium uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
+                {title}
+              </div>
+              <h2 className="mt-2 inline-flex items-center gap-3 text-3xl font-semibold tracking-tighter text-zinc-900 transition-colors group-hover/header:text-cyan-600 dark:text-white dark:group-hover/header:text-cyan-400 sm:text-4xl">
+                {subtitle}
+                <ArrowRight className="h-6 w-6" />
+              </h2>
+            </Link>
+          ) : (
+            <>
+              <div className="text-xs font-medium uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
+                {title}
+              </div>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tighter text-zinc-900 dark:text-white sm:text-4xl">
+                {subtitle}
+              </h2>
+            </>
+          )}
           {description ? (
             <p className="mt-3 leading-relaxed text-zinc-600 dark:text-zinc-400">
               {description}
@@ -500,6 +543,15 @@ function ItemRail({
         </div>
 
         <div className="flex gap-3">
+          {href ? (
+            <Button asChild variant="outline" className="h-12 rounded-2xl border-zinc-300 bg-white/90 px-5 dark:border-zinc-700 dark:bg-zinc-900/90">
+              <Link to={href}>
+                View all
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          ) : null}
+
           <Button
             variant="outline"
             size="icon"
@@ -532,6 +584,7 @@ function ItemRail({
           const basePrice = toNumber(item.price);
           const finalPrice = calcStorefrontPrice(item);
           const isDiscounted = Math.abs(basePrice - finalPrice) > 0.01;
+          const marketIsOpen = item.market?.operating_status?.is_open ?? item.market?.is_active ?? true;
 
           return (
             <article
@@ -608,9 +661,9 @@ function ItemRail({
                   ) : null}
                 </div>
 
-                <Button asChild className="mt-auto h-11 rounded-2xl text-sm font-semibold">
+                <Button asChild className={`mt-auto h-11 rounded-2xl text-sm font-semibold ${marketIsOpen ? "" : "bg-rose-600 hover:bg-rose-700"}`}>
                   <Link to={`/m/${item.market_id}`}>
-                    Open Market
+                    {marketIsOpen ? "Open Market" : "View Menu - Closed"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
@@ -721,6 +774,7 @@ export default function PublicMarketsPage() {
               </span>
             ) : null}
             <ThemeToggle />
+            <PublicAccountMenu />
           </div>
         </div>
       </nav>
@@ -776,7 +830,7 @@ export default function PublicMarketsPage() {
                 <div className="flex flex-wrap gap-4 mt-8">
                   {promotedMarkets.length > 0 ? (
                     <Button asChild size="lg" className="h-14 px-8 rounded-2xl text-base">
-                      <Link to={`/m/${promotedMarkets[0].id}`}>
+                      <Link to="/discover/featured">
                         Explore Promoted Markets
                       </Link>
                     </Button>
@@ -892,7 +946,7 @@ export default function PublicMarketsPage() {
               variant="secondary"
               className="rounded-2xl h-12 px-8 self-start lg:self-center"
             >
-              <Link to={promotedMarkets[0] ? `/m/${promotedMarkets[0].id}` : "#"}>
+              <Link to="/discover/featured">
                 View Sponsored
               </Link>
             </Button>
@@ -906,6 +960,7 @@ export default function PublicMarketsPage() {
               subtitle="Popular Items Right Now"
               description="Top items based on order activity when available. If there is no order history yet, this row falls back to random live picks."
               items={discoveryFeed?.popular ?? []}
+              href="/discover/popular"
             />
 
             <ItemRail
@@ -913,6 +968,7 @@ export default function PublicMarketsPage() {
               subtitle="Combo Picks"
               description="Items that already have combo offers configured by their market."
               items={discoveryFeed?.combo ?? []}
+              href="/discover/combo"
             />
 
             <ItemRail
@@ -920,6 +976,7 @@ export default function PublicMarketsPage() {
               subtitle="Discounted Items"
               description="Live discounted items across all public markets."
               items={discoveryFeed?.discounted ?? []}
+              href="/discover/discounted"
             />
           </>
         ) : null}
@@ -954,6 +1011,7 @@ export default function PublicMarketsPage() {
                 subtitle="Promoted Markets"
                 description="Highlighted storefronts with premium placement, strong visuals, and featured discovery."
                 markets={promotedMarkets}
+                href="/discover/featured"
                 autoScrollMs={5500}
               />
             ) : null}

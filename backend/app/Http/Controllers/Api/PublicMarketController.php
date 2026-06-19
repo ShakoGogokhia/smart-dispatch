@@ -47,6 +47,7 @@ class PublicMarketController extends Controller
                             'discount_type',
                         'discount_value',
                         'stock_qty',
+                        'show_stock_quantity',
                         'is_promoted',
                         'promotion_starts_at',
                         'promotion_ends_at',
@@ -95,6 +96,11 @@ class PublicMarketController extends Controller
                 'banner_url' => $market->banner_url,
                 'image_url' => $market->image_url,
                 'delivery_slots' => $market->delivery_slots ?? [],
+                'uses_operating_schedule' => (bool) ($market->uses_operating_schedule ?? false),
+                'operating_hours' => $market->operating_hours ?? [],
+                'is_manually_closed' => (bool) ($market->is_manually_closed ?? false),
+                'manual_close_comment' => $market->manual_close_comment,
+                'operating_status' => $market->operatingStatus(),
                 'active_items_count' => (int) ($market->active_items_count ?? 0),
                 'review_summary' => [
                     'count' => $reviewCount,
@@ -120,6 +126,7 @@ class PublicMarketController extends Controller
                         'discount_type' => $item->discount_type,
                         'discount_value' => $item->discount_value,
                         'stock_qty' => $item->stock_qty,
+                        'show_stock_quantity' => (bool) ($item->show_stock_quantity ?? true),
                         'is_promoted' => (bool) ($item->is_promoted ?? false),
                         'promotion_ends_at' => $item->promotion_ends_at?->toDateTimeString(),
                     ];
@@ -142,7 +149,7 @@ class PublicMarketController extends Controller
                 $marketQuery->where('is_active', true);
             })
             ->with([
-                'market:id,name,code,is_active',
+                'market:id,name,code,is_active,uses_operating_schedule,operating_hours,is_manually_closed,manual_close_comment',
             ])
             ->leftJoinSub($orderCounts, 'order_counts', function ($join) {
                 $join->on('items.id', '=', 'order_counts.item_id');
@@ -157,6 +164,7 @@ class PublicMarketController extends Controller
                 'items.discount_type',
                 'items.discount_value',
                 'items.stock_qty',
+                'items.show_stock_quantity',
                 'items.image_url',
                 'items.image_path',
                 'items.image_paths',
@@ -249,6 +257,11 @@ class PublicMarketController extends Controller
             'banner_url' => $market->banner_url,
             'image_url' => $market->image_url,
             'delivery_slots' => $market->delivery_slots ?? [],
+            'uses_operating_schedule' => (bool) ($market->uses_operating_schedule ?? false),
+            'operating_hours' => $market->operating_hours ?? [],
+            'is_manually_closed' => (bool) ($market->is_manually_closed ?? false),
+            'manual_close_comment' => $market->manual_close_comment,
+            'operating_status' => $market->operatingStatus(),
             'active_items_count' => (int) ($market->active_items_count ?? 0),
             'review_summary' => [
                 'count' => $reviewCount,
@@ -274,6 +287,7 @@ class PublicMarketController extends Controller
                 'discount_value',
                 'is_active',
                 'stock_qty',
+                'show_stock_quantity',
                 'category',
                 'image_url',
                 'image_path',
@@ -323,6 +337,7 @@ class PublicMarketController extends Controller
                     'is_promoted' => (bool) ($item->is_promoted ?? false),
                     'promotion_ends_at' => $item->promotion_ends_at?->toDateTimeString(),
                     'stock_qty' => $item->stock_qty,
+                    'show_stock_quantity' => (bool) ($item->show_stock_quantity ?? true),
                     'low_stock_threshold' => $item->low_stock_threshold,
                     'is_low_stock' => $item->stock_qty <= $item->low_stock_threshold,
                     'review_summary' => [
@@ -464,6 +479,12 @@ class PublicMarketController extends Controller
                 'id' => $item->market->id,
                 'name' => $item->market->name,
                 'code' => $item->market->code,
+                'is_active' => (bool) $item->market->is_active,
+                'uses_operating_schedule' => (bool) ($item->market->uses_operating_schedule ?? false),
+                'operating_hours' => $item->market->operating_hours ?? [],
+                'is_manually_closed' => (bool) ($item->market->is_manually_closed ?? false),
+                'manual_close_comment' => $item->market->manual_close_comment,
+                'operating_status' => $item->market->operatingStatus(),
             ] : null,
             'name' => $item->name,
             'sku' => $item->sku,
@@ -476,6 +497,7 @@ class PublicMarketController extends Controller
             'discount_type' => $item->discount_type,
             'discount_value' => $item->discount_value,
             'stock_qty' => $item->stock_qty,
+            'show_stock_quantity' => (bool) ($item->show_stock_quantity ?? true),
             'is_promoted' => (bool) ($item->is_promoted ?? false),
             'promotion_ends_at' => $item->promotion_ends_at?->toDateTimeString(),
             'ordered_qty' => (int) ($item->ordered_qty ?? 0),

@@ -44,6 +44,7 @@ type Item = {
   discount_type: "none" | "percent" | "fixed";
   discount_value: string | number;
   stock_qty: number;
+  show_stock_quantity?: boolean;
   low_stock_threshold?: number;
   is_low_stock?: boolean;
   is_active: boolean;
@@ -830,6 +831,7 @@ export default function MarketItemsPage() {
   const [discountType, setDiscountType] = useState<Item["discount_type"]>("none");
   const [discountValue, setDiscountValue] = useState("");
   const [stockQty, setStockQty] = useState("0");
+  const [showStockQuantity, setShowStockQuantity] = useState(true);
   const [isActive, setIsActive] = useState(true);
   const [category, setCategory] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -841,7 +843,7 @@ export default function MarketItemsPage() {
   const [createComboOffers, setCreateComboOffers] = useState<ComboOffer[]>([]);
   const [lowStockThreshold, setLowStockThreshold] = useState("5");
   const [csvDraft, setCsvDraft] = useState(
-    "name,sku,category,price,discount_type,discount_value,stock_qty,low_stock_threshold,is_active,image_url,variants,availability_schedule,ingredients,combo_offers",
+    "name,sku,category,price,discount_type,discount_value,stock_qty,show_stock_quantity,low_stock_threshold,is_active,image_url,variants,availability_schedule,ingredients,combo_offers",
   );
 
   const createM = useMutation({
@@ -860,6 +862,7 @@ export default function MarketItemsPage() {
         discount_type: discountType,
         discount_value: Number(discountValue || 0),
         stock_qty: Number(stockQty || 0),
+        show_stock_quantity: showStockQuantity,
         low_stock_threshold: Number(lowStockThreshold || 5),
         is_active: isActive,
       };
@@ -890,6 +893,7 @@ export default function MarketItemsPage() {
       setDiscountType("none");
       setDiscountValue("");
       setStockQty("0");
+      setShowStockQuantity(true);
       setIsActive(true);
       setCategory("");
       setImageUrl("");
@@ -921,6 +925,7 @@ export default function MarketItemsPage() {
         discount_type: editItem.discount_type,
         discount_value: Number(editItem.discount_value || 0),
         stock_qty: Number(editItem.stock_qty || 0),
+        show_stock_quantity: editItem.show_stock_quantity ?? true,
         category: editItem.category ?? null,
         image_url: editItem.image_url ?? null,
         variants: normalizeVariants((editItem.variants as ItemVariant[] | null) ?? []),
@@ -1135,6 +1140,16 @@ export default function MarketItemsPage() {
                         <Input value={stockQty} onChange={(event) => setStockQty(event.target.value)} className="input-shell" />
                       </div>
 
+                      <div className="rounded-xl border p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <Label className="field-label">Show quantity to customers</Label>
+                            <div className="text-sm text-muted-foreground">When off, customers only see stock status.</div>
+                          </div>
+                          <Switch checked={showStockQuantity} onCheckedChange={setShowStockQuantity} />
+                        </div>
+                      </div>
+
                       <div className="grid gap-2">
                         <Label className="field-label">Low Stock Threshold</Label>
                         <Input
@@ -1320,7 +1335,12 @@ export default function MarketItemsPage() {
                       <TableCell>
                         <ComboSummary comboOffers={item.combo_offers} />
                       </TableCell>
-                      <TableCell>{item.stock_qty}{item.is_low_stock ? " (Low)" : ""}</TableCell>
+                      <TableCell>
+                        <div className="grid gap-1">
+                          <span>{item.stock_qty}{item.is_low_stock ? " (Low)" : ""}</span>
+                          <span className="text-xs text-muted-foreground">{item.show_stock_quantity ?? true ? "Visible qty" : "Hidden qty"}</span>
+                        </div>
+                      </TableCell>
                       <TableCell>{item.review_summary?.average ?? "-"} / {item.review_summary?.count ?? 0}</TableCell>
                       <TableCell>{item.is_active ? "Yes" : "No"}</TableCell>
                       <TableCell className="text-right">
@@ -1476,6 +1496,19 @@ export default function MarketItemsPage() {
                       onChange={(event) => setEditItem({ ...editItem, stock_qty: Number(event.target.value) })}
                       className="input-shell"
                     />
+                  </div>
+
+                  <div className="rounded-xl border p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <Label className="field-label">Show quantity to customers</Label>
+                        <div className="text-sm text-muted-foreground">When off, customers only see stock status.</div>
+                      </div>
+                      <Switch
+                        checked={editItem.show_stock_quantity ?? true}
+                        onCheckedChange={(checked) => setEditItem({ ...editItem, show_stock_quantity: checked })}
+                      />
+                    </div>
                   </div>
 
                   <div className="grid gap-2">

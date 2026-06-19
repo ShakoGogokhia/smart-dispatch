@@ -77,6 +77,7 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::get('/me', [AuthController::class, 'me']);
     Route::patch('/me', [AuthController::class, 'updateProfile']);
+    Route::post('/me/photo', [AuthController::class, 'uploadProfilePhoto']);
     Route::match(['patch', 'post'], '/me/language', [AuthController::class, 'updateLanguage']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/notifications', [NotificationController::class, 'index']);

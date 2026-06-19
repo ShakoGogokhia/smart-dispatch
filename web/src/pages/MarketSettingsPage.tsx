@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ImagePlus, Sparkles, Users } from "lucide-react";
+import { Clock3, ImagePlus, Sparkles, Users } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -28,6 +28,40 @@ type StaffUser = {
   is_owner?: boolean;
   pivot?: { role?: string };
 };
+
+type OperatingHour = {
+  day: string;
+  enabled: boolean;
+  open: string;
+  close: string;
+};
+
+const defaultOperatingHours: OperatingHour[] = [
+  { day: "monday", enabled: true, open: "09:00", close: "18:00" },
+  { day: "tuesday", enabled: true, open: "09:00", close: "18:00" },
+  { day: "wednesday", enabled: true, open: "09:00", close: "18:00" },
+  { day: "thursday", enabled: true, open: "09:00", close: "18:00" },
+  { day: "friday", enabled: true, open: "09:00", close: "18:00" },
+  { day: "saturday", enabled: false, open: "10:00", close: "16:00" },
+  { day: "sunday", enabled: false, open: "10:00", close: "16:00" },
+];
+
+function normalizeOperatingHours(hours?: StorefrontMarket["operating_hours"]): OperatingHour[] {
+  return defaultOperatingHours.map((fallback) => {
+    const saved = hours?.find((entry) => entry.day === fallback.day);
+
+    return {
+      day: fallback.day,
+      enabled: saved?.enabled ?? fallback.enabled,
+      open: saved?.open || fallback.open,
+      close: saved?.close || fallback.close,
+    };
+  });
+}
+
+function dayLabel(day: string) {
+  return day.slice(0, 1).toUpperCase() + day.slice(1);
+}
 
 function resolveMarketMediaUrl(url?: string | null) {
   if (!url) {
@@ -80,6 +114,10 @@ export default function MarketSettingsPage() {
   const [featuredBadge, setFeaturedBadge] = useState("");
   const [featuredHeadline, setFeaturedHeadline] = useState("");
   const [featuredCopy, setFeaturedCopy] = useState("");
+  const [isManuallyClosed, setIsManuallyClosed] = useState(false);
+  const [manualCloseComment, setManualCloseComment] = useState("");
+  const [usesOperatingSchedule, setUsesOperatingSchedule] = useState(false);
+  const [operatingHours, setOperatingHours] = useState<OperatingHour[]>(defaultOperatingHours);
 
   useEffect(() => {
     if (!market) return;
@@ -92,6 +130,10 @@ export default function MarketSettingsPage() {
     setFeaturedBadge(market.featured_badge ?? "");
     setFeaturedHeadline(market.featured_headline ?? "");
     setFeaturedCopy(market.featured_copy ?? "");
+    setIsManuallyClosed(!!market.is_manually_closed);
+    setManualCloseComment(market.manual_close_comment ?? "");
+    setUsesOperatingSchedule(!!market.uses_operating_schedule);
+    setOperatingHours(normalizeOperatingHours(market.operating_hours));
   }, [market]);
 
   const [tab, setTab] = useState<"details" | "staff">("details");
@@ -103,6 +145,10 @@ export default function MarketSettingsPage() {
         address: address.trim() || null,
         lat: lat.trim() ? Number(lat) : null,
         lng: lng.trim() ? Number(lng) : null,
+        uses_operating_schedule: usesOperatingSchedule,
+        operating_hours: operatingHours,
+        is_manually_closed: isManuallyClosed,
+        manual_close_comment: isManuallyClosed ? manualCloseComment.trim() : null,
         ...(isAdmin
           ? {
               is_active: isActive,
@@ -232,6 +278,11 @@ export default function MarketSettingsPage() {
     (addStaffM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
     (addStaffM.error as { message?: string })?.message ??
     null;
+  const closureCommentMissing = isManuallyClosed && manualCloseComment.trim().length === 0;
+
+  const updateOperatingHour = (day: string, patch: Partial<OperatingHour>) => {
+    setOperatingHours((current) => current.map((entry) => (entry.day === day ? { ...entry, ...patch } : entry)));
+  };
 
   if (!Number.isFinite(id)) {
     return (
@@ -284,7 +335,8 @@ export default function MarketSettingsPage() {
                 </div>
                 <div className="subpanel p-4">
                   <div className="section-kicker">Visibility</div>
-                  <div className="theme-ink mt-2 font-semibold">{market.is_active ? "Publicly live" : "Hidden from marketplace"}</div>
+                  <div className="theme-ink mt-2 font-semibold">{market.operating_status?.label ?? (market.is_active ? "Publicly live" : "Hidden from marketplace")}</div>
+                  {market.operating_status?.reason ? <div className="theme-muted mt-1 text-sm">{market.operating_status.reason}</div> : null}
                 </div>
                 <div className="subpanel p-4">
                   <div className="section-kicker">Promotion state</div>
@@ -350,6 +402,69 @@ export default function MarketSettingsPage() {
                           placeholder="Shown on the landing page when the storefront is promoted."
                           disabled={!isAdmin}
                         />
+                      </div>
+                    </div>
+
+                    <div className="subpanel grid gap-5 p-4">
+                      <div className="flex items-center gap-2">
+                        <Clock3 className="h-4 w-4 text-cyan-600 dark:text-cyan-200" />
+                        <div>
+                          <div className="theme-ink font-medium">Market hours and manual closure</div>
+                          <div className="theme-muted text-sm">Owners can close immediately with a required reason or let the weekly schedule control open status.</div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="theme-ink font-medium">Use weekly schedule</div>
+                            <div className="theme-muted text-sm">When off, the market is open all day unless manually closed.</div>
+                          </div>
+                          <Switch checked={usesOperatingSchedule} onCheckedChange={setUsesOperatingSchedule} />
+                        </div>
+                      </div>
+
+                      <div className="rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="theme-ink font-medium">Temporarily close market</div>
+                            <div className="theme-muted text-sm">Customers will still see the market, but it will show as closed.</div>
+                          </div>
+                          <Switch checked={isManuallyClosed} onCheckedChange={setIsManuallyClosed} />
+                        </div>
+                      {isManuallyClosed ? (
+                        <div className="mt-4 grid gap-2">
+                          <Label>Closure reason</Label>
+                            <Input
+                              value={manualCloseComment}
+                              onChange={(e) => setManualCloseComment(e.target.value)}
+                              placeholder="Example: Closed today for inventory count"
+                            />
+                            {closureCommentMissing ? <div className="text-sm text-red-600">A reason is required while the market is closed.</div> : null}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="grid gap-3">
+                        {operatingHours.map((entry) => (
+                          <div key={entry.day} className="grid gap-3 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950 md:grid-cols-[1fr_auto_auto] md:items-center">
+                            <div className="flex items-center justify-between gap-4 md:justify-start">
+                              <div className="min-w-[120px] font-medium theme-ink">{dayLabel(entry.day)}</div>
+                              <Switch checked={entry.enabled} onCheckedChange={(checked) => updateOperatingHour(entry.day, { enabled: checked })} disabled={!usesOperatingSchedule} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="grid gap-1">
+                                <Label className="text-xs">Open</Label>
+                                <Input type="time" value={entry.open} onChange={(e) => updateOperatingHour(entry.day, { open: e.target.value })} disabled={!usesOperatingSchedule || !entry.enabled} />
+                              </div>
+                              <div className="grid gap-1">
+                                <Label className="text-xs">Close</Label>
+                                <Input type="time" value={entry.close} onChange={(e) => updateOperatingHour(entry.day, { close: e.target.value })} disabled={!usesOperatingSchedule || !entry.enabled} />
+                              </div>
+                            </div>
+                            <div className="theme-muted text-sm md:w-28 md:text-right">{!usesOperatingSchedule ? "Ignored" : entry.enabled ? `${entry.open} - ${entry.close}` : "Closed"}</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -430,7 +545,7 @@ export default function MarketSettingsPage() {
                     {updateError && <div className="text-sm text-red-600">{updateError}</div>}
 
                     <div className="flex flex-wrap items-center gap-3">
-                      <Button onClick={() => updateMarketM.mutate()} disabled={updateMarketM.isPending || !name.trim()}>
+                      <Button onClick={() => updateMarketM.mutate()} disabled={updateMarketM.isPending || !name.trim() || closureCommentMissing}>
                         {updateMarketM.isPending ? "Saving..." : isAdmin ? "Save changes" : "Save basic details"}
                       </Button>
                       {!isAdmin && (

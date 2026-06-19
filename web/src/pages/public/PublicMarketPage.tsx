@@ -36,6 +36,8 @@ import {
 import { formatMoney, toNumber } from "@/lib/format";
 import {
   calcStorefrontPrice,
+  formatMarketHours,
+  formatOperatingHoursList,
   type MarketPromo,
   type StorefrontMarket,
 } from "@/lib/storefront";
@@ -59,6 +61,7 @@ type Item = {
   discount_value?: number | string;
   is_active: boolean;
   stock_qty: number;
+  show_stock_quantity?: boolean;
   is_low_stock?: boolean;
   review_summary?: {
     count?: number;
@@ -433,6 +436,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
       count: marketReviews.length,
     };
   }, [market?.review_summary, marketReviewsQ.data]);
+  const marketIsOpen = market?.operating_status?.is_open ?? market?.is_active ?? false;
+  const marketHoursLabel = formatMarketHours(market);
+  const operatingHoursList = formatOperatingHoursList(market);
 
   const itemReviewError = reviewM.isError
     ? getErrorMessage(reviewM.error, "Unable to post your item review right now.")
@@ -447,6 +453,10 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   };
 
   const addToCart = (item: Item, removedIngredients: string[] = [], comboOffer?: ComboOffer | null) => {
+    if (!marketIsOpen) {
+      return;
+    }
+
     const normalizedRemovedIngredients = [...removedIngredients].sort((left, right) => left.localeCompare(right));
     const price = comboOffer ? toNumber(comboOffer.combo_price) : calcStorefrontPrice(item);
     const cartId = buildCartItemId(item.id, normalizedRemovedIngredients, comboOffer?.name);
@@ -541,7 +551,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 pb-24">
         {/* Hero */}
         <div className="relative overflow-hidden rounded-[2rem] shadow-2xl mb-10 sm:mb-12 border border-zinc-200/60 dark:border-zinc-800">
-          <div className="relative h-[360px] sm:h-[430px]">
+          <div className="relative min-h-[620px] sm:min-h-[560px] lg:min-h-[520px]">
             {getMarketBannerUrl(market) ? (
               <img
                 src={getMarketBannerUrl(market) ?? undefined}
@@ -568,10 +578,10 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
               </div>
             )}
 
-            <div className="absolute inset-x-0 bottom-0 p-6 sm:p-10 text-white">
+            <div className="relative z-10 flex min-h-[620px] flex-col justify-end p-6 pt-24 text-white sm:min-h-[560px] sm:p-10 sm:pt-28 lg:min-h-[520px]">
               <div className="flex flex-wrap items-center gap-3 mb-4">
                 {resolveMarketMediaUrl(market?.logo_url) ? (
-                  <img src={resolveMarketMediaUrl(market?.logo_url) ?? undefined} alt={`${market?.name ?? "Market"} logo`} className="h-16 w-16 rounded-2xl border border-white/30 object-cover shadow-lg" />
+                  <img src={resolveMarketMediaUrl(market?.logo_url) ?? undefined} alt={`${market?.name ?? "Market"} logo`} className="h-16 w-16 shrink-0 rounded-2xl border border-white/30 object-cover shadow-lg" />
                 ) : null}
                 <span className="font-mono text-xs sm:text-sm tracking-widest text-white/75">
                   {market?.code}
@@ -606,12 +616,29 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
               <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
                 <div>
-                  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-none">
+                  <h1 className="max-w-4xl break-words text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
                     {market?.name}
                   </h1>
                   <p className="mt-4 text-sm sm:text-base lg:text-lg text-white/80 max-w-2xl">
                     {market?.address || "Premium marketplace experience"}
                   </p>
+
+                  <div className={`mt-5 w-fit rounded-2xl border px-4 py-3 text-sm ${
+                    marketIsOpen
+                      ? "border-emerald-300/30 bg-emerald-400/15 text-emerald-100"
+                      : "border-rose-300/30 bg-rose-400/15 text-rose-100"
+                  }`}>
+                    <div className="font-semibold">{market?.operating_status?.label ?? (marketIsOpen ? "Open now" : "Closed now")}</div>
+                    {marketHoursLabel ? <div className="mt-1 text-xs opacity-85">{marketHoursLabel}</div> : null}
+                  </div>
+
+                  <div className="mt-3 flex max-w-4xl flex-wrap gap-2">
+                    {operatingHoursList.map((entry) => (
+                      <span key={entry} className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/80 backdrop-blur">
+                        {entry}
+                      </span>
+                    ))}
+                  </div>
 
                   <div className="mt-5 flex flex-wrap items-center gap-3">
                     <div className="rounded-2xl bg-white/10 backdrop-blur px-4 py-2 border border-white/10">
@@ -823,9 +850,11 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                             </span>
                           )}
 
-                          <span className="text-xs px-3 py-1 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                            Qty: {item.stock_qty}
-                          </span>
+                          {item.show_stock_quantity ?? true ? (
+                            <span className="text-xs px-3 py-1 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                              Qty: {item.stock_qty}
+                            </span>
+                          ) : null}
 
                           {ingredientCount > 0 && (
                             <span className="text-xs px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300">
@@ -913,10 +942,10 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
                               addToCart(item);
                             }}
-                            disabled={outOfStock || !item.is_active}
+                            disabled={outOfStock || !item.is_active || !marketIsOpen}
                             className="rounded-2xl h-11 font-medium"
                           >
-                            {outOfStock ? "Out of Stock" : needsCustomization ? "View Details" : "Add to Cart"}
+                            {!marketIsOpen ? "Market Closed" : outOfStock ? "Out of Stock" : needsCustomization ? "View Details" : "Add to Cart"}
                           </Button>
                         </div>
                       </CardContent>
@@ -1362,10 +1391,10 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                     addToCart(selectedItem, selectedRemovedIngredients, selectedComboOffer);
                     setSelectedItemId(null);
                   }}
-                  disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active}
+                  disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active || !marketIsOpen}
                   className="h-12 rounded-2xl text-base"
                 >
-                  {selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add Customized Item"}
+                  {!marketIsOpen ? "Market Closed" : selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add Customized Item"}
                 </Button>
               </div>
             </div>

@@ -55,6 +55,19 @@ export type StorefrontMarket = {
   } | null;
   logo_url?: string | null;
   delivery_slots?: Array<{ label?: string; from?: string; to?: string } | string>;
+  uses_operating_schedule?: boolean;
+  operating_hours?: Array<{ day: string; enabled?: boolean; open?: string; close?: string }>;
+  is_manually_closed?: boolean;
+  manual_close_comment?: string | null;
+  operating_status?: {
+    is_open: boolean;
+    mode: "inactive" | "manual" | "schedule" | "always_open";
+    label: string;
+    reason?: string | null;
+    next_open_at?: string | null;
+    next_close_at?: string | null;
+    today_hours?: { day: string; enabled?: boolean; open?: string; close?: string } | null;
+  };
   active_items_count?: number;
   item_preview?: StorefrontItemPreview[];
   active_promo?: MarketPromo | null;
@@ -96,4 +109,62 @@ export function getMarketCopy(market: Pick<StorefrontMarket, "featured_copy" | "
       ? `${market.name} is ready to serve this area with a faster storefront and cleaner checkout flow.`
       : `${market.name} is ready for orders with a curated catalog and quick delivery handoff.`)
   );
+}
+
+export function formatMarketHours(market?: Pick<StorefrontMarket, "operating_status"> | null) {
+  const status = market?.operating_status;
+
+  if (!status) {
+    return null;
+  }
+
+  if (status.reason) {
+    return status.reason;
+  }
+
+  if (status.next_open_at) {
+    return `Opens ${new Date(status.next_open_at).toLocaleString([], {
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  if (status.next_close_at) {
+    return `Closes ${new Date(status.next_close_at).toLocaleString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    })}`;
+  }
+
+  if (status.today_hours?.open && status.today_hours?.close) {
+    return `Today ${status.today_hours.open} - ${status.today_hours.close}`;
+  }
+
+  return status.mode === "always_open" ? "Open all day" : null;
+}
+
+export function formatOperatingHoursList(market?: Pick<StorefrontMarket, "uses_operating_schedule" | "operating_hours"> | null) {
+  if (!market?.uses_operating_schedule) {
+    return ["Open all day"];
+  }
+
+  const days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+  const labels: Record<string, string> = {
+    monday: "Mon",
+    tuesday: "Tue",
+    wednesday: "Wed",
+    thursday: "Thu",
+    friday: "Fri",
+    saturday: "Sat",
+    sunday: "Sun",
+  };
+
+  return days.map((day) => {
+    const entry = market.operating_hours?.find((item) => item.day === day);
+
+    return entry?.enabled && entry.open && entry.close
+      ? `${labels[day]} ${entry.open} - ${entry.close}`
+      : `${labels[day]} Closed`;
+  });
 }

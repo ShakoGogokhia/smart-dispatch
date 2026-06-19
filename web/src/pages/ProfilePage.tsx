@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
+import { resolveApiMediaUrl } from "@/lib/media";
 import { useMe } from "@/lib/useMe";
 
 function getErrorMessage(error: unknown) {
@@ -27,6 +28,7 @@ export default function ProfilePage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,6 +62,25 @@ export default function ProfilePage() {
     },
   });
 
+  const uploadPhotoM = useMutation({
+    mutationFn: async () => {
+      if (!photoFile) {
+        return null;
+      }
+
+      const formData = new FormData();
+      formData.append("photo", photoFile);
+      return (await api.post("/api/me/photo", formData)).data;
+    },
+    onSuccess: async () => {
+      setSuccessMessage("Profile photo updated.");
+      setPhotoFile(null);
+      await queryClient.invalidateQueries({ queryKey: ["me"] });
+    },
+  });
+
+  const profilePhotoUrl = resolveApiMediaUrl(meQ.data?.profile_photo_url);
+
   return (
     <div className="grid gap-6">
       <div className="intro-panel">
@@ -75,6 +96,32 @@ export default function ProfilePage() {
             <CardTitle className="font-display text-2xl">Profile details</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-5">
+            <div className="grid gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+              <Label>Profile picture</Label>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cyan-600 text-xl font-semibold text-white">
+                  {profilePhotoUrl ? (
+                    <img src={profilePhotoUrl} alt={meQ.data?.name ?? "Profile"} className="h-full w-full object-cover" />
+                  ) : (
+                    (meQ.data?.name ?? "User")
+                      .split(" ")
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .map((part: string) => part[0]?.toUpperCase())
+                      .join("") || "U"
+                  )}
+                </div>
+                <div className="grid flex-1 gap-3">
+                  <Input type="file" accept="image/*" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} className="rounded-2xl" />
+                  <div className="flex justify-start">
+                    <Button variant="secondary" onClick={() => uploadPhotoM.mutate()} disabled={!photoFile || uploadPhotoM.isPending}>
+                      {uploadPhotoM.isPending ? "Uploading..." : "Upload profile picture"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-2">
               <Label>Name</Label>
               <Input value={name} onChange={(event) => setName(event.target.value)} className="rounded-2xl" />
@@ -129,6 +176,12 @@ export default function ProfilePage() {
       {saveProfileM.error ? (
         <div className="status-bad rounded-[20px] border px-4 py-3 text-sm">
           {getErrorMessage(saveProfileM.error)}
+        </div>
+      ) : null}
+
+      {uploadPhotoM.error ? (
+        <div className="status-bad rounded-[20px] border px-4 py-3 text-sm">
+          {getErrorMessage(uploadPhotoM.error)}
         </div>
       ) : null}
 

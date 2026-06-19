@@ -118,11 +118,59 @@ class OrderController extends Controller
         ]);
 
         $market = !empty($data['market_id']) ? Market::findOrFail($data['market_id']) : null;
+        $itemIds = collect($data['items'] ?? [])
+            ->pluck('item_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($itemIds->isNotEmpty()) {
+            $itemMarketIds = Item::query()
+                ->whereIn('id', $itemIds)
+                ->pluck('market_id')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($itemMarketIds->count() > 1) {
+                return response()->json([
+                    'message' => 'Items must belong to one market.',
+                ], 422);
+            }
+
+            $itemMarketId = $itemMarketIds->first();
+
+            if ($itemMarketId) {
+                if ($market && (int) $market->id !== (int) $itemMarketId) {
+                    return response()->json([
+                        'message' => 'Items do not belong to the selected market.',
+                    ], 422);
+                }
+
+                $market ??= Market::findOrFail($itemMarketId);
+            }
+        }
+
+        if ($market && !$market->operatingStatus()['is_open']) {
+            return response()->json([
+                'message' => 'This market is currently closed.',
+                'operating_status' => $market->operatingStatus(),
+            ], 422);
+        }
 
         $itemsPayload = collect($data['items'] ?? [])->map(function (array $item) {
             if (!empty($item['item_id'])) {
                 $dbItem = Item::find($item['item_id']);
                 if ($dbItem) {
+                    $requestedQty = (int) $item['qty'];
+
+                    if (!$dbItem->is_active || $dbItem->stock_qty < $requestedQty) {
+                        abort(response()->json([
+                            'message' => "{$dbItem->name} is out of stock.",
+                        ], 422));
+                    }
+
                     $ingredients = $this->normalizeIngredients($dbItem->ingredients);
                     $comboOffer = $this->resolveComboOffer($dbItem, $item['combo_offer'] ?? null);
                     $unitPrice = $comboOffer['combo_price'] ?? (float) $item['price'];
@@ -131,12 +179,13 @@ class OrderController extends Controller
                         'item_id' => $dbItem->id,
                         'name' => $dbItem->name,
                         'sku' => $dbItem->sku,
-                        'qty' => (int) $item['qty'],
+                        'qty' => $requestedQty,
                         'unit_price' => $unitPrice,
-                        'line_total' => $unitPrice * (int) $item['qty'],
+                        'line_total' => $unitPrice * $requestedQty,
                         'ingredients' => $ingredients,
                         'removed_ingredients' => $this->normalizeRemovedIngredients($ingredients, $item['removed_ingredients'] ?? []),
                         'combo_offer' => $comboOffer,
+                        'decrement_stock' => true,
                     ];
                 }
             }
@@ -155,6 +204,7 @@ class OrderController extends Controller
                 'ingredients' => $ingredients,
                 'removed_ingredients' => $this->normalizeRemovedIngredients($ingredients, $item['removed_ingredients'] ?? []),
                 'combo_offer' => $comboOffer,
+                'decrement_stock' => false,
             ];
         });
 
@@ -221,6 +271,19 @@ class OrderController extends Controller
                     'removed_ingredients' => $item['removed_ingredients'],
                     'combo_offer' => $item['combo_offer'],
                 ]);
+
+                if (!empty($item['decrement_stock']) && $item['item_id']) {
+                    $updated = Item::query()
+                        ->where('id', $item['item_id'])
+                        ->where('stock_qty', '>=', $item['qty'])
+                        ->decrement('stock_qty', $item['qty']);
+
+                    if ($updated === 0) {
+                        abort(response()->json([
+                            'message' => "{$item['name']} is out of stock.",
+                        ], 422));
+                    }
+                }
             });
 
             OrderEvent::create([

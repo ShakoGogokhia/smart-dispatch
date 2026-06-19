@@ -22,6 +22,7 @@ const RoutesPage = lazy(() => import("@/pages/RoutesPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const PublicMarketPage = lazy(() => import("@/pages/public/PublicMarketPage"));
 const PublicMarketsPage = lazy(() => import("@/pages/public/PublicMarketsPage"));
+const PublicDiscoveryPage = lazy(() => import("@/pages/public/PublicDiscoveryPage"));
 
 function ProtectedLayout() {
   return (
@@ -59,6 +60,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={withSuspense(<PublicMarketsPage />)} />
+      <Route path="/discover/:collection" element={withSuspense(<PublicDiscoveryPage />)} />
       <Route path="/m/:marketId" element={withSuspense(<PublicMarketPage />)} />
       <Route path="/login" element={withSuspense(<LoginPage />)} />
 

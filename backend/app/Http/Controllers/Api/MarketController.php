@@ -102,6 +102,14 @@ class MarketController extends Controller
             'featured_copy' => ['nullable', 'string', 'max:255'],
             'featured_theme' => ['nullable', 'array'],
             'delivery_slots' => ['nullable', 'array'],
+            'uses_operating_schedule' => ['nullable', 'boolean'],
+            'operating_hours' => ['nullable', 'array'],
+            'operating_hours.*.day' => ['required_with:operating_hours', 'string', 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday'],
+            'operating_hours.*.enabled' => ['nullable', 'boolean'],
+            'operating_hours.*.open' => ['nullable', 'date_format:H:i'],
+            'operating_hours.*.close' => ['nullable', 'date_format:H:i'],
+            'is_manually_closed' => ['nullable', 'boolean'],
+            'manual_close_comment' => ['nullable', 'string', 'max:255', 'required_if:is_manually_closed,true'],
         ]);
 
         $market = Market::create([
@@ -113,6 +121,10 @@ class MarketController extends Controller
             'lng' => $data['lng'] ?? null,
             'is_active' => $data['is_active'] ?? true,
             'delivery_slots' => $data['delivery_slots'] ?? [],
+            'uses_operating_schedule' => $data['uses_operating_schedule'] ?? false,
+            'operating_hours' => $data['operating_hours'] ?? [],
+            'is_manually_closed' => $data['is_manually_closed'] ?? false,
+            'manual_close_comment' => ($data['is_manually_closed'] ?? false) ? ($data['manual_close_comment'] ?? null) : null,
             ...$this->featuredAttributes($data),
         ]);
 
@@ -139,7 +151,19 @@ class MarketController extends Controller
             'featured_headline' => ['nullable', 'string', 'max:120'],
             'featured_copy' => ['nullable', 'string', 'max:255'],
             'delivery_slots' => ['nullable', 'array'],
+            'uses_operating_schedule' => ['sometimes', 'boolean'],
+            'operating_hours' => ['nullable', 'array'],
+            'operating_hours.*.day' => ['required_with:operating_hours', 'string', 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday'],
+            'operating_hours.*.enabled' => ['nullable', 'boolean'],
+            'operating_hours.*.open' => ['nullable', 'date_format:H:i'],
+            'operating_hours.*.close' => ['nullable', 'date_format:H:i'],
+            'is_manually_closed' => ['sometimes', 'boolean'],
+            'manual_close_comment' => ['nullable', 'string', 'max:255', 'required_if:is_manually_closed,true'],
         ]);
+
+        if (array_key_exists('is_manually_closed', $data) && !$data['is_manually_closed']) {
+            $data['manual_close_comment'] = null;
+        }
 
         $market->update([
             ...collect($data)->except(['is_featured', 'featured_badge', 'featured_headline', 'featured_copy'])->all(),
@@ -179,6 +203,14 @@ class MarketController extends Controller
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'numeric', 'between:-180,180'],
             'delivery_slots' => ['nullable', 'array'],
+            'uses_operating_schedule' => ['sometimes', 'boolean'],
+            'operating_hours' => ['nullable', 'array'],
+            'operating_hours.*.day' => ['required_with:operating_hours', 'string', 'in:monday,tuesday,wednesday,thursday,friday,saturday,sunday'],
+            'operating_hours.*.enabled' => ['nullable', 'boolean'],
+            'operating_hours.*.open' => ['nullable', 'date_format:H:i'],
+            'operating_hours.*.close' => ['nullable', 'date_format:H:i'],
+            'is_manually_closed' => ['sometimes', 'boolean'],
+            'manual_close_comment' => ['nullable', 'string', 'max:255', 'required_if:is_manually_closed,true'],
         ];
 
         if ($isAdmin) {
@@ -191,6 +223,10 @@ class MarketController extends Controller
         }
 
         $data = $request->validate($rules);
+
+        if (array_key_exists('is_manually_closed', $data) && !$data['is_manually_closed']) {
+            $data['manual_close_comment'] = null;
+        }
 
         $market->update([
             ...collect($data)->except(['is_featured', 'featured_badge', 'featured_headline', 'featured_copy'])->all(),
@@ -338,6 +374,11 @@ public function addStaff(Request $request, Market $market)
             'banner_url' => $market->banner_url,
             'image_url' => $market->image_url,
             'delivery_slots' => $market->delivery_slots ?? [],
+            'uses_operating_schedule' => (bool) ($market->uses_operating_schedule ?? false),
+            'operating_hours' => $market->operating_hours ?? [],
+            'is_manually_closed' => (bool) ($market->is_manually_closed ?? false),
+            'manual_close_comment' => $market->manual_close_comment,
+            'operating_status' => $market->operatingStatus(),
             'approval_status' => $market->approval_status ?? 'approved',
             'promotion_starts_at' => $market->promotion_starts_at?->toDateTimeString(),
             'promotion_ends_at' => $market->promotion_ends_at?->toDateTimeString(),

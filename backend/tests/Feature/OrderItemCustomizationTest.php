@@ -142,4 +142,183 @@ class OrderItemCustomizationTest extends TestCase
         $this->assertSame('Burger Combo', $orderItem->combo_offer['name'] ?? null);
         $this->assertSame(12.5, (float) ($orderItem->combo_offer['combo_price'] ?? 0));
     }
+
+    public function test_closed_market_rejects_order_even_when_market_id_is_omitted(): void
+    {
+        $owner = User::factory()->create();
+        $customer = User::factory()->create();
+
+        $market = Market::create([
+            'name' => 'Closed Kitchen',
+            'code' => 'CLS001',
+            'owner_user_id' => $owner->id,
+            'is_active' => true,
+            'is_manually_closed' => true,
+            'manual_close_comment' => 'Closed for maintenance',
+            'address' => '1 Closed Street',
+            'lat' => 41.7151,
+            'lng' => 44.8271,
+        ]);
+
+        $item = Item::create([
+            'market_id' => $market->id,
+            'name' => 'Soup',
+            'sku' => 'SOUP-01',
+            'price' => 8.00,
+            'stock_qty' => 10,
+            'is_active' => true,
+        ]);
+
+        $response = $this->withToken($customer->createToken('closed-market')->plainTextToken)->postJson('/api/orders', [
+            'dropoff_lat' => 41.72,
+            'dropoff_lng' => 44.82,
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'qty' => 1,
+                    'price' => 8.00,
+                ],
+            ],
+        ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This market is currently closed.');
+    }
+
+    public function test_order_rejects_items_that_do_not_belong_to_selected_market(): void
+    {
+        $owner = User::factory()->create();
+        $customer = User::factory()->create();
+
+        $selectedMarket = Market::create([
+            'name' => 'Selected Kitchen',
+            'code' => 'SEL001',
+            'owner_user_id' => $owner->id,
+            'is_active' => true,
+            'address' => '1 Selected Street',
+            'lat' => 41.7151,
+            'lng' => 44.8271,
+        ]);
+
+        $otherMarket = Market::create([
+            'name' => 'Other Kitchen',
+            'code' => 'OTH001',
+            'owner_user_id' => $owner->id,
+            'is_active' => true,
+            'address' => '2 Other Street',
+            'lat' => 41.7151,
+            'lng' => 44.8271,
+        ]);
+
+        $item = Item::create([
+            'market_id' => $otherMarket->id,
+            'name' => 'Salad',
+            'sku' => 'SALAD-01',
+            'price' => 9.00,
+            'stock_qty' => 10,
+            'is_active' => true,
+        ]);
+
+        $response = $this->withToken($customer->createToken('market-mismatch')->plainTextToken)->postJson('/api/orders', [
+            'market_id' => $selectedMarket->id,
+            'dropoff_lat' => 41.72,
+            'dropoff_lng' => 44.82,
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'qty' => 1,
+                    'price' => 9.00,
+                ],
+            ],
+        ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Items do not belong to the selected market.');
+    }
+
+    public function test_order_decrements_item_stock(): void
+    {
+        $owner = User::factory()->create();
+        $customer = User::factory()->create();
+
+        $market = Market::create([
+            'name' => 'Stock Kitchen',
+            'code' => 'STK001',
+            'owner_user_id' => $owner->id,
+            'is_active' => true,
+            'address' => '1 Stock Street',
+            'lat' => 41.7151,
+            'lng' => 44.8271,
+        ]);
+
+        $item = Item::create([
+            'market_id' => $market->id,
+            'name' => 'Pasta',
+            'sku' => 'PASTA-01',
+            'price' => 12.00,
+            'stock_qty' => 3,
+            'is_active' => true,
+        ]);
+
+        $response = $this->withToken($customer->createToken('stock-decrement')->plainTextToken)->postJson('/api/orders', [
+            'market_id' => $market->id,
+            'dropoff_lat' => 41.72,
+            'dropoff_lng' => 44.82,
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'qty' => 2,
+                    'price' => 12.00,
+                ],
+            ],
+        ]);
+
+        $response->assertCreated();
+
+        $this->assertSame(1, $item->fresh()->stock_qty);
+    }
+
+    public function test_out_of_stock_item_cannot_be_ordered(): void
+    {
+        $owner = User::factory()->create();
+        $customer = User::factory()->create();
+
+        $market = Market::create([
+            'name' => 'Empty Kitchen',
+            'code' => 'EMP001',
+            'owner_user_id' => $owner->id,
+            'is_active' => true,
+            'address' => '1 Empty Street',
+            'lat' => 41.7151,
+            'lng' => 44.8271,
+        ]);
+
+        $item = Item::create([
+            'market_id' => $market->id,
+            'name' => 'Cake',
+            'sku' => 'CAKE-01',
+            'price' => 14.00,
+            'stock_qty' => 0,
+            'is_active' => true,
+        ]);
+
+        $response = $this->withToken($customer->createToken('out-of-stock')->plainTextToken)->postJson('/api/orders', [
+            'market_id' => $market->id,
+            'dropoff_lat' => 41.72,
+            'dropoff_lng' => 44.82,
+            'items' => [
+                [
+                    'item_id' => $item->id,
+                    'qty' => 1,
+                    'price' => 14.00,
+                ],
+            ],
+        ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Cake is out of stock.');
+    }
 }

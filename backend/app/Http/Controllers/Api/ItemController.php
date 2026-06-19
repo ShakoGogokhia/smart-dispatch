@@ -42,6 +42,7 @@ class ItemController extends Controller
             'discount_type' => ['nullable', 'in:none,percent,fixed'],
             'discount_value' => ['nullable', 'numeric', 'min:0'],
             'stock_qty' => ['nullable', 'integer', 'min:0'],
+            'show_stock_quantity' => ['nullable', 'boolean'],
             'is_active' => ['nullable', 'boolean'],
             'category' => ['nullable', 'string', 'max:120'],
             'image_url' => ['nullable', 'string', 'max:2048'],
@@ -70,6 +71,7 @@ class ItemController extends Controller
             'discount_type' => $data['discount_type'] ?? 'none',
             'discount_value' => $data['discount_value'] ?? 0,
             'stock_qty' => $data['stock_qty'] ?? 0,
+            'show_stock_quantity' => $data['show_stock_quantity'] ?? true,
             'is_active' => $data['is_active'] ?? true,
             'category' => $data['category'] ?? null,
             'image_url' => $data['image_url'] ?? null,
@@ -106,6 +108,7 @@ class ItemController extends Controller
             'discount_type' => ['sometimes', 'in:none,percent,fixed'],
             'discount_value' => ['sometimes', 'numeric', 'min:0'],
             'stock_qty' => ['sometimes', 'integer', 'min:0'],
+            'show_stock_quantity' => ['sometimes', 'boolean'],
             'is_active' => ['sometimes', 'boolean'],
             'category' => ['nullable', 'string', 'max:120'],
             'image_url' => ['nullable', 'string', 'max:2048'],
@@ -268,6 +271,7 @@ class ItemController extends Controller
                     'discount_type' => $row['discount_type'] ?? 'none',
                     'discount_value' => (float) ($row['discount_value'] ?? 0),
                     'stock_qty' => (int) ($row['stock_qty'] ?? 0),
+                    'show_stock_quantity' => filter_var($row['show_stock_quantity'] ?? true, FILTER_VALIDATE_BOOL),
                     'is_active' => filter_var($row['is_active'] ?? true, FILTER_VALIDATE_BOOL),
                     'category' => $row['category'] ?? null,
                     'image_url' => $row['image_url'] ?? null,
@@ -294,7 +298,7 @@ class ItemController extends Controller
             'Content-Disposition' => 'attachment; filename="market-' . $market->id . '-items.csv"',
         ];
 
-        $columns = ['name', 'sku', 'item_kind', 'category', 'price', 'discount_type', 'discount_value', 'stock_qty', 'low_stock_threshold', 'is_active', 'image_url', 'variants', 'availability_schedule', 'ingredients', 'combo_offers'];
+        $columns = ['name', 'sku', 'item_kind', 'category', 'price', 'discount_type', 'discount_value', 'stock_qty', 'show_stock_quantity', 'low_stock_threshold', 'is_active', 'image_url', 'variants', 'availability_schedule', 'ingredients', 'combo_offers'];
 
         return response()->stream(function () use ($market, $columns) {
             $handle = fopen('php://output', 'w');
@@ -310,6 +314,7 @@ class ItemController extends Controller
                     $item->discount_type,
                     $item->discount_value,
                     $item->stock_qty,
+                    $item->show_stock_quantity ? 'true' : 'false',
                     $item->low_stock_threshold,
                     $item->is_active ? 'true' : 'false',
                     $item->image_url,
@@ -351,6 +356,7 @@ class ItemController extends Controller
             'discount_type' => $item->discount_type,
             'discount_value' => $item->discount_value,
             'stock_qty' => $item->stock_qty,
+            'show_stock_quantity' => (bool) ($item->show_stock_quantity ?? true),
             'low_stock_threshold' => $item->low_stock_threshold,
             'is_active' => (bool) $item->is_active,
             'is_low_stock' => $item->stock_qty <= $item->low_stock_threshold,
