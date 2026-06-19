@@ -22,7 +22,6 @@ use App\Http\Controllers\Api\ReoptimizeController;
 use App\Http\Controllers\Api\LiveController;
 use App\Http\Controllers\Api\AnalyticsController;
 
-/* NEW */
 use App\Http\Controllers\Api\MarketController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\PromoCodeController;
@@ -36,11 +35,7 @@ use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\WorkflowApprovalController;
 use App\Http\Controllers\Api\StorefrontPromotionController;
 
-/*
-|--------------------------------------------------------------------------
-| Public Routes
-|--------------------------------------------------------------------------
-*/
+
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
@@ -56,11 +51,6 @@ Route::prefix('public')->group(function () {
     Route::get('/markets/{market}/validate-promo', [PublicMarketController::class, 'validatePromo']);
     Route::get('/items/{item}/reviews', [ReviewController::class, 'index']);
 });
-/*
-|--------------------------------------------------------------------------
-| Protected Routes (Sanctum)
-|--------------------------------------------------------------------------
-*/
 
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -70,11 +60,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/promo-codes/{promoCode}', [PromoCodeController::class, 'updateGlobal']);
     });
 
-    /*
-    |--------------------------------------------------------------------------
-    | Auth
-    |--------------------------------------------------------------------------
-    */
+
     Route::get('/me', [AuthController::class, 'me']);
     Route::patch('/me', [AuthController::class, 'updateProfile']);
     Route::post('/me/photo', [AuthController::class, 'uploadProfilePhoto']);
@@ -90,11 +76,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/workflow-approvals', [WorkflowApprovalController::class, 'store']);
     Route::post('/workflow-approvals/{workflowApproval}/review', [WorkflowApprovalController::class, 'review']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Orders
-    |--------------------------------------------------------------------------
-    */
+ 
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
@@ -107,19 +89,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/reorder', [OrderController::class, 'reorder']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Vehicles
-    |--------------------------------------------------------------------------
-    */
+
     Route::get('/vehicles', [VehicleController::class, 'index']);
     Route::post('/vehicles', [VehicleController::class, 'store']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Drivers
-    |--------------------------------------------------------------------------
-    */
     Route::get('/drivers', [DriverController::class, 'index']);
     Route::post('/drivers', [DriverController::class, 'store']);
     Route::patch('/drivers/{driver}/status', [DriverController::class, 'updateStatus']);
@@ -130,95 +103,50 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/driver/orders/{order}/picked-up', [DriverOrderController::class, 'pickedUp']);
     Route::post('/driver/orders/{order}/delivered', [DriverOrderController::class, 'delivered']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Shifts
-    |--------------------------------------------------------------------------
-    */
     Route::post('/shifts/start', [ShiftController::class, 'start']);
     Route::post('/shifts/end', [ShiftController::class, 'end']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Planning
-    |--------------------------------------------------------------------------
-    */
+
     Route::post('/planning/run', [PlanningController::class, 'run']);
     Route::post('/planning/commit', [PlanningController::class, 'commit']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Tracking
-    |--------------------------------------------------------------------------
-    */
+ 
     Route::post('/tracking/ping', [TrackingController::class, 'ping']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Route Dispatch
-    |--------------------------------------------------------------------------
-    */
+
     Route::post('/routes/{routePlan}/reassign-stop', [RouteDispatchController::class, 'reassignStop']);
     Route::patch('/routes/{routePlan}/stops/reorder', [RouteDispatchController::class, 'reorder']);
     Route::delete('/routes/{routePlan}/stops/{stop}', [RouteDispatchController::class, 'removeStop']);
     Route::post('/routes/{routePlan}/reoptimize', [ReoptimizeController::class, 'reoptimize']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Live
-    |--------------------------------------------------------------------------
-    */
+
     Route::get('/live/locations', [LiveController::class, 'locations']);
     Route::get('/live/routes', [LiveController::class, 'routes']);
     Route::get('/live/alerts', [LiveController::class, 'alerts']);
     Route::get('/live/history', [LiveController::class, 'history']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Analytics
-    |--------------------------------------------------------------------------
-    */
+
     Route::get('/analytics/summary', [AnalyticsController::class, 'summary']);
-
-    /*
-    |--------------------------------------------------------------------------
-    | Markets System
-    |--------------------------------------------------------------------------
-    */
-
-    /*
-    | Admin-only routes
-    */
     Route::middleware('role:admin')->group(function () {
 
-        // Get all users to assign as owner
         Route::get('/users', [UsersController::class, 'index']);
         Route::get('/users/owners', [UsersController::class, 'owners']);
         Route::post('/users', [UsersController::class, 'store']);
         Route::patch('/users/{user}', [UsersController::class, 'update']);
 
-        // Markets CRUD
         Route::get('/markets', [MarketController::class, 'index']);
         Route::post('/markets', [MarketController::class, 'store']);
         Route::patch('/markets/{market}', [MarketController::class, 'update']);
         Route::get('/badge-requests', [MarketBadgeRequestController::class, 'index']);
 
-        // Change owner
         Route::post('/markets/{market}/assign-owner', [MarketController::class, 'assignOwner']);
     });
 
-    /*
-    | Owner / Staff markets
-    */
     Route::get('/my/markets', [MarketController::class, 'myMarkets']);
     Route::get('/my/badge-requests', [MarketBadgeRequestController::class, 'index']);
 
-    /*
-    | Market scoped routes (owner or staff or admin)
-    */
     Route::middleware('market.access')->group(function () {
 
-        // Items
         Route::get('/markets/{market}/items', [ItemController::class, 'index']);
         Route::patch('/markets/{market}/settings', [MarketController::class, 'updateSettings']);
         Route::post('/markets/{market}/items', [ItemController::class, 'store']);
@@ -230,7 +158,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/markets/{market}/items/export-csv', [ItemController::class, 'exportCsv']);
         Route::post('/markets/{market}/logo', [MarketController::class, 'uploadLogo']);
         Route::post('/markets/{market}/banner', [MarketController::class, 'uploadBanner']);
-        // Promo Codes
         Route::get('/markets/{market}/promo-codes', [PromoCodeController::class, 'index']);
         Route::post('/markets/{market}/promo-codes', [PromoCodeController::class, 'store']);
         Route::patch('/markets/{market}/promo-codes/{promoCode}', [PromoCodeController::class, 'update']);

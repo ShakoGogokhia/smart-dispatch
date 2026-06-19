@@ -22,7 +22,6 @@ class PublicMarketController extends Controller
         return $query;
     }
 
-    // GET /api/public/markets
     public function markets()
     {
         $marketsQuery = $this->applyFeaturedOrdering(Market::query())
@@ -135,7 +134,6 @@ class PublicMarketController extends Controller
         });
     }
 
-    // GET /api/public/discovery-items
     public function discoveryItems()
     {
         $orderCounts = DB::table('order_items')
@@ -222,7 +220,6 @@ class PublicMarketController extends Controller
         ]);
     }
 
-    // GET /api/public/markets/{market}
     public function market(Market $market)
     {
         abort_unless($market->is_active, 404);
@@ -270,7 +267,6 @@ class PublicMarketController extends Controller
         ];
     }
 
-    // GET /api/public/markets/{market}/items
     public function items(Market $market)
     {
         abort_unless($market->is_active, 404);
@@ -348,13 +344,11 @@ class PublicMarketController extends Controller
             });
     }
 
-    // GET /api/public/markets/{market}/active-promo  (optional)
     public function activePromo(Market $market)
     {
         abort_unless($market->is_active, 404);
 
-        // If you have promo_codes table/model relation
-        // return first active promo for market
+       
         $promo = $market->promoCodes()
             ->activeApplicable()
             ->orderByDesc('id')

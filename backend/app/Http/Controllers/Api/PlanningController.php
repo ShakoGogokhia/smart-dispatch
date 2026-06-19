@@ -16,12 +16,11 @@ class PlanningController extends Controller
     public function run(Request $request, RouteOptimizerService $optimizer)
     {
         $data = $request->validate([
-            'date' => ['nullable','date'], // default today
+            'date' => ['nullable','date'], 
         ]);
 
         $date = isset($data['date']) ? \Carbon\Carbon::parse($data['date'])->toDateString() : now()->toDateString();
 
-        // active drivers = drivers with ACTIVE shift (today or not ended)
         $drivers = Driver::query()
             ->with('vehicle')
             ->whereHas('user')
@@ -31,7 +30,6 @@ class PlanningController extends Controller
             })
             ->get();
 
-        // unassigned orders
         $orders = Order::query()
             ->whereNull('assigned_driver_id')
             ->whereIn('status', ['NEW', 'PLANNED', 'READY_FOR_PICKUP', 'MARKET_ACCEPTED'])
@@ -98,7 +96,6 @@ class PlanningController extends Controller
                     ]);
                 }
 
-                // mark orders assigned
                 Order::whereIn('id', collect($plan['stops'])->pluck('order_id')->all())
                     ->update([
                         'status' => 'ASSIGNED',

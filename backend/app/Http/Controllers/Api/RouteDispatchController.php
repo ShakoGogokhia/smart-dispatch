@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\DB;
 
 class RouteDispatchController extends Controller
 {
-    // POST /api/routes/{routePlan}/reassign-stop
     public function reassignStop(Request $request, RoutePlan $routePlan)
     {
         $data = $request->validate([
@@ -29,7 +28,6 @@ class RouteDispatchController extends Controller
                 return response()->json(['message' => 'Cannot move completed stop'], 422);
             }
 
-            // Find or create target routePlan for that driver (same date)
             $targetRoute = RoutePlan::firstOrCreate(
                 [
                     'driver_id' => $data['to_driver_id'],
@@ -40,14 +38,11 @@ class RouteDispatchController extends Controller
                 ]
             );
 
-            // Remove stop from old route
             $stop->delete();
             $this->normalizeSequences($routePlan->id);
 
-            // Insert stop in target route
             $sequence = $data['new_sequence'] ?? (RouteStop::where('route_plan_id', $targetRoute->id)->max('sequence') ?? 0) + 1;
 
-            // Shift existing sequences down if inserting in middle
             RouteStop::where('route_plan_id', $targetRoute->id)
                 ->where('sequence', '>=', $sequence)
                 ->increment('sequence');
@@ -69,7 +64,6 @@ class RouteDispatchController extends Controller
         });
     }
 
-    // PATCH /api/routes/{routePlan}/stops/reorder
     public function reorder(Request $request, RoutePlan $routePlan)
     {
         $data = $request->validate([
@@ -79,7 +73,6 @@ class RouteDispatchController extends Controller
         ]);
 
         return DB::transaction(function () use ($routePlan, $data) {
-            // only allow reorder of PENDING stops
             $stopIds = collect($data['stops'])->pluck('order_id')->all();
 
             $existing = RouteStop::where('route_plan_id', $routePlan->id)
@@ -105,7 +98,6 @@ class RouteDispatchController extends Controller
         });
     }
 
-    // DELETE /api/routes/{routePlan}/stops/{stop}
     public function removeStop(Request $request, RoutePlan $routePlan, RouteStop $stop)
     {
         if ($stop->route_plan_id !== $routePlan->id) {
@@ -123,7 +115,6 @@ class RouteDispatchController extends Controller
             $this->normalizeSequences($routePlan->id);
             $this->refreshRouteMetrics($routePlan);
 
-            // Optional: if order was assigned only because of this stop, return it to PLANNED
             Order::where('id', $orderId)->where('status', 'ASSIGNED')->update(['status' => 'PLANNED']);
 
             return response()->json($routePlan->fresh()->load('stops.order'));

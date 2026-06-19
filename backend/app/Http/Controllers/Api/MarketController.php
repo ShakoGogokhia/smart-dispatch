@@ -128,7 +128,6 @@ class MarketController extends Controller
             ...$this->featuredAttributes($data),
         ]);
 
-        // owner role
         $owner = User::find($data['owner_user_id']);
         if ($owner && !$owner->hasRole('owner')) {
             $owner->assignRole('owner');
@@ -322,7 +321,6 @@ public function addStaff(Request $request, Market $market)
     ]);
 
     $market->users()->syncWithoutDetaching([
-        // prevent removing current owner
         (int)$data['user_id'] => ['role' => $data['role'] ?? 'staff'],
     ]);
 
@@ -331,7 +329,6 @@ public function addStaff(Request $request, Market $market)
 
     public function removeStaff(Request $request, Market $market, $userId)
     {
-    // prevent removing current owner
     if ((int)$market->owner_user_id === (int)$userId) {
         return response()->json(['message' => 'Cannot remove market owner'], 422);
     }
@@ -339,7 +336,6 @@ public function addStaff(Request $request, Market $market)
     $market->users()->detach((int)$userId);
 
     return response()->json(['message' => 'Staff removed']);
-        // prevent removing current owner
     }
 
     protected function serializeMarkets(Collection $markets)
