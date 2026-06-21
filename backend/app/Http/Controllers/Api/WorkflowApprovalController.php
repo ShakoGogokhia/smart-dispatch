@@ -28,11 +28,28 @@ class WorkflowApprovalController extends Controller
             ])
             ->latest();
 
+        if ($request->filled('status')) {
+            $query->where('status', $request->query('status'));
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->query('type'));
+        }
+
         if (!$request->user()->hasRole('admin')) {
             $query->where('requested_by', $request->user()->id);
         }
 
-        return $query->get()->map(fn (WorkflowApproval $approval) => $this->serialize($approval))->values();
+        $approvals = $query->get();
+
+        return response()->json([
+            'summary' => [
+                'pending' => (clone $query)->where('status', 'pending')->count(),
+                'approved' => (clone $query)->where('status', 'approved')->count(),
+                'rejected' => (clone $query)->where('status', 'rejected')->count(),
+            ],
+            'data' => $approvals->map(fn (WorkflowApproval $approval) => $this->serialize($approval))->values(),
+        ]);
     }
 
     public function store(Request $request)

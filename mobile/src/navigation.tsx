@@ -6,9 +6,11 @@ import type { RootStackParamList } from "@/src/types/navigation";
 import { HomeScreen, LoginScreen, PublicMarketScreen, PublicMarketsScreen, CheckoutScreen } from "@/src/screens/public";
 import { AnalyticsScreen, LiveMapScreen, OrdersScreen, RoutesScreen } from "@/src/screens/operations";
 import { DriverHubScreen } from "@/src/screens/driver";
+import { DriverEarningsScreen } from "@/src/screens/driver-earnings";
 import { DriversScreen, MarketsScreen, MyMarketsScreen, UsersScreen } from "@/src/screens/admin-core";
 import { MarketItemsScreen, MarketPromoCodesScreen, MarketSettingsScreen } from "@/src/screens/market-management";
 import { ProfileScreen } from "@/src/screens/profile";
+import { OrderTrackingScreen } from "@/src/screens/tracking";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -23,12 +25,14 @@ export function RootNavigator() {
         <Stack.Screen name="PublicMarket" component={PublicMarketScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
         <Stack.Screen name="Checkout" component={CheckoutScreen} />
+        <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Orders" component={OrdersScreen} />
         <Stack.Screen name="Routes" component={RoutesScreen} />
         <Stack.Screen name="LiveMap" component={LiveMapScreen} />
         <Stack.Screen name="Analytics" component={AnalyticsScreen} />
         <Stack.Screen name="DriverHub" component={DriverHubScreen} />
+        <Stack.Screen name="DriverEarnings" component={DriverEarningsScreen} />
         <Stack.Screen name="Drivers" component={DriversScreen} />
         <Stack.Screen name="Users" component={UsersScreen} />
         <Stack.Screen name="Markets" component={MarketsScreen} />

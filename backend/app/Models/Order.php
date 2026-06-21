@@ -32,6 +32,15 @@ class Order extends Model
         'subtotal',
         'discount_total',
         'total',
+        'payment_method',
+        'payment_status',
+        'payment_reference',
+        'payment_amount',
+        'paid_at',
+        'payment_failed_at',
+        'payment_failure_reason',
+        'refunded_amount',
+        'refunded_at',
         'status',
         'market_accepted_at',
         'ready_for_pickup_at',
@@ -69,9 +78,14 @@ class Order extends Model
         'estimated_delivery_at' => 'datetime',
         'cancellation_requested_at' => 'datetime',
         'refund_requested_at' => 'datetime',
+        'paid_at' => 'datetime',
+        'payment_failed_at' => 'datetime',
+        'refunded_at' => 'datetime',
         'driver_distance_km' => 'decimal:2',
         'driver_weather_multiplier' => 'decimal:2',
         'driver_earning_amount' => 'decimal:2',
+        'payment_amount' => 'decimal:2',
+        'refunded_amount' => 'decimal:2',
     ];
 
     public function events()
@@ -107,5 +121,10 @@ class Order extends Model
     public function declines()
     {
         return $this->hasMany(OrderDriverDecline::class);
+    }
+
+    public function supportTickets()
+    {
+        return $this->hasMany(SupportTicket::class);
     }
 }

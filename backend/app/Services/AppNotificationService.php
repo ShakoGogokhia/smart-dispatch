@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\NotificationRealtimeCreated;
 use App\Models\AppNotification;
 use App\Models\Market;
 use App\Models\Order;
@@ -12,13 +13,15 @@ class AppNotificationService
 {
     public function sendToUser(int $userId, string $type, string $title, string $message, ?array $payload = null): void
     {
-        AppNotification::create([
+        $notification = AppNotification::create([
             'user_id' => $userId,
             'type' => $type,
             'title' => $title,
             'message' => $message,
             'payload' => $payload,
         ]);
+
+        broadcast(new NotificationRealtimeCreated($notification))->toOthers();
     }
 
     public function sendToUsers(iterable $userIds, string $type, string $title, string $message, ?array $payload = null): void

@@ -9,7 +9,9 @@ export type RootStackParamList = {
   Routes: undefined;
   LiveMap: undefined;
   Analytics: undefined;
+  OrderTracking: { code?: string } | undefined;
   DriverHub: undefined;
+  DriverEarnings: undefined;
   Drivers: undefined;
   Users: undefined;
   Markets: undefined;
@@ -19,6 +21,6 @@ export type RootStackParamList = {
   MarketPromoCodes: { marketId: string };
 };
 
-export type PublicRouteName = "PublicMarkets" | "PublicMarket" | "Login" | "Home";
+export type PublicRouteName = "PublicMarkets" | "PublicMarket" | "Login" | "Home" | "OrderTracking";
 
 export type ProtectedRouteName = Exclude<keyof RootStackParamList, PublicRouteName>;

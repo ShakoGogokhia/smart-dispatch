@@ -14,6 +14,15 @@ type RouteStop = {
   status: string;
   eta?: string | null;
   dispatch_score?: number;
+  dispatch_reason?: {
+    priority?: number;
+    size?: number;
+    weather_condition?: string;
+    leg_to_pickup_km?: number;
+    leg_to_dropoff_km?: number;
+    time_window_penalty?: number;
+    ready_time_penalty?: number;
+  } | null;
   order?: { code: string; dropoff_address?: string | null };
 };
 
@@ -109,8 +118,15 @@ export default function RoutesPage() {
                         <TableCell>{stop.order?.code || stop.order_id}</TableCell>
                         <TableCell>{stop.order?.dropoff_address || "No address set"}</TableCell>
                         <TableCell>{stop.status}</TableCell>
-                        <TableCell>{formatDateTime(stop.eta)}</TableCell>
-                        <TableCell>{stop.dispatch_score ?? "-"}</TableCell>
+                      <TableCell>{formatDateTime(stop.eta)}</TableCell>
+                        <TableCell>
+                          <div className="font-semibold">{stop.dispatch_score ?? "-"}</div>
+                          {stop.dispatch_reason ? (
+                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              p{stop.dispatch_reason.priority ?? "-"} - {stop.dispatch_reason.leg_to_pickup_km ?? 0}km pickup - {stop.dispatch_reason.weather_condition ?? "clear"}
+                            </div>
+                          ) : null}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {(route.stops ?? []).length === 0 && (

@@ -18,6 +18,14 @@ import {
   Bell,
   ChevronRight,
   PanelTop,
+  History,
+  Wallet,
+  ClipboardList,
+  Boxes,
+  DatabaseZap,
+  MessageSquareText,
+  ShieldCheck,
+  ScrollText,
 } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -174,19 +182,29 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const primaryNav: NavEntry[] = isCustomerOnly
-    ? [{ label: "Orders", to: "/orders", icon: Package }]
+    ? [
+        { label: "Orders", to: "/orders", icon: Package },
+        { label: "Order history", to: "/order-history", icon: History },
+        { label: "Notifications", to: "/notifications", icon: Bell },
+      ]
     : [
         ...(isDriver ? [{ label: "Driver hub", to: "/driver-hub", icon: Truck, mobileLabel: "Driver" }] : []),
+        ...(isDriver ? [{ label: "Earnings", to: "/driver-earnings", icon: Wallet, mobileLabel: "Earn" }] : []),
         { label: "Orders", to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
+        { label: "Dispatch", to: "/dispatch", icon: ClipboardList, end: true, mobileLabel: "Dispatch" },
         { label: "Routes", to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
         { label: "Live map", to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
         { label: "Analytics", to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
+        { label: "Notifications", to: "/notifications", icon: Bell, end: true, mobileLabel: "Alerts" },
+        { label: "Support", to: "/support", icon: MessageSquareText, end: true, mobileLabel: "Help" },
       ];
 
   const marketNav: NavEntry[] = currentMarketId
     ? [
+        { label: "Dashboard", to: `/markets/${currentMarketId}/dashboard`, icon: BarChart3, end: true },
         { label: "Settings", to: `/markets/${currentMarketId}`, icon: Compass, end: true },
         { label: "Items", to: `/markets/${currentMarketId}/items`, icon: ShoppingBag, end: true },
+        { label: "Inventory alerts", to: `/markets/${currentMarketId}/inventory-alerts`, icon: Boxes, end: true },
         { label: "Promo codes", to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
       ]
     : [];
@@ -226,7 +244,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ? [
             { label: "Drivers", to: "/drivers", icon: Warehouse, end: true },
             { label: "Global promos", to: "/promo-codes", icon: Activity, end: true },
+            { label: "Approvals", to: "/approvals", icon: ShieldCheck, end: true },
+            { label: "Audit logs", to: "/audit-logs", icon: ScrollText, end: true },
             { label: "Users", to: "/users", icon: Users, end: true },
+            { label: "Demo scenario", to: "/demo-scenario", icon: DatabaseZap, end: true },
           ]
         : []),
     ];
@@ -383,7 +404,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onNavigate={() => setMobileOpen(false)}
             />
             <AppNavLink
+              entry={{ label: "Approvals", to: "/approvals", icon: ShieldCheck, end: true }}
+              onNavigate={() => setMobileOpen(false)}
+            />
+            <AppNavLink
+              entry={{ label: "Audit logs", to: "/audit-logs", icon: ScrollText, end: true }}
+              onNavigate={() => setMobileOpen(false)}
+            />
+            <AppNavLink
               entry={{ label: "Users", to: "/users", icon: Users, end: true }}
+              onNavigate={() => setMobileOpen(false)}
+            />
+            <AppNavLink
+              entry={{ label: "Demo scenario", to: "/demo-scenario", icon: DatabaseZap, end: true }}
               onNavigate={() => setMobileOpen(false)}
             />
           </div>

@@ -24,14 +24,21 @@ It is not intended to be treated as a production-ready system. Some parts are in
 - Customer registration and login
 - Saved customer profile data for checkout autofill
 - Public market browsing
+- Public order tracking by order code
 - Cart and checkout flow
+- Customer order history, receipts, reorder, refund, and rating flows
 - Order lifecycle from creation to delivery
 - Driver offer, accept, decline, pickup, and delivery flow
+- Driver shift earnings dashboard and transaction history
 - Driver payout preview and delivery earnings
 - Market item and promo management
+- Market owner dashboard with revenue, top items, ratings, promo usage, approvals, and stock warnings
+- Inventory alerts with out-of-stock hiding tools
+- Dispatch console with assignment reasoning, offer timeout, driver capacity, distance, and decline visibility
 - Admin user and driver management
 - Live dispatch and route-related views
-- Notification support
+- Notification center with filters and mark-all-read support
+- Demo scenario generator for realistic local data
 - Web and mobile interfaces connected to the same backend
 
 ## Tech Stack
@@ -97,6 +104,38 @@ npm install
 copy .env.example .env
 npx expo start
 ```
+
+## Demo Accounts
+
+After running `php artisan db:seed`, the default local accounts are:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@test.com` | `123456` |
+| Customer | `customer@test.com` | `123456` |
+| Market owner | `owner@test.com` | `123456` |
+| Driver | `driver@test.com` | `123456` |
+
+Admins can also open **Demo scenario** in the web app to create fresh demo markets, lifecycle orders, low-stock items, driver pings, route stops, reviews, and notifications.
+
+## New Demo Flows
+
+- Public tracking: open `/track` or `/track/{orderCode}` in the web app.
+- Customer history: sign in as a customer and open **Order history**.
+- Driver earnings: sign in as the driver and open **Earnings**.
+- Market dashboard: sign in as an owner/admin, select a market, then open **Dashboard**.
+- Inventory alerts: open a market and use **Inventory alerts**.
+- Dispatch insights: open **Dispatch** to inspect candidate drivers and assignment reasoning.
+- Notifications: open **Notifications** to filter unread/order/driver/market messages and mark them read.
+- Payments: customer order history can simulate mock-card or cash-on-delivery payment states.
+- Support: open **Support** for customer issues, replies, and internal/admin handling.
+- Approvals and audit: admins can open **Approvals** and **Audit logs**.
+
+## Realtime, Uploads, And CI
+
+- Backend events are broadcast for order and notification updates. By default `BROADCAST_CONNECTION=log` keeps local setup simple; configure Laravel Reverb or Pusher-compatible credentials to enable WebSocket delivery.
+- Driver proof-of-delivery photos are stored on the public filesystem disk. Run `php artisan storage:link` if local uploaded files are not visible in the browser.
+- GitHub Actions checks are included for backend tests, web build, mobile lint, and mobile TypeScript.
 
 ## Notes
 

@@ -92,11 +92,14 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
   const navEntries: NavEntry[] = isCustomerOnly
     ? [
         { label: "Browse markets", name: "PublicMarkets", icon: "storefront-outline", mobileLabel: "Markets" },
+        { label: "Track order", name: "OrderTracking", icon: "navigate-outline", mobileLabel: "Track" },
         { label: "My orders", name: "Orders", icon: "cube-outline", mobileLabel: "Orders" },
       ]
     : [
         { label: "Browse markets", name: "PublicMarkets", icon: "storefront-outline", mobileLabel: "Order" },
+        { label: "Track order", name: "OrderTracking", icon: "navigate-outline", mobileLabel: "Track" },
         ...(isDriver ? [{ label: "Driver Hub", name: "DriverHub" as const, icon: "car-outline" as const, mobileLabel: "Driver" }] : []),
+        ...(isDriver ? [{ label: "Driver Earnings", name: "DriverEarnings" as const, icon: "wallet-outline" as const, mobileLabel: "Earn" }] : []),
         { label: "Orders", name: "Orders", icon: "cube-outline", mobileLabel: "Orders" },
         { label: "Routes", name: "Routes", icon: "git-branch-outline", mobileLabel: "Routes" },
         { label: "Live Map", name: "LiveMap", icon: "map-outline", mobileLabel: "Map" },
@@ -123,7 +126,7 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
       ];
 
   const bottomNav = isCustomerOnly
-    ? navEntries.slice(0, 2)
+    ? navEntries.slice(0, 3)
     : [
         navEntries.find((entry) => entry.name === "PublicMarkets"),
         navEntries.find((entry) => entry.name === "Orders"),

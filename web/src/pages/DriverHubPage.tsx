@@ -173,6 +173,7 @@ export default function DriverHubPage() {
   const [lat, setLat] = useState("41.7151");
   const [lng, setLng] = useState("44.8271");
   const [proofSignature, setProofSignature] = useState("");
+  const [proofPhoto, setProofPhoto] = useState<File | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -219,11 +220,22 @@ export default function DriverHubPage() {
   });
 
   const actionM = useMutation({
-    mutationFn: async ({ orderId, action }: { orderId: number; action: string }) =>
-      (
+    mutationFn: async ({ orderId, action }: { orderId: number; action: string }) => {
+      if (action === "delivered" && proofPhoto) {
+        const formData = new FormData();
+        formData.append("proof_photo", proofPhoto);
+        if (proofSignature) formData.append("proof_signature_name", proofSignature);
+        return (await api.post(`/api/driver/orders/${orderId}/delivered`, formData)).data;
+      }
+
+      return (
         await api.post(`/api/driver/orders/${orderId}/${action}`, action === "delivered" ? { proof_signature_name: proofSignature || null } : undefined)
-      ).data,
-    onSuccess: refreshQueries,
+      ).data;
+    },
+    onSuccess: async () => {
+      setProofPhoto(null);
+      await refreshQueries();
+    },
   });
 
   const activeShift = feedQ.data?.driver?.active_shift;
@@ -416,6 +428,10 @@ export default function DriverHubPage() {
                 <div className="grid gap-2">
                   <Label>{text.proofSignature}</Label>
                   <Input value={proofSignature} onChange={(event) => setProofSignature(event.target.value)} className="rounded-2xl" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Proof photo</Label>
+                  <Input type="file" accept="image/*" onChange={(event) => setProofPhoto(event.target.files?.[0] ?? null)} className="rounded-2xl" />
                 </div>
               </div>
               {assignedOrders.length === 0 ? (

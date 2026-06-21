@@ -120,7 +120,10 @@ export default function MarketsPage() {
 
   const approvalsQ = useQuery({
     queryKey: ["workflow-approvals"],
-    queryFn: async () => (await api.get("/api/workflow-approvals")).data as WorkflowApproval[],
+    queryFn: async () => {
+      const payload = (await api.get("/api/workflow-approvals")).data as WorkflowApproval[] | { data: WorkflowApproval[] };
+      return Array.isArray(payload) ? payload : payload.data;
+    },
     enabled: isAdmin,
   });
 

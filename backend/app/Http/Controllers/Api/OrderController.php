@@ -10,7 +10,9 @@ use App\Models\OrderEvent;
 use App\Models\OrderItem;
 use App\Models\PromoCode;
 use App\Models\WorkflowApproval;
+use App\Events\OrderRealtimeUpdated;
 use App\Services\AppNotificationService;
+use App\Services\AuditLogService;
 use App\Services\OrderDispatchService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -23,6 +25,7 @@ class OrderController extends Controller
     public function __construct(
         private OrderDispatchService $dispatchService,
         private AppNotificationService $notifications,
+        private AuditLogService $audit,
     )
     {
     }
@@ -300,6 +303,11 @@ class OrderController extends Controller
             return $order;
         });
 
+        $this->audit->record('order.created', $request, $order, [
+            'code' => $order->code,
+            'total' => $order->total,
+        ]);
+
         if (!$market) {
             $this->dispatchService->offerOrder($order);
         }
@@ -390,6 +398,8 @@ class OrderController extends Controller
         }
 
         $order->update($data);
+        $this->audit->record('order.updated', $request, $order, $data);
+        broadcast(new OrderRealtimeUpdated($order->fresh(), 'order.updated'))->toOthers();
 
         return response()->json($this->decorateOrder($order->fresh(['market', 'customer', 'assignedDriver.user', 'offeredDriver.user', 'items'])));
     }
@@ -722,6 +732,17 @@ class OrderController extends Controller
             'subtotal' => $order->subtotal,
             'discount_total' => $order->discount_total,
             'total' => $order->total,
+            'payment' => [
+                'method' => $order->payment_method,
+                'status' => $order->payment_status,
+                'reference' => $order->payment_reference,
+                'amount' => $order->payment_amount,
+                'paid_at' => $order->paid_at?->toDateTimeString(),
+                'failed_at' => $order->payment_failed_at?->toDateTimeString(),
+                'failure_reason' => $order->payment_failure_reason,
+                'refunded_amount' => $order->refunded_amount,
+                'refunded_at' => $order->refunded_at?->toDateTimeString(),
+            ],
             'items' => $order->items->map(fn ($item) => [
                 'name' => $item->name,
                 'qty' => $item->qty,

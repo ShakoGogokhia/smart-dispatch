@@ -8,10 +8,12 @@ use App\Models\OrderDriverDecline;
 use App\Models\OrderEvent;
 use App\Models\RoutePlan;
 use App\Models\RouteStop;
+use App\Events\OrderRealtimeUpdated;
 use App\Services\AppNotificationService;
 use App\Services\DriverEarningsService;
 use App\Services\OrderDispatchService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class DriverOrderController extends Controller
 {
@@ -202,16 +204,23 @@ class DriverOrderController extends Controller
         $data = $request->validate([
             'proof_note' => ['nullable', 'string'],
             'proof_photo_url' => ['nullable', 'url'],
+            'proof_photo' => ['nullable', 'image', 'max:4096'],
             'proof_signature_name' => ['nullable', 'string', 'max:255'],
         ]);
 
         $order->loadMissing('market');
 
+        $proofPhotoUrl = $data['proof_photo_url'] ?? null;
+        if ($request->hasFile('proof_photo')) {
+            $path = $request->file('proof_photo')->store('proof-of-delivery', 'public');
+            $proofPhotoUrl = url(Storage::disk('public')->url($path));
+        }
+
         $order->update([
             'delivered_at' => now(),
             'status' => 'DELIVERED',
             'proof_of_delivery_note' => $data['proof_note'] ?? $order->proof_of_delivery_note,
-            'proof_of_delivery_photo_url' => $data['proof_photo_url'] ?? $order->proof_of_delivery_photo_url,
+            'proof_of_delivery_photo_url' => $proofPhotoUrl ?? $order->proof_of_delivery_photo_url,
             'proof_of_delivery_signature_name' => $data['proof_signature_name'] ?? $order->proof_of_delivery_signature_name,
         ]);
 
@@ -221,7 +230,7 @@ class DriverOrderController extends Controller
             'payload' => [
                 'driver_id' => $driver->id,
                 'proof_note' => $data['proof_note'] ?? null,
-                'proof_photo_url' => $data['proof_photo_url'] ?? null,
+                'proof_photo_url' => $proofPhotoUrl,
                 'proof_signature_name' => $data['proof_signature_name'] ?? null,
             ],
         ]);
@@ -256,6 +265,44 @@ class DriverOrderController extends Controller
         }
 
         $this->dispatchService->refreshPendingOrders();
+        broadcast(new OrderRealtimeUpdated($order->fresh(), 'order.delivered'))->toOthers();
+
+        return response()->json($order->fresh(['market', 'items', 'customer', 'assignedDriver.user']));
+    }
+
+    public function uploadProof(Request $request, Order $order)
+    {
+        $driver = $request->user()->driver;
+
+        if (!$driver || (int) $order->assigned_driver_id !== (int) $driver->id) {
+            return response()->json(['message' => 'This order is not assigned to you'], 422);
+        }
+
+        $data = $request->validate([
+            'proof_note' => ['nullable', 'string'],
+            'proof_photo' => ['required', 'image', 'max:4096'],
+            'proof_signature_name' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $path = $request->file('proof_photo')->store('proof-of-delivery', 'public');
+        $photoUrl = url(Storage::disk('public')->url($path));
+
+        $order->update([
+            'proof_of_delivery_note' => $data['proof_note'] ?? $order->proof_of_delivery_note,
+            'proof_of_delivery_photo_url' => $photoUrl,
+            'proof_of_delivery_signature_name' => $data['proof_signature_name'] ?? $order->proof_of_delivery_signature_name,
+        ]);
+
+        OrderEvent::create([
+            'order_id' => $order->id,
+            'type' => 'PROOF_UPLOADED',
+            'payload' => [
+                'driver_id' => $driver->id,
+                'photo_url' => $photoUrl,
+            ],
+        ]);
+
+        broadcast(new OrderRealtimeUpdated($order->fresh(), 'proof.uploaded'))->toOthers();
 
         return response()->json($order->fresh(['market', 'items', 'customer', 'assignedDriver.user']));
     }

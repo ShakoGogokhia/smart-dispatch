@@ -84,6 +84,12 @@ class RouteOptimizerService
                 'total_size' => round($bucket['size'], 2),
                 'planned_distance_km' => round($distanceKm, 2),
                 'planned_duration_min' => $durationMin,
+                'route_reason' => [
+                    'driver_capacity' => $bucket['capacity'],
+                    'planned_load' => round($bucket['size'], 2),
+                    'max_stops' => $bucket['max_stops'],
+                    'strategy' => 'priority, time window, capacity, then nearest-neighbor sequencing',
+                ],
                 'stops' => $stops,
             ];
         }
@@ -208,6 +214,17 @@ class RouteOptimizerService
                 'eta' => $cursor->toDateTimeString(),
                 'status' => 'PENDING',
                 'dispatch_score' => round($this->priorityRank($order) + $this->timeWindowPenalty($order), 2),
+                'dispatch_reason' => [
+                    'priority' => (int) ($order->priority ?? 3),
+                    'size' => (float) ($order->size ?? 1),
+                    'weather_condition' => $order->weather_condition ?? 'clear',
+                    'time_window_start' => $order->time_window_start?->toDateTimeString(),
+                    'time_window_end' => $order->time_window_end?->toDateTimeString(),
+                    'leg_to_pickup_km' => round($legToPickup, 2),
+                    'leg_to_dropoff_km' => round($legToDropoff, 2),
+                    'time_window_penalty' => round($this->timeWindowPenalty($order), 2),
+                    'ready_time_penalty' => round($this->readyTimePenalty($order), 2),
+                ],
             ];
 
             $currentLat = $dropoffLat;

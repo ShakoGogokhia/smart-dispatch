@@ -34,6 +34,16 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\WorkflowApprovalController;
 use App\Http\Controllers\Api\StorefrontPromotionController;
+use App\Http\Controllers\Api\OrderTrackingController;
+use App\Http\Controllers\Api\CustomerOrderController;
+use App\Http\Controllers\Api\DriverEarningsController;
+use App\Http\Controllers\Api\MarketDashboardController;
+use App\Http\Controllers\Api\InventoryAlertController;
+use App\Http\Controllers\Api\DispatchInsightController;
+use App\Http\Controllers\Api\DemoScenarioController;
+use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\SupportTicketController;
+use App\Http\Controllers\Api\AuditLogController;
 
 
 
@@ -50,6 +60,7 @@ Route::prefix('public')->group(function () {
     Route::get('/markets/{market}/reviews', [ReviewController::class, 'marketIndex']);
     Route::get('/markets/{market}/validate-promo', [PublicMarketController::class, 'validatePromo']);
     Route::get('/items/{item}/reviews', [ReviewController::class, 'index']);
+    Route::get('/track/{code}', [OrderTrackingController::class, 'show']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -67,7 +78,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::match(['patch', 'post'], '/me/language', [AuthController::class, 'updateLanguage']);
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::get('/support-tickets', [SupportTicketController::class, 'index']);
+    Route::post('/support-tickets', [SupportTicketController::class, 'store'])->middleware('throttle:20,1');
+    Route::post('/support-tickets/{supportTicket}/messages', [SupportTicketController::class, 'message'])->middleware('throttle:40,1');
+    Route::patch('/support-tickets/{supportTicket}', [SupportTicketController::class, 'update']);
+    Route::get('/customer/orders/history', [CustomerOrderController::class, 'history']);
+    Route::get('/customer/orders/{order}/receipt', [CustomerOrderController::class, 'receipt']);
     Route::get('/favorites', [FavoriteController::class, 'index']);
     Route::post('/favorites/toggle', [FavoriteController::class, 'toggle']);
     Route::post('/markets/{market}/reviews', [ReviewController::class, 'storeMarket']);
@@ -85,6 +103,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/mark-ready', [OrderController::class, 'markReady']);
     Route::post('/orders/{order}/request-cancel', [OrderController::class, 'requestCancel']);
     Route::post('/orders/{order}/request-refund', [OrderController::class, 'requestRefund']);
+    Route::post('/orders/{order}/payment/simulate', [PaymentController::class, 'simulate'])->middleware('throttle:20,1');
+    Route::post('/orders/{order}/payment/refund', [PaymentController::class, 'refund'])->middleware('role:admin');
     Route::post('/orders/{order}/rate', [OrderController::class, 'rate']);
     Route::post('/orders/{order}/reorder', [OrderController::class, 'reorder']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
@@ -97,18 +117,20 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/drivers', [DriverController::class, 'store']);
     Route::patch('/drivers/{driver}/status', [DriverController::class, 'updateStatus']);
     Route::get('/driver/routes/today', [DriverRouteController::class, 'today']);
+    Route::get('/driver/earnings', [DriverEarningsController::class, 'summary']);
     Route::get('/driver/orders/feed', [DriverOrderController::class, 'feed']);
     Route::post('/driver/orders/{order}/accept', [DriverOrderController::class, 'accept']);
     Route::post('/driver/orders/{order}/decline', [DriverOrderController::class, 'decline']);
     Route::post('/driver/orders/{order}/picked-up', [DriverOrderController::class, 'pickedUp']);
+    Route::post('/driver/orders/{order}/proof', [DriverOrderController::class, 'uploadProof'])->middleware('throttle:20,1');
     Route::post('/driver/orders/{order}/delivered', [DriverOrderController::class, 'delivered']);
 
     Route::post('/shifts/start', [ShiftController::class, 'start']);
     Route::post('/shifts/end', [ShiftController::class, 'end']);
 
 
-    Route::post('/planning/run', [PlanningController::class, 'run']);
-    Route::post('/planning/commit', [PlanningController::class, 'commit']);
+    Route::post('/planning/run', [PlanningController::class, 'run'])->middleware(['can:view-dispatch-console', 'throttle:dispatch-actions']);
+    Route::post('/planning/commit', [PlanningController::class, 'commit'])->middleware(['can:view-dispatch-console', 'throttle:dispatch-actions']);
 
  
     Route::post('/tracking/ping', [TrackingController::class, 'ping']);
@@ -124,6 +146,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/live/routes', [LiveController::class, 'routes']);
     Route::get('/live/alerts', [LiveController::class, 'alerts']);
     Route::get('/live/history', [LiveController::class, 'history']);
+    Route::get('/dispatch/orders/{order}/insights', [DispatchInsightController::class, 'show'])->middleware('can:view-dispatch-console');
 
 
     Route::get('/analytics/summary', [AnalyticsController::class, 'summary']);
@@ -138,6 +161,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/markets', [MarketController::class, 'store']);
         Route::patch('/markets/{market}', [MarketController::class, 'update']);
         Route::get('/badge-requests', [MarketBadgeRequestController::class, 'index']);
+        Route::post('/demo/scenario', [DemoScenarioController::class, 'store']);
+        Route::get('/audit-logs', [AuditLogController::class, 'index']);
 
         Route::post('/markets/{market}/assign-owner', [MarketController::class, 'assignOwner']);
     });
@@ -148,6 +173,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('market.access')->group(function () {
 
         Route::get('/markets/{market}/items', [ItemController::class, 'index']);
+        Route::get('/markets/{market}/dashboard', [MarketDashboardController::class, 'show']);
+        Route::get('/markets/{market}/inventory-alerts', [InventoryAlertController::class, 'index']);
+        Route::post('/markets/{market}/inventory-alerts/hide-out-of-stock', [InventoryAlertController::class, 'hideOutOfStock']);
         Route::patch('/markets/{market}/settings', [MarketController::class, 'updateSettings']);
         Route::post('/markets/{market}/items', [ItemController::class, 'store']);
         Route::patch('/markets/{market}/items/{item}', [ItemController::class, 'update']);

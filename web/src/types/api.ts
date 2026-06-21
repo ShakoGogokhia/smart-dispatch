@@ -25,6 +25,107 @@ export type NotificationRecord = {
   created_at?: string | null;
 };
 
+export type TrackingPayload = {
+  id: number;
+  code: string;
+  status: string;
+  market?: MarketLite | null;
+  pickup_address?: string | null;
+  pickup_lat?: number | string | null;
+  pickup_lng?: number | string | null;
+  dropoff_address?: string | null;
+  dropoff_lat?: number | string | null;
+  dropoff_lng?: number | string | null;
+  created_at?: string | null;
+  eta_summary?: Order["eta_summary"];
+  driver?: {
+    id: number;
+    name?: string | null;
+    status?: string | null;
+    latest_ping?: { lat: number | string; lng: number | string; updated_at?: string | null } | null;
+  } | null;
+  timeline?: Array<{ key: string; label: string; at?: string | null; done: boolean }>;
+  events?: Array<{ id: number; type: string; payload?: Record<string, unknown> | null; created_at?: string | null }>;
+};
+
+export type DriverEarningsSummary = {
+  range: { from: string; to: string };
+  driver: DriverLite & { active_shift?: { id: number; started_at?: string | null } | null };
+  totals: {
+    balance: number | string;
+    total_earned: number | string;
+    period_earnings: number;
+    period_deliveries: number;
+    average_delivery_earning: number;
+  };
+  daily: Array<{ date: string; earnings: number; deliveries: number }>;
+  transactions: Array<{
+    id: number;
+    type: string;
+    amount: number | string;
+    distance_km?: number | string | null;
+    weather_multiplier?: number | string | null;
+    weather_condition?: string | null;
+    description?: string | null;
+    created_at?: string | null;
+    payout_status?: string;
+    order?: { id: number; code: string; status?: string; dropoff_address?: string | null } | null;
+  }>;
+};
+
+export type MarketDashboardSummary = {
+  range: { from: string; to: string };
+  market: MarketLite & { operating_status?: Record<string, unknown> };
+  summary: {
+    orders: number;
+    revenue: number;
+    pending_orders: number;
+    ready_orders: number;
+    delivered_orders: number;
+    low_stock_count: number;
+    pending_approvals: number;
+  };
+  top_items: Array<{ item_id?: number | null; name: string; qty_sold: number | string; revenue: number | string }>;
+  stock_warnings: Array<{ id: number; name: string; sku: string; stock_qty: number; low_stock_threshold: number; is_active: boolean }>;
+  promo_performance: Array<{ id: number; code: string; type: string; value: number | string; uses: number; max_uses?: number | null; is_active: boolean }>;
+  rating_trends: {
+    market_average?: number | null;
+    market_count: number;
+    item_average?: number | null;
+    item_count: number;
+  };
+};
+
+export type DispatchInsight = {
+  order: Order;
+  offer_timeout_seconds: number;
+  offer_expires_at?: string | null;
+  current_offer?: { driver_id: number; driver_name?: string | null } | null;
+  declines: Array<{ driver_id: number; driver_name?: string | null; declined_at?: string | null }>;
+  candidates: Array<{
+    driver_id: number;
+    driver_name: string;
+    status: string;
+    distance_km?: number | null;
+    active_assigned_orders: number;
+    remaining_capacity: number;
+    declined: boolean;
+    eligible: boolean;
+    reasons: string[];
+  }>;
+  suggested_driver?: {
+    driver_id: number;
+    driver_name: string;
+    status: string;
+    distance_km?: number | null;
+    active_assigned_orders: number;
+    remaining_capacity: number;
+    declined: boolean;
+    eligible: boolean;
+    reasons: string[];
+  } | null;
+};
+
 export type ReviewRecord = {
   id: number;
   rating: number;
@@ -148,6 +249,17 @@ export type Order = {
     subtotal?: number | string;
     discount_total?: number | string;
     total?: number | string;
+    payment?: {
+      method?: string | null;
+      status?: string | null;
+      reference?: string | null;
+      amount?: number | string | null;
+      paid_at?: string | null;
+      failed_at?: string | null;
+      failure_reason?: string | null;
+      refunded_amount?: number | string | null;
+      refunded_at?: string | null;
+    };
     items?: Array<{
       name: string;
       qty: number;

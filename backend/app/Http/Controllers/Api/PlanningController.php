@@ -93,6 +93,8 @@ class PlanningController extends Controller
                         'sequence' => $stop['sequence'],
                         'eta' => $stop['eta'] ?? null,
                         'status' => 'PENDING',
+                        'dispatch_score' => $stop['dispatch_score'] ?? null,
+                        'dispatch_reason' => $stop['dispatch_reason'] ?? null,
                     ]);
                 }
 
