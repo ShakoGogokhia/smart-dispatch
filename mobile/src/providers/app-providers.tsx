@@ -1,19 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
+import { useColorScheme } from "react-native";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 
 import { api, setApiLanguage, setApiToken } from "@/src/lib/api";
+import { buildColors, DEFAULT_PALETTE, isPaletteId, type PaletteId, type ResolvedTheme, type ThemeColors, type ThemeMode } from "@/src/theme/tokens";
 import {
   clearStoredToken,
   getStoredLanguage,
+  getStoredPalette,
   getStoredTheme,
   getStoredToken,
   setStoredLanguage,
+  setStoredPalette,
   setStoredTheme,
   setStoredToken,
 } from "@/src/lib/storage";
 
-type ThemeMode = "light" | "dark";
 type Language = "en" | "ka";
 
 type PendingRoute = {
@@ -33,7 +36,14 @@ type AuthContextValue = {
 type PreferencesContextValue = {
   language: Language;
   setLanguage: (language: Language) => Promise<void>;
-  theme: ThemeMode;
+  /** Resolved light/dark scheme actually shown. */
+  theme: ResolvedTheme;
+  /** User choice: light, dark or follow the system. */
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => Promise<void>;
+  palette: PaletteId;
+  setPalette: (palette: PaletteId) => Promise<void>;
+  colors: ThemeColors;
   toggleTheme: () => Promise<void>;
 };
 
@@ -111,24 +121,33 @@ function AuthProvider({ children }: PropsWithChildren) {
 }
 
 function PreferencesProvider({ children }: PropsWithChildren) {
+  const systemScheme = useColorScheme();
   const [language, setLanguageState] = useState<Language>("en");
-  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [themeMode, setThemeModeState] = useState<ThemeMode>("system");
+  const [palette, setPaletteState] = useState<PaletteId>(DEFAULT_PALETTE);
 
   useEffect(() => {
     let active = true;
 
     async function load() {
-      const [storedLanguage, storedTheme] = await Promise.all([getStoredLanguage(), getStoredTheme()]);
+      const [storedLanguage, storedTheme, storedPalette] = await Promise.all([
+        getStoredLanguage(),
+        getStoredTheme(),
+        getStoredPalette(),
+      ]);
 
       if (!active) {
         return;
       }
 
       const nextLanguage = storedLanguage === "ka" ? "ka" : "en";
-      const nextTheme = storedTheme === "dark" ? "dark" : "light";
+      const nextMode: ThemeMode = storedTheme === "dark" || storedTheme === "light" ? storedTheme : "system";
 
       setLanguageState(nextLanguage);
-      setTheme(nextTheme);
+      setThemeModeState(nextMode);
+      if (isPaletteId(storedPalette)) {
+        setPaletteState(storedPalette);
+      }
       setApiLanguage(nextLanguage);
     }
 
@@ -149,20 +168,36 @@ function PreferencesProvider({ children }: PropsWithChildren) {
     });
   }, []);
 
+  const theme: ResolvedTheme = themeMode === "system" ? (systemScheme === "dark" ? "dark" : "light") : themeMode;
+  const colors = useMemo(() => buildColors(palette, theme), [palette, theme]);
+
+  const setThemeMode = useCallback(async (mode: ThemeMode) => {
+    setThemeModeState(mode);
+    await setStoredTheme(mode);
+  }, []);
+
+  const setPalette = useCallback(async (next: PaletteId) => {
+    setPaletteState(next);
+    await setStoredPalette(next);
+  }, []);
+
   const toggleTheme = useCallback(async () => {
-    const nextTheme: ThemeMode = theme === "light" ? "dark" : "light";
-    setTheme(nextTheme);
-    await setStoredTheme(nextTheme);
-  }, [theme]);
+    await setThemeMode(theme === "light" ? "dark" : "light");
+  }, [setThemeMode, theme]);
 
   const value = useMemo<PreferencesContextValue>(
     () => ({
       language,
       setLanguage,
       theme,
+      themeMode,
+      setThemeMode,
+      palette,
+      setPalette,
+      colors,
       toggleTheme,
     }),
-    [language, setLanguage, theme, toggleTheme],
+    [colors, language, palette, setLanguage, setPalette, setThemeMode, theme, themeMode, toggleTheme],
   );
 
   return <PreferencesContext.Provider value={value}>{children}</PreferencesContext.Provider>;
@@ -192,4 +227,9 @@ export function usePreferences() {
     throw new Error("usePreferences must be used inside AppProviders");
   }
   return context;
+}
+
+/** Theme tokens (same as the web app) for the active palette and light/dark mode. */
+export function useThemeColors() {
+  return usePreferences().colors;
 }

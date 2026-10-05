@@ -5,6 +5,7 @@ export const STORAGE_KEYS = {
   token: "smart-dispatch-token",
   language: "smart-dispatch-language",
   theme: "smart-dispatch-theme",
+  palette: "smart-dispatch-palette",
   activeMarketId: "smart-dispatch-active-market-id",
 } as const;
 
@@ -115,6 +116,14 @@ export async function getStoredTheme() {
 
 export async function setStoredTheme(theme: string) {
   await storage.setItem(STORAGE_KEYS.theme, theme);
+}
+
+export async function getStoredPalette() {
+  return storage.getItem(STORAGE_KEYS.palette);
+}
+
+export async function setStoredPalette(palette: string) {
+  await storage.setItem(STORAGE_KEYS.palette, palette);
 }
 
 export async function getActiveMarketId() {

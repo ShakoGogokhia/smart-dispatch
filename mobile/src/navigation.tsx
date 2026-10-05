@@ -15,10 +15,23 @@ import { OrderTrackingScreen } from "@/src/screens/tracking";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
-  const { theme } = usePreferences();
+  const { theme, colors } = usePreferences();
+  const base = theme === "dark" ? DarkTheme : DefaultTheme;
+  const navTheme = {
+    ...base,
+    colors: {
+      ...base.colors,
+      primary: colors.primary,
+      background: colors.background,
+      card: colors.card,
+      text: colors.foreground,
+      border: colors.border,
+      notification: colors.destructive,
+    },
+  };
 
   return (
-    <NavigationContainer theme={theme === "dark" ? DarkTheme : DefaultTheme}>
+    <NavigationContainer theme={navTheme}>
       <Stack.Navigator initialRouteName="Home" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="PublicMarkets" component={PublicMarketsScreen} />

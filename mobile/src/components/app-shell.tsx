@@ -1,11 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { Ionicons } from "@expo/vector-icons";
 
-import { AppButton, AppModal, HeroCard, Pill, Screen, SectionCard, SettingRow, usePalette } from "@/src/components/ui";
+import {
+  AppText,
+  Avatar,
+  Badge,
+  Button,
+  IconButton,
+  ListItem,
+  PageHeader,
+  Screen,
+  SegmentedControl,
+  Separator,
+  Sheet,
+  ThemePanel,
+  ThemeToggle,
+  useColors,
+  withAlpha,
+  type IconName,
+} from "@/src/components/ui";
 import { api } from "@/src/lib/api";
+import { formatDateTime } from "@/src/lib/format";
 import { getActiveMarketId, setActiveMarketId } from "@/src/lib/storage";
 import { useAuth, usePreferences } from "@/src/providers/app-providers";
 import { useMe } from "@/src/lib/use-me";
@@ -24,19 +43,32 @@ type NavEntry = {
   label: string;
   name: keyof RootStackParamList;
   params?: Record<string, unknown>;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: IconName;
   mobileLabel?: string;
 };
 
+type NavSection = { title: string; items: NavEntry[] };
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  owner: "Owner",
+  staff: "Staff",
+  customer: "Customer",
+  driver: "Driver",
+};
+
 export function AppShell({ children, navigation, screenName, title, subtitle, marketId }: AppShellProps) {
-  const palette = usePalette();
+  const c = useColors();
+  const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
-  const { language, setLanguage, theme, toggleTheme } = usePreferences();
+  const { language, setLanguage } = usePreferences();
   const meQ = useMe(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [storedMarketId, setStoredMarketId] = useState("");
 
-  const roles = meQ.data?.roles ?? [];
+  const user = meQ.data;
+  const roles: string[] = user?.roles ?? [];
   const isAdmin = roles.includes("admin");
   const isDriver = roles.includes("driver");
   const isCustomerOnly =
@@ -45,16 +77,19 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
   const myMarketsQ = useQuery({
     queryKey: ["my-markets-lite"],
     queryFn: async () => (await api.get("/api/my/markets")).data as MarketLite[],
-    enabled: !!meQ.data && !isCustomerOnly,
+    enabled: !!user && !isCustomerOnly,
     retry: false,
   });
 
   const notificationsQ = useQuery({
     queryKey: ["notifications"],
     queryFn: async () => (await api.get("/api/notifications")).data as NotificationRecord[],
-    enabled: !!meQ.data,
+    enabled: !!user,
     refetchInterval: 15000,
   });
+
+  const notifications = notificationsQ.data ?? [];
+  const unreadCount = notifications.filter((item) => !item.read_at).length;
 
   useEffect(() => {
     let active = true;
@@ -89,52 +124,94 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
     [currentMarketId, myMarketsQ.data],
   );
 
-  const navEntries: NavEntry[] = isCustomerOnly
+  const sections: NavSection[] = isCustomerOnly
     ? [
-        { label: "Browse markets", name: "PublicMarkets", icon: "storefront-outline", mobileLabel: "Markets" },
-        { label: "Track order", name: "OrderTracking", icon: "navigate-outline", mobileLabel: "Track" },
-        { label: "My orders", name: "Orders", icon: "cube-outline", mobileLabel: "Orders" },
+        {
+          title: "Shop",
+          items: [
+            { label: "Browse markets", name: "PublicMarkets", icon: "storefront-outline", mobileLabel: "Markets" },
+            { label: "Track order", name: "OrderTracking", icon: "navigate-outline", mobileLabel: "Track" },
+            { label: "My orders", name: "Orders", icon: "cube-outline", mobileLabel: "Orders" },
+          ],
+        },
       ]
     : [
-        { label: "Browse markets", name: "PublicMarkets", icon: "storefront-outline", mobileLabel: "Order" },
-        { label: "Track order", name: "OrderTracking", icon: "navigate-outline", mobileLabel: "Track" },
-        ...(isDriver ? [{ label: "Driver Hub", name: "DriverHub" as const, icon: "car-outline" as const, mobileLabel: "Driver" }] : []),
-        ...(isDriver ? [{ label: "Driver Earnings", name: "DriverEarnings" as const, icon: "wallet-outline" as const, mobileLabel: "Earn" }] : []),
-        { label: "Orders", name: "Orders", icon: "cube-outline", mobileLabel: "Orders" },
-        { label: "Routes", name: "Routes", icon: "git-branch-outline", mobileLabel: "Routes" },
-        { label: "Live Map", name: "LiveMap", icon: "map-outline", mobileLabel: "Map" },
-        { label: "Analytics", name: "Analytics", icon: "bar-chart-outline", mobileLabel: "Stats" },
         {
-          label: isAdmin ? "Markets" : "My Markets",
-          name: isAdmin ? "Markets" : "MyMarkets",
-          icon: "storefront-outline",
-          mobileLabel: "Markets",
+          title: "Shop",
+          items: [
+            { label: "Browse markets", name: "PublicMarkets", icon: "storefront-outline", mobileLabel: "Shop" },
+            { label: "Track order", name: "OrderTracking", icon: "navigate-outline", mobileLabel: "Track" },
+          ],
         },
-        ...(currentMarketId
+        ...(isDriver
           ? [
-              { label: "Market Settings", name: "MarketSettings" as const, params: { marketId: currentMarketId }, icon: "settings-outline" as const },
-              { label: "Market Items", name: "MarketItems" as const, params: { marketId: currentMarketId }, icon: "basket-outline" as const },
-              { label: "Promo Codes", name: "MarketPromoCodes" as const, params: { marketId: currentMarketId }, icon: "pricetag-outline" as const },
+              {
+                title: "Driver",
+                items: [
+                  { label: "Driver hub", name: "DriverHub" as const, icon: "car-outline" as const, mobileLabel: "Driver" },
+                  { label: "Earnings", name: "DriverEarnings" as const, icon: "wallet-outline" as const, mobileLabel: "Earn" },
+                ],
+              },
             ]
           : []),
+        {
+          title: "Operations",
+          items: [
+            { label: "Orders", name: "Orders", icon: "cube-outline", mobileLabel: "Orders" },
+            { label: "Routes", name: "Routes", icon: "git-branch-outline", mobileLabel: "Routes" },
+            { label: "Live map", name: "LiveMap", icon: "map-outline", mobileLabel: "Map" },
+            { label: "Analytics", name: "Analytics", icon: "bar-chart-outline", mobileLabel: "Stats" },
+          ],
+        },
+        {
+          title: currentMarket ? currentMarket.name : "Markets",
+          items: [
+            { label: isAdmin ? "All markets" : "My markets", name: isAdmin ? "Markets" : "MyMarkets", icon: "storefront-outline", mobileLabel: "Markets" },
+            ...(currentMarketId
+              ? [
+                  { label: "Products", name: "MarketItems" as const, params: { marketId: currentMarketId }, icon: "basket-outline" as const },
+                  { label: "Promo codes", name: "MarketPromoCodes" as const, params: { marketId: currentMarketId }, icon: "pricetag-outline" as const },
+                  { label: "Market settings", name: "MarketSettings" as const, params: { marketId: currentMarketId }, icon: "settings-outline" as const },
+                ]
+              : []),
+          ],
+        },
         ...(isAdmin
           ? [
-              { label: "Drivers", name: "Drivers" as const, icon: "people-circle-outline" as const },
-              { label: "Users", name: "Users" as const, icon: "people-outline" as const },
+              {
+                title: "Admin",
+                items: [
+                  { label: "Drivers", name: "Drivers" as const, icon: "people-circle-outline" as const },
+                  { label: "Users", name: "Users" as const, icon: "people-outline" as const },
+                ],
+              },
             ]
           : []),
       ];
 
-  const bottomNav = isCustomerOnly
-    ? navEntries.slice(0, 3)
-    : [
-        navEntries.find((entry) => entry.name === "PublicMarkets"),
-        navEntries.find((entry) => entry.name === "Orders"),
-        isDriver ? navEntries.find((entry) => entry.name === "DriverHub") : navEntries.find((entry) => entry.name === "Routes"),
-        navEntries.find((entry) => entry.name === "LiveMap"),
-      ].filter((entry): entry is NavEntry => Boolean(entry));
+  const navEntries = sections.flatMap((section) => section.items);
+  const find = (name: keyof RootStackParamList) => navEntries.find((entry) => entry.name === name);
+
+  const bottomNav = (
+    isCustomerOnly
+      ? [find("PublicMarkets"), find("Orders"), find("OrderTracking")]
+      : [find("PublicMarkets"), find("Orders"), isDriver ? find("DriverHub") : find("Routes"), find("LiveMap"), find(isAdmin ? "Markets" : "MyMarkets")]
+  ).filter((entry): entry is NavEntry => Boolean(entry));
+
+  function go(entry: NavEntry) {
+    setMenuOpen(false);
+    navigation.navigate(entry.name, entry.params);
+  }
+
+  function switchMarket(market: MarketLite) {
+    void setActiveMarketId(String(market.id));
+    setStoredMarketId(String(market.id));
+    setMenuOpen(false);
+    navigation.navigate("MarketItems", { marketId: String(market.id) });
+  }
 
   async function handleLogout() {
+    setMenuOpen(false);
     await signOut();
     navigation.reset({
       index: 0,
@@ -142,370 +219,195 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
     });
   }
 
+  const topBar = (
+    <View style={[styles.topBar, { backgroundColor: c.background, borderBottomColor: c.border }]}>
+      <IconButton icon="menu-outline" onPress={() => setMenuOpen(true)} accessibilityLabel="Open menu" />
+      <View style={styles.topTitle}>
+        <Text numberOfLines={1} style={[styles.topTitleText, { color: c.foreground }]}>
+          {title}
+        </Text>
+        {currentMarket ? (
+          <Text numberOfLines={1} style={[styles.topSubtitle, { color: c.mutedForeground }]}>
+            {currentMarket.name}
+          </Text>
+        ) : null}
+      </View>
+      <IconButton icon="notifications-outline" onPress={() => setNotificationsOpen(true)} accessibilityLabel={`Notifications, ${unreadCount} unread`} badge={unreadCount} />
+      <ThemeToggle />
+      <Pressable onPress={() => setMenuOpen(true)} accessibilityLabel="Account menu" style={styles.avatarButton}>
+        <Avatar name={user?.name} uri={user?.profile_photo_url} size={30} />
+      </Pressable>
+    </View>
+  );
+
   return (
-    <Screen scroll={false}>
-      <View style={styles.shellRoot}>
-        <ScrollView
-          style={styles.shellScroll}
-          contentContainerStyle={styles.shellContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View
-            style={[
-              styles.mobileTopBar,
-              {
-                backgroundColor: `${palette.surface}ee`,
-                borderColor: `${palette.border}bf`,
-                shadowColor: palette.shadow,
-              },
-            ]}
-          >
-            <Pressable onPress={() => setMenuOpen(true)} style={[styles.iconButton, { backgroundColor: palette.surfaceMuted, borderColor: `${palette.border}cc` }]}>
-              <Ionicons name="menu-outline" size={20} color={palette.text} />
-            </Pressable>
-            <View style={styles.mobileTopText}>
-              <Text style={[styles.mobileTopKicker, { color: palette.muted }]}>Workspace</Text>
-              <Text style={[styles.mobileTopTitle, { color: palette.text }]} numberOfLines={1}>
-                {title}
-              </Text>
-            </View>
-            <View style={[styles.unreadBadge, { backgroundColor: palette.dark ? `${palette.primary}24` : "#0f172a" }]}>
-              <Text style={[styles.unreadText, { color: palette.dark ? palette.primaryStrong : "#ffffff" }]}>
-                {notificationsQ.data?.filter((item) => !item.read_at).length ?? 0}
-              </Text>
-            </View>
-          </View>
-
-          <HeroCard eyebrow="Workspace" title={title} subtitle={subtitle}>
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroMeta}>
-                <Text style={[styles.metaLabel, { color: "rgba(255,255,255,0.58)" }]}>Signed in as</Text>
-                <Text style={[styles.metaValue, { color: "#ffffff" }]}>{meQ.data?.name || "Workspace member"}</Text>
-              </View>
-              <View style={styles.heroButtonGroup}>
-                <AppButton compact onPress={() => navigation.navigate("PublicMarkets")}>
-                  Order
-                </AppButton>
-                <AppButton variant="secondary" compact onPress={() => setMenuOpen(true)}>
-                  Menu
-                </AppButton>
-              </View>
-            </View>
-
-            <View style={styles.pillRow}>
-              {roles.map((role: string) => (
-                <Pill key={role}>{role}</Pill>
-              ))}
-              {currentMarket ? <Pill tone="success">{currentMarket.code}</Pill> : null}
-              <Pill tone="warning">{notificationsQ.data?.filter((item) => !item.read_at).length ?? 0} unread</Pill>
-            </View>
-          </HeroCard>
-
-          {children}
-
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
+    <Screen scroll={false} header={topBar} contentStyle={styles.noPad}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.content, { paddingBottom: 96 + insets.bottom }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <PageHeader title={title} description={subtitle} />
+        {children}
+      </ScrollView>
 
       <View
         style={[
           styles.bottomNav,
-          {
-            backgroundColor: `${palette.surface}f4`,
-            borderColor: `${palette.border}bf`,
-            shadowColor: palette.shadow,
-          },
+          { backgroundColor: withAlpha(c.background, 0.96), borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 8) },
         ]}
       >
         {bottomNav.map((entry) => {
           const active = entry.name === screenName;
-
           return (
             <Pressable
               key={entry.name}
               onPress={() => navigation.navigate(entry.name, entry.params)}
-              style={[
-                styles.bottomItem,
-                active && {
-                  backgroundColor: palette.dark ? `${palette.primary}24` : "#0f172a",
-                },
-              ]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              style={styles.bottomItem}
             >
-              <Ionicons name={entry.icon} size={17} color={active ? (palette.dark ? palette.primaryStrong : "#ffffff") : palette.muted} />
-              <Text style={[styles.bottomLabel, { color: active ? (palette.dark ? palette.primaryStrong : "#ffffff") : palette.muted }]} numberOfLines={1}>
+              <View style={[styles.bottomIconWrap, active && { backgroundColor: withAlpha(c.primary, 0.12) }]}>
+                <Ionicons name={active ? (entry.icon.replace("-outline", "") as IconName) : entry.icon} size={20} color={active ? c.primary : c.mutedForeground} />
+              </View>
+              <Text numberOfLines={1} style={[styles.bottomLabel, { color: active ? c.primary : c.mutedForeground }]}>
                 {entry.mobileLabel ?? entry.label}
               </Text>
             </Pressable>
           );
         })}
       </View>
-      </View>
 
-      <AppModal visible={menuOpen} title="Workspace" onClose={() => setMenuOpen(false)}>
-        <View style={styles.modalSection}>
-          <Text style={[styles.sectionTitle, { color: palette.text }]}>Account</Text>
-          <SectionCard>
-            <Text style={[styles.sectionLead, { color: palette.text }]}>{meQ.data?.name || "Workspace member"}</Text>
-            <Text style={[styles.sectionHint, { color: palette.muted }]}>{meQ.data?.email || "No email loaded"}</Text>
-            <View style={styles.pillRow}>
-              {roles.map((role: string) => (
-                <Pill key={role}>{role}</Pill>
-              ))}
-              {(meQ.data?.permissions ?? []).slice(0, 3).map((permission: string) => (
-                <Pill key={permission}>{permission}</Pill>
+      <Sheet visible={menuOpen} title="Smart Dispatch" description="Workspace navigation" onClose={() => setMenuOpen(false)}>
+        <Pressable
+          onPress={() => {
+            setMenuOpen(false);
+            navigation.navigate("Profile");
+          }}
+          style={[styles.accountCard, { borderColor: c.border, backgroundColor: c.card }]}
+        >
+          <Avatar name={user?.name} uri={user?.profile_photo_url} size={42} />
+          <View style={styles.flex}>
+            <AppText variant="heading" numberOfLines={1}>{user?.name || "Workspace member"}</AppText>
+            <AppText variant="caption" numberOfLines={1}>{user?.email || ""}</AppText>
+            <View style={styles.badgeRow}>
+              {roles.map((role) => (
+                <Badge key={role} tone="primary">{ROLE_LABELS[role] ?? role}</Badge>
               ))}
             </View>
-          </SectionCard>
-          <SettingRow
-            label="Profile settings"
-            value="Name, phone, address, password"
-            onPress={() => {
-              setMenuOpen(false);
-              navigation.navigate("Profile");
-            }}
-          />
-        </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={c.mutedForeground} />
+        </Pressable>
 
-        {currentMarket ? (
-          <View style={styles.modalSection}>
-            <Text style={[styles.sectionTitle, { color: palette.text }]}>Current market</Text>
-            <SectionCard>
-              <Text style={[styles.sectionLead, { color: palette.text }]}>{currentMarket.name}</Text>
-              <Text style={[styles.sectionHint, { color: palette.muted }]}>{currentMarket.code}</Text>
-            </SectionCard>
+        {!isCustomerOnly && (myMarketsQ.data?.length ?? 0) > 1 ? (
+          <View style={styles.section}>
+            <AppText variant="caption" style={styles.sectionTitle}>Switch market</AppText>
+            {(myMarketsQ.data ?? []).map((market) => (
+              <ListItem
+                key={market.id}
+                title={market.name}
+                description={market.code}
+                icon="storefront-outline"
+                active={String(market.id) === currentMarketId}
+                onPress={() => switchMarket(market)}
+              />
+            ))}
           </View>
         ) : null}
 
-        <View style={styles.modalSection}>
-          <Text style={[styles.sectionTitle, { color: palette.text }]}>Navigate</Text>
-          {navEntries.map((entry) => (
-            <SettingRow
-              key={`${entry.name}-${entry.label}`}
-              label={entry.label}
-              value={screenName === entry.name ? "Current" : undefined}
-              onPress={() => {
-                setMenuOpen(false);
-                navigation.navigate(entry.name, entry.params);
-              }}
-            />
-          ))}
-        </View>
-
-        <View style={styles.modalSection}>
-          <Text style={[styles.sectionTitle, { color: palette.text }]}>Notifications</Text>
-          <SectionCard>
-            {(notificationsQ.data ?? []).slice(0, 3).map((entry) => (
-              <View key={entry.id} style={styles.noticeRow}>
-                <Text style={[styles.sectionLead, { color: palette.text }]}>{entry.title}</Text>
-                <Text style={[styles.sectionHint, { color: palette.muted }]}>{entry.message}</Text>
-              </View>
+        {sections.map((section) => (
+          <View key={section.title} style={styles.section}>
+            <AppText variant="caption" style={styles.sectionTitle}>{section.title.toUpperCase()}</AppText>
+            {section.items.map((entry) => (
+              <ListItem
+                key={`${entry.name}-${entry.label}`}
+                title={entry.label}
+                icon={entry.icon}
+                active={screenName === entry.name}
+                onPress={() => go(entry)}
+              />
             ))}
-          </SectionCard>
-        </View>
-
-        <View style={styles.modalSection}>
-          <Text style={[styles.sectionTitle, { color: palette.text }]}>Preferences</Text>
-          <View style={styles.choiceRow}>
-            <Pressable
-              onPress={() => void setLanguage("en")}
-              style={[
-                styles.choice,
-                {
-                  backgroundColor: `${palette.surfaceMuted}ef`,
-                  borderColor: `${palette.border}bf`,
-                },
-                language === "en" && { backgroundColor: `${palette.primary}1f`, borderColor: `${palette.primary}88` },
-              ]}
-            >
-              <Text style={[styles.choiceText, { color: palette.text }]}>English</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => void setLanguage("ka")}
-              style={[
-                styles.choice,
-                {
-                  backgroundColor: `${palette.surfaceMuted}ef`,
-                  borderColor: `${palette.border}bf`,
-                },
-                language === "ka" && { backgroundColor: `${palette.primary}1f`, borderColor: `${palette.primary}88` },
-              ]}
-            >
-              <Text style={[styles.choiceText, { color: palette.text }]}>Georgian</Text>
-            </Pressable>
           </View>
-          <AppButton variant="secondary" onPress={() => void toggleTheme()}>
-            Theme: {theme}
-          </AppButton>
+        ))}
+
+        <Separator />
+
+        <View style={styles.section}>
+          <AppText variant="caption" style={styles.sectionTitle}>PREFERENCES</AppText>
+          <SegmentedControl
+            value={language}
+            onChange={(next) => void setLanguage(next)}
+            options={[
+              { value: "en", label: "English" },
+              { value: "ka", label: "ქართული" },
+            ]}
+          />
+          <ThemePanel />
         </View>
 
-        <View style={styles.modalSection}>
-          <AppButton variant="danger" onPress={() => void handleLogout()}>
-            Log out
-          </AppButton>
-        </View>
-      </AppModal>
+        <Button variant="outline" icon="log-out-outline" onPress={() => void handleLogout()} fullWidth>
+          Sign out
+        </Button>
+      </Sheet>
+
+      <Sheet visible={notificationsOpen} title="Notifications" description={`${unreadCount} unread`} onClose={() => setNotificationsOpen(false)}>
+        {notifications.length === 0 ? (
+          <View style={styles.emptyNotice}>
+            <Ionicons name="notifications-off-outline" size={22} color={c.mutedForeground} />
+            <AppText variant="small" tone="muted">You&apos;re all caught up.</AppText>
+          </View>
+        ) : (
+          notifications.slice(0, 20).map((entry) => (
+            <View key={entry.id} style={[styles.noticeRow, { borderBottomColor: c.border }]}>
+              <View style={[styles.noticeDot, { backgroundColor: entry.read_at ? "transparent" : c.primary }]} />
+              <View style={styles.flex}>
+                <AppText variant="label">{entry.title}</AppText>
+                <AppText variant="small" tone="muted">{entry.message}</AppText>
+                {entry.created_at ? <AppText variant="caption">{formatDateTime(entry.created_at, language)}</AppText> : null}
+              </View>
+            </View>
+          ))
+        )}
+      </Sheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  shellRoot: {
-    flex: 1,
-  },
-  shellScroll: {
-    flex: 1,
-  },
-  shellContent: {
-    gap: 16,
-  },
-  mobileTopBar: {
-    borderWidth: 1,
-    borderRadius: 28,
-    padding: 10,
+  flex: { flex: 1 },
+  noPad: { paddingHorizontal: 0, paddingTop: 0, paddingBottom: 0, gap: 0 },
+  topBar: {
+    height: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 4,
+    gap: 2,
+    paddingHorizontal: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth * 2,
   },
-  iconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  mobileTopText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  mobileTopKicker: {
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 1.8,
-  },
-  mobileTopTitle: {
-    marginTop: 2,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-  unreadBadge: {
-    minWidth: 40,
-    height: 40,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  unreadText: {
-    fontSize: 13,
-    fontWeight: "900",
-  },
+  topTitle: { flex: 1, minWidth: 0, paddingHorizontal: 4 },
+  topTitleText: { fontSize: 16, fontWeight: "600" },
+  topSubtitle: { fontSize: 12, marginTop: 1 },
+  avatarButton: { paddingHorizontal: 6 },
+  content: { paddingHorizontal: 16, paddingTop: 16, gap: 16 },
   bottomNav: {
     position: "absolute",
-    left: 18,
-    right: 18,
-    bottom: 12,
-    minHeight: 70,
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 8,
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: "row",
-    gap: 6,
-    shadowOpacity: 0.14,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 8,
+    borderTopWidth: StyleSheet.hairlineWidth * 2,
+    paddingTop: 6,
+    paddingHorizontal: 6,
   },
-  bottomItem: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    paddingHorizontal: 2,
-    paddingVertical: 7,
-  },
-  bottomLabel: {
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  bottomSpacer: {
-    height: 82,
-  },
-  heroTopRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    marginTop: 6,
-  },
-  heroMeta: {
-    flex: 1,
-    gap: 4,
-  },
-  heroButtonGroup: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    gap: 8,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  metaValue: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  pillRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 4,
-  },
-  modalSection: {
-    gap: 10,
-    marginBottom: 18,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  sectionLead: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  sectionHint: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  noticeRow: {
-    gap: 4,
-    marginBottom: 10,
-  },
-  choiceRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  choice: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-  choiceText: {
-    fontSize: 14,
-    fontWeight: "800",
-  },
+  bottomItem: { flex: 1, minWidth: 0, alignItems: "center", gap: 2, paddingVertical: 2 },
+  bottomIconWrap: { width: 52, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  bottomLabel: { fontSize: 11, fontWeight: "500" },
+  accountCard: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 14, padding: 12 },
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 6 },
+  section: { gap: 2 },
+  sectionTitle: { fontWeight: "600", letterSpacing: 0.6, paddingHorizontal: 10, paddingBottom: 4 },
+  emptyNotice: { alignItems: "center", gap: 8, paddingVertical: 24 },
+  noticeRow: { flexDirection: "row", gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth * 2 },
+  noticeDot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
 });

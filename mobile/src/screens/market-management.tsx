@@ -1,590 +1,132 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { ReactNode } from "react";
+import { Alert as RNAlert, StyleSheet, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppShell } from "@/src/components/app-shell";
-import { AppButton, AppModal, EmptyBlock, HelperText, InputField, LoadingBlock, Pill, SectionCard, ToggleRow, uiStyles } from "@/src/components/ui";
+import {
+  Alert,
+  AppText,
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  Chip,
+  ChipRow,
+  EmptyState,
+  IconButton,
+  Input,
+  ListItem,
+  LoadingBlock,
+  OptionCard,
+  Panel,
+  Row,
+  SegmentedControl,
+  Sheet,
+  StatCard,
+  StatGrid,
+  Switch,
+  useColors,
+  withAlpha,
+  type IconName,
+} from "@/src/components/ui";
+import {
+  buildComboPayload,
+  computeFinalPrice,
+  emptyComboOffer,
+  getComboSelectableItems,
+  getItemImageUrls,
+  getItemIngredientsPayload,
+  getStockState,
+  hasDiscount,
+  hydrateComboOffers,
+  normalizeAvailabilitySchedule,
+  normalizeVariants,
+  promoStatus,
+  resolveMediaUrl,
+  type AvailabilitySlot,
+  type ComboOffer,
+  type ItemIngredient,
+  type ItemVariant,
+  type PickedImage,
+  type StaffUser,
+} from "@/src/components/market-management/helpers";
+import { ItemFormSheet, type ItemFormTab, type ItemFormValues } from "@/src/components/market-management/item-form-sheet";
+import { ProductCard } from "@/src/components/market-management/product-card";
+import { PromoCard, PromoFormSheet, usePromoValueLabel, type PromoFormValues } from "@/src/components/market-management/promo-components";
 import { useProtectedAccess } from "@/src/hooks/use-protected-access";
 import { api } from "@/src/lib/api";
 import { getErrorMessage } from "@/src/lib/errors";
-import { formatMoney } from "@/src/lib/format";
-import type { Item, MarketLite, PromoCode, UserLite } from "@/src/types/api";
+import { toNumber } from "@/src/lib/format";
+import type { Item, MarketLite, PromoCode } from "@/src/types/api";
 import type { RootStackParamList } from "@/src/types/navigation";
 
 type MarketSettingsProps = NativeStackScreenProps<RootStackParamList, "MarketSettings">;
 type MarketItemsProps = NativeStackScreenProps<RootStackParamList, "MarketItems">;
 type MarketPromoCodesProps = NativeStackScreenProps<RootStackParamList, "MarketPromoCodes">;
 
-type StaffUser = UserLite & {
-  roles?: string[];
-  is_owner?: boolean;
-  pivot?: { role?: string };
-};
-
-type ItemVariant = {
-  name: string;
-  value: string;
-  price_delta?: number | string;
-};
-
-type AvailabilitySlot = {
-  day: string;
-  from: string;
-  to: string;
-};
-
-type ItemIngredient = {
-  name: string;
-  removable: boolean;
-};
-
-type ComboOffer = NonNullable<Item["combo_offers"]>[number];
-
-type ComboSelectableItem = {
-  id: number;
-  name: string;
-  sku: string;
-  price: string | number;
-  ingredients: ItemIngredient[];
-};
-
-const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function emptyVariant(): ItemVariant {
-  return {
-    name: "",
-    value: "",
-    price_delta: 0,
-  };
+/** Short-lived success message (the mobile stand-in for the web toasts). */
+function useFlash() {
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    if (!message) return;
+    const timer = setTimeout(() => setMessage(null), 3500);
+    return () => clearTimeout(timer);
+  }, [message]);
+  return [message, setMessage] as const;
 }
 
-function emptyIngredient(): ItemIngredient {
-  return {
-    name: "",
-    removable: false,
-  };
-}
+async function pickSingleImage(fallbackName: string): Promise<PickedImage | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    return null;
+  }
 
-function emptyComboOffer(): ComboOffer {
-  return {
-    name: "",
-    description: null,
-    combo_price: 0,
-    item_ids: [],
-    items: [],
-  };
-}
-
-function emptyScheduleSlot(): AvailabilitySlot {
-  return {
-    day: "Mon",
-    from: "",
-    to: "",
-  };
-}
-
-function normalizeVariants(variants: ItemVariant[]) {
-  const normalized = variants
-    .map((variant) => ({
-      name: variant.name.trim(),
-      value: variant.value.trim(),
-      price_delta: Number(variant.price_delta || 0),
-    }))
-    .filter((variant) => variant.name.length > 0 && variant.value.length > 0);
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function normalizeAvailabilitySchedule(slots: AvailabilitySlot[]) {
-  const normalized = slots
-    .map((slot) => ({
-      day: slot.day.trim(),
-      from: slot.from.trim(),
-      to: slot.to.trim(),
-    }))
-    .filter((slot) => slot.day && slot.from && slot.to);
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function normalizeIngredients(ingredients: ItemIngredient[]) {
-  const normalized = ingredients
-    .map((ingredient) => ({
-      name: ingredient.name.trim(),
-      removable: Boolean(ingredient.removable),
-    }))
-    .filter((ingredient) => ingredient.name.length > 0);
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function normalizeComboOffers(comboOffers: ComboOffer[]) {
-  const normalized = comboOffers
-    .map((comboOffer) => ({
-      name: comboOffer.name?.trim() || "",
-      description: comboOffer.description?.trim() ? comboOffer.description.trim() : null,
-      combo_price: Number(comboOffer.combo_price || 0),
-      item_ids: Array.from(
-        new Set(
-          (comboOffer.item_ids ?? [])
-            .map((itemId) => Number(itemId))
-            .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
-        ),
-      ),
-    }))
-    .filter((comboOffer) => comboOffer.item_ids.length > 0);
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function buildComboName(selectedItems: ComboSelectableItem[]) {
-  return selectedItems
-    .map((item) => item.name.trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(" + ");
-}
-
-function getComboSelectableItems(items: Item[], currentItemId?: number | null): ComboSelectableItem[] {
-  return items
-    .filter((item) => item.id !== currentItemId)
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      sku: item.sku,
-      price: item.price,
-      ingredients: item.ingredients ?? [],
-    }));
-}
-
-function hydrateComboOffers(comboOffers: Item["combo_offers"], items: ComboSelectableItem[]): ComboOffer[] {
-  return (comboOffers ?? []).map((comboOffer) => {
-    const selectedIds = Array.from(
-      new Set(
-        (comboOffer.item_ids ?? comboOffer.items?.map((item) => item.id) ?? [])
-          .map((itemId) => Number(itemId))
-          .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
-      ),
-    );
-    const selectedItems = selectedIds
-      .map((itemId) => items.find((item) => item.id === itemId))
-      .filter((item): item is ComboSelectableItem => Boolean(item));
-
-    return {
-      ...comboOffer,
-      name: comboOffer.name?.trim() || buildComboName(selectedItems),
-      item_ids: selectedIds,
-      items: selectedItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        sku: item.sku,
-        ingredients: item.ingredients,
-      })),
-    };
+  const result = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    quality: 0.8,
   });
-}
 
-function buildComboPayload(itemKind: "regular" | "combo", comboOffers: ComboOffer[], priceValue: string | number) {
-  const normalized = normalizeComboOffers(comboOffers) ?? [];
-
-  if (itemKind === "combo") {
-    const primaryCombo = normalized[0];
-
-    if (!primaryCombo) {
-      return null;
-    }
-
-    return [
-      {
-        ...primaryCombo,
-        name: primaryCombo.name || "Combo bundle",
-        description: null,
-        combo_price: Number(priceValue || 0),
-      },
-    ];
-  }
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function getItemIngredientsPayload(itemKind: "regular" | "combo", ingredients: ItemIngredient[]) {
-  if (itemKind === "combo") {
+  if (result.canceled || !result.assets[0]) {
     return null;
   }
 
-  return normalizeIngredients(ingredients);
+  const asset = result.assets[0];
+  return {
+    uri: asset.uri,
+    name: asset.fileName || fallbackName,
+    type: asset.mimeType || "image/jpeg",
+  };
 }
 
-function resolveMediaUrl(url?: string | null) {
-  if (!url) {
-    return null;
-  }
+/* =================================================================================================
+ * Market settings
+ * ===============================================================================================*/
 
-  try {
-    const apiOrigin = new URL(api.defaults.baseURL ?? "http://127.0.0.1:8000").origin;
-    const parsed = new URL(url, apiOrigin);
+type SettingsTab = "general" | "branding" | "team" | "danger";
 
-    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-    }
-
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
-function getItemImageUrls(item?: Item | null) {
-  const urls = [...(item?.image_urls ?? [])];
-
-  if (item?.image_url) {
-    urls.push(item.image_url);
-  }
-
-  return Array.from(
-    new Set(
-      urls
-        .map((url) => resolveMediaUrl(url))
-        .filter((url): url is string => typeof url === "string" && url.length > 0),
-    ),
-  );
-}
-
-function OptionPicker<T extends { id: number }>({
-  options,
-  value,
-  onChange,
-  getLabel,
-  emptyText = "No options available.",
-}: {
-  options: T[];
-  value: string;
-  onChange: (value: string) => void;
-  getLabel: (option: T) => string;
-  emptyText?: string;
-}) {
-  if (options.length === 0) {
-    return <HelperText>{emptyText}</HelperText>;
-  }
-
+function SummaryTile({ label, value, badge, hint }: { label: string; value: string; badge?: ReactNode; hint?: string }) {
   return (
-    <View style={uiStyles.listGap}>
-      {options.map((option) => {
-        const selected = value === String(option.id);
-        return (
-          <Pressable key={option.id} onPress={() => onChange(String(option.id))} style={[styles.optionRow, selected && styles.optionRowSelected]}>
-            <Text style={styles.optionLabel}>{getLabel(option)}</Text>
-            {selected ? <Pill tone="success">Selected</Pill> : null}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function ChoiceRow({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-}) {
-  return (
-    <View style={styles.choiceWrap}>
-      {options.map((option) => (
-        <Pressable key={option} onPress={() => onChange(option)} style={[styles.choiceChip, value === option && styles.choiceChipActive]}>
-          <Text style={styles.choiceChipText}>
-            {option === "regular"
-              ? "Regular item"
-              : option === "combo"
-                ? "Combo item"
-                : option.charAt(0).toUpperCase() + option.slice(1)}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function VariantEditor({
-  variants,
-  onChange,
-}: {
-  variants: ItemVariant[];
-  onChange: (variants: ItemVariant[]) => void;
-}) {
-  return (
-    <View style={uiStyles.listGap}>
-      {variants.map((variant, index) => (
-        <SectionCard key={`variant-${index}`} title={`Variant ${index + 1}`}>
-          <InputField
-            label="Option group"
-            value={variant.name}
-            onChangeText={(value) =>
-              onChange(variants.map((entry, entryIndex) => (entryIndex === index ? { ...entry, name: value } : entry)))
-            }
-            placeholder="Size"
-          />
-          <InputField
-            label="Option value"
-            value={variant.value}
-            onChangeText={(value) =>
-              onChange(variants.map((entry, entryIndex) => (entryIndex === index ? { ...entry, value } : entry)))
-            }
-            placeholder="Large"
-          />
-          <InputField
-            label="Price delta"
-            value={String(variant.price_delta ?? 0)}
-            onChangeText={(value) =>
-              onChange(variants.map((entry, entryIndex) => (entryIndex === index ? { ...entry, price_delta: value } : entry)))
-            }
-            placeholder="0 or 1.50"
-            keyboardType="numeric"
-          />
-          <AppButton variant="secondary" onPress={() => onChange(variants.filter((_, entryIndex) => entryIndex !== index))}>
-            Remove variant
-          </AppButton>
-        </SectionCard>
-      ))}
-
-      <AppButton variant="secondary" onPress={() => onChange([...variants, emptyVariant()])}>
-        Add variant
-      </AppButton>
-    </View>
-  );
-}
-
-function ScheduleEditor({
-  schedule,
-  onChange,
-}: {
-  schedule: AvailabilitySlot[];
-  onChange: (schedule: AvailabilitySlot[]) => void;
-}) {
-  return (
-    <View style={uiStyles.listGap}>
-      {schedule.map((slot, index) => (
-        <SectionCard key={`schedule-${index}`} title={`Schedule ${index + 1}`}>
-          <HelperText>Day</HelperText>
-          <ChoiceRow
-            value={slot.day}
-            onChange={(value) =>
-              onChange(schedule.map((entry, entryIndex) => (entryIndex === index ? { ...entry, day: value } : entry)))
-            }
-            options={SCHEDULE_DAYS}
-          />
-          <InputField
-            label="From"
-            value={slot.from}
-            onChangeText={(value) =>
-              onChange(schedule.map((entry, entryIndex) => (entryIndex === index ? { ...entry, from: value } : entry)))
-            }
-            placeholder="09:00"
-          />
-          <InputField
-            label="To"
-            value={slot.to}
-            onChangeText={(value) =>
-              onChange(schedule.map((entry, entryIndex) => (entryIndex === index ? { ...entry, to: value } : entry)))
-            }
-            placeholder="18:00"
-          />
-          <AppButton variant="secondary" onPress={() => onChange(schedule.filter((_, entryIndex) => entryIndex !== index))}>
-            Remove slot
-          </AppButton>
-        </SectionCard>
-      ))}
-
-      <AppButton variant="secondary" onPress={() => onChange([...schedule, emptyScheduleSlot()])}>
-        Add schedule row
-      </AppButton>
-    </View>
-  );
-}
-
-function IngredientEditor({
-  ingredients,
-  onChange,
-}: {
-  ingredients: ItemIngredient[];
-  onChange: (ingredients: ItemIngredient[]) => void;
-}) {
-  return (
-    <View style={uiStyles.listGap}>
-      {ingredients.map((ingredient, index) => (
-        <SectionCard key={`ingredient-${index}`} title={`Ingredient ${index + 1}`}>
-          <InputField
-            label="Ingredient name"
-            value={ingredient.name}
-            onChangeText={(value) =>
-              onChange(ingredients.map((entry, entryIndex) => (entryIndex === index ? { ...entry, name: value } : entry)))
-            }
-            placeholder="Tomato"
-          />
-          <ToggleRow
-            label="Removable"
-            value={ingredient.removable}
-            onValueChange={(value) =>
-              onChange(ingredients.map((entry, entryIndex) => (entryIndex === index ? { ...entry, removable: value } : entry)))
-            }
-          />
-          <AppButton variant="secondary" onPress={() => onChange(ingredients.filter((_, entryIndex) => entryIndex !== index))}>
-            Remove ingredient
-          </AppButton>
-        </SectionCard>
-      ))}
-
-      <AppButton variant="secondary" onPress={() => onChange([...ingredients, emptyIngredient()])}>
-        Add ingredient
-      </AppButton>
-    </View>
-  );
-}
-
-function ComboOfferEditor({
-  comboOffers,
-  availableItems,
-  itemKind,
-  onChange,
-}: {
-  comboOffers: ComboOffer[];
-  availableItems: ComboSelectableItem[];
-  itemKind: "regular" | "combo";
-  onChange: (comboOffers: ComboOffer[]) => void;
-}) {
-  const visibleComboOffers = itemKind === "combo" ? (comboOffers.length > 0 ? [comboOffers[0]] : [emptyComboOffer()]) : comboOffers;
-
-  function toggleComboItem(comboIndex: number, item: ComboSelectableItem) {
-    const sourceOffers = itemKind === "combo" ? visibleComboOffers : comboOffers;
-    const next = sourceOffers.map((entry, entryIndex) => {
-      if (entryIndex !== comboIndex) {
-        return entry;
-      }
-
-      const currentIds = new Set(entry.item_ids ?? []);
-      if (currentIds.has(item.id)) {
-        currentIds.delete(item.id);
-      } else {
-        currentIds.add(item.id);
-      }
-
-      const selectedItems = availableItems.filter((candidate) => currentIds.has(candidate.id));
-
-      return {
-        ...entry,
-        name: entry.name?.trim() || buildComboName(selectedItems),
-        item_ids: selectedItems.map((candidate) => candidate.id),
-        items: selectedItems.map((candidate) => ({
-          id: candidate.id,
-          name: candidate.name,
-          sku: candidate.sku,
-          ingredients: candidate.ingredients,
-        })),
-      };
-    });
-
-    onChange(next);
-  }
-
-  return (
-    <View style={uiStyles.listGap}>
-      {availableItems.length === 0 ? <HelperText>Add other market items first so this combo can include them.</HelperText> : null}
-
-      {visibleComboOffers.map((comboOffer, index) => (
-        <SectionCard key={`combo-offer-${index}`} title={itemKind === "combo" ? "Combo items" : `Combo ${index + 1}`}>
-          {itemKind === "regular" ? (
-            <>
-              <InputField
-                label="Combo label"
-                value={comboOffer.name ?? ""}
-                onChangeText={(value) =>
-                  onChange(comboOffers.map((entry, entryIndex) => (entryIndex === index ? { ...entry, name: value } : entry)))
-                }
-                placeholder="Auto-filled from selected items"
-              />
-              <InputField
-                label="Combo price"
-                value={String(comboOffer.combo_price ?? 0)}
-                onChangeText={(value) =>
-                  onChange(comboOffers.map((entry, entryIndex) => (entryIndex === index ? { ...entry, combo_price: Number(value || 0) } : entry)))
-                }
-                keyboardType="numeric"
-              />
-              <InputField
-                label="Description"
-                value={comboOffer.description ?? ""}
-                onChangeText={(value) =>
-                  onChange(comboOffers.map((entry, entryIndex) => (entryIndex === index ? { ...entry, description: value } : entry)))
-                }
-                placeholder="Optional short note"
-              />
-            </>
-          ) : (
-            <HelperText>This combo item uses the main price above. Only choose which market items are included.</HelperText>
-          )}
-
-          <HelperText>Select combo items from this market</HelperText>
-          <View style={uiStyles.listGap}>
-            {availableItems.map((item) => {
-              const active = (comboOffer.item_ids ?? []).includes(item.id);
-
-              return (
-                <Pressable key={`${item.id}-${index}`} onPress={() => toggleComboItem(index, item)} style={[styles.optionRow, active && styles.optionRowSelected]}>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <Text style={styles.optionLabel}>{item.name}</Text>
-                    <HelperText>
-                      {item.sku} · {formatMoney(item.price, "en")}
-                    </HelperText>
-                    {(item.ingredients ?? []).length > 0 ? (
-                      <HelperText>
-                        Ingredients: {(item.ingredients ?? []).map((ingredient) => `${ingredient.name}${ingredient.removable ? " (removable)" : ""}`).join(", ")}
-                      </HelperText>
-                    ) : null}
-                  </View>
-                  {active ? <Pill tone="success">Included</Pill> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {(comboOffer.items ?? []).length > 0 ? (
-            <View style={uiStyles.listGap}>
-              {(comboOffer.items ?? []).map((item) => (
-                <SectionCard key={`combo-item-preview-${item.id}`} title={item.name} subtitle={item.sku || "Included item"}>
-                  {(item.ingredients ?? []).length > 0 ? (
-                    <HelperText>
-                      {(item.ingredients ?? []).map((ingredient) => `${ingredient.name}${ingredient.removable ? " (removable)" : ""}`).join(", ")}
-                    </HelperText>
-                  ) : (
-                    <HelperText>No ingredients listed</HelperText>
-                  )}
-                </SectionCard>
-              ))}
-            </View>
-          ) : (
-            <HelperText>Choose at least one item for this combo.</HelperText>
-          )}
-
-          {itemKind === "regular" ? (
-            <AppButton variant="secondary" onPress={() => onChange(comboOffers.filter((_, entryIndex) => entryIndex !== index))}>
-              Remove combo
-            </AppButton>
-          ) : null}
-        </SectionCard>
-      ))}
-
-      {itemKind === "regular" ? (
-        <AppButton variant="secondary" onPress={() => onChange([...(comboOffers ?? []), emptyComboOffer()])} disabled={availableItems.length === 0}>
-          Add combo offer
-        </AppButton>
+    <Card style={styles.summaryTile}>
+      <Row justify="space-between" gap={6}>
+        <AppText variant="caption" numberOfLines={1}>
+          {label}
+        </AppText>
+        {badge}
+      </Row>
+      <AppText variant="label" numberOfLines={1}>
+        {value}
+      </AppText>
+      {hint ? (
+        <AppText variant="caption" numberOfLines={2}>
+          {hint}
+        </AppText>
       ) : null}
-    </View>
+    </Card>
   );
 }
 
@@ -592,13 +134,15 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
   const { marketId } = route.params;
   const access = useProtectedAccess("MarketSettings", { marketId });
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<"details" | "staff">("details");
+  const c = useColors();
+  const [tab, setTab] = useState<SettingsTab>("general");
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [isActive, setIsActive] = useState(true);
-  const [selectedLogo, setSelectedLogo] = useState<{ uri: string; name: string; type: string } | null>(null);
-  const [selectedBanner, setSelectedBanner] = useState<{ uri: string; name: string; type: string } | null>(null);
+  const [selectedLogo, setSelectedLogo] = useState<PickedImage | null>(null);
+  const [selectedBanner, setSelectedBanner] = useState<PickedImage | null>(null);
   const [staffUserId, setStaffUserId] = useState("");
+  const [flash, setFlash] = useFlash();
 
   const id = Number(marketId);
   const roles = access.me?.roles ?? [];
@@ -691,14 +235,14 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
   const staffQ = useQuery({
     queryKey: ["market-staff", id],
     queryFn: async () => (await api.get(`/api/markets/${id}/staff`)).data as StaffUser[],
-    enabled: access.ready && Number.isFinite(id) && tab === "staff",
+    enabled: access.ready && Number.isFinite(id) && tab === "team",
     retry: false,
   });
 
   const assignableUsersQ = useQuery({
     queryKey: ["market-assignable-users", id],
     queryFn: async () => (await api.get(`/api/markets/${id}/assignable-users`)).data as StaffUser[],
-    enabled: access.ready && Number.isFinite(id) && tab === "staff",
+    enabled: access.ready && Number.isFinite(id) && tab === "team",
     retry: false,
   });
 
@@ -720,151 +264,338 @@ export function MarketSettingsScreen({ navigation, route }: MarketSettingsProps)
   });
 
   async function pickLogo() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets[0]) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    setSelectedLogo({
-      uri: asset.uri,
-      name: asset.fileName || "market-logo.jpg",
-      type: asset.mimeType || "image/jpeg",
-    });
+    const picked = await pickSingleImage("market-logo.jpg");
+    if (picked) setSelectedLogo(picked);
   }
 
   async function pickBanner() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      return;
-    }
+    const picked = await pickSingleImage("market-banner.jpg");
+    if (picked) setSelectedBanner(picked);
+  }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
-
-    if (result.canceled || !result.assets[0]) {
-      return;
-    }
-
-    const asset = result.assets[0];
-    setSelectedBanner({
-      uri: asset.uri,
-      name: asset.fileName || "market-banner.jpg",
-      type: asset.mimeType || "image/jpeg",
-    });
+  function confirmRemoveStaff(user: StaffUser) {
+    RNAlert.alert(`Remove ${user.name}?`, "They will lose access to this market. You can add them again later.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => removeStaffM.mutate(user.id, { onSuccess: () => setFlash(`${user.name} removed`) }),
+      },
+    ]);
   }
 
   if (!access.ready) {
     return access.fallback;
   }
 
+  const saveDisabled = updateMarketM.isPending || !name.trim();
+  const saveFooter = (
+    <View style={styles.footerStack}>
+      {updateMarketM.error ? (
+        <AppText variant="caption" tone="destructive">
+          {getErrorMessage(updateMarketM.error)}
+        </AppText>
+      ) : (
+        <AppText variant="caption">Saves the name, address and storefront visibility.</AppText>
+      )}
+      <Button
+        onPress={() => updateMarketM.mutate(undefined, { onSuccess: () => setFlash("Market settings saved") })}
+        disabled={saveDisabled}
+        loading={updateMarketM.isPending}
+        fullWidth
+      >
+        {updateMarketM.isPending ? "Saving..." : "Save changes"}
+      </Button>
+    </View>
+  );
+
+  const logoSrc = selectedLogo?.uri ?? resolveMediaUrl(market?.logo_url);
+  const bannerSrc = selectedBanner?.uri ?? resolveMediaUrl(market?.banner_url);
+
   return (
-    <AppShell navigation={navigation} screenName="MarketSettings" title="Market Settings" subtitle="Edit market details, upload a logo, and manage assigned staff.">
+    <AppShell
+      navigation={navigation}
+      screenName="MarketSettings"
+      marketId={marketId}
+      title={market?.name ?? "Market settings"}
+      subtitle="Manage this market's details, branding, team and visibility."
+    >
+      <Row wrap gap={8}>
+        <Button variant="outline" size="sm" icon="cube-outline" onPress={() => navigation.navigate("MarketItems", { marketId })}>
+          Products
+        </Button>
+        <Button variant="outline" size="sm" icon="pricetags-outline" onPress={() => navigation.navigate("MarketPromoCodes", { marketId })}>
+          Promo codes
+        </Button>
+      </Row>
+
+      {marketsQ.isError ? <Alert tone="destructive" title="Could not load markets" description={getErrorMessage(marketsQ.error)} /> : null}
+
       {marketsQ.isLoading ? (
-        <LoadingBlock message="Loading market..." />
+        <LoadingBlock message="Loading market..." rows={4} />
       ) : !market ? (
-        <EmptyBlock message="Market not found in your accessible list." />
+        <EmptyState
+          icon="storefront-outline"
+          title="Market not found"
+          description="This market is not in your accessible list. It may have been removed, or you may not have access to it."
+        />
       ) : (
         <>
-          <SectionCard title={market.name} subtitle={`${market.code} • ${market.address || "No address set"}`}>
-            <View style={styles.row}>
-              <AppButton variant={tab === "details" ? "primary" : "secondary"} compact onPress={() => setTab("details")}>
-                Details
-              </AppButton>
-              <AppButton variant={tab === "staff" ? "primary" : "secondary"} compact onPress={() => setTab("staff")}>
-                Staff
-              </AppButton>
-              <AppButton compact variant="secondary" onPress={() => navigation.navigate("MarketItems", { marketId })}>
-                Items
-              </AppButton>
-              <AppButton compact variant="secondary" onPress={() => navigation.navigate("MarketPromoCodes", { marketId })}>
-                Promos
-              </AppButton>
-            </View>
-          </SectionCard>
+          <View style={styles.tileGrid}>
+            <SummaryTile label="Market code" value={market.code} />
+            <SummaryTile
+              label="Visibility"
+              value={market.is_active === false ? "Hidden from marketplace" : "Publicly live"}
+              badge={<Badge tone={market.is_active === false ? "neutral" : "success"} dot>{market.is_active === false ? "Hidden" : "Live"}</Badge>}
+            />
+            <SummaryTile label="Promotion" value={market.is_featured ? market.featured_badge || "Promoted" : "Standard placement"} />
+            <SummaryTile label="Catalog" value={`${market.active_items_count ?? 0} visible items`} />
+          </View>
 
-          {tab === "details" ? (
-            <SectionCard title="Market details">
-              <InputField label="Name" value={name} onChangeText={setName} placeholder="Market name" />
-              <InputField label="Address" value={address} onChangeText={setAddress} placeholder="Address" multiline />
-              <ToggleRow label="Active" value={isActive} onValueChange={setIsActive} />
-              {updateMarketM.error ? <HelperText tone="danger">{getErrorMessage(updateMarketM.error)}</HelperText> : null}
-              <AppButton onPress={() => updateMarketM.mutate()} disabled={updateMarketM.isPending || !name.trim()}>
-                {updateMarketM.isPending ? "Saving..." : "Save changes"}
-              </AppButton>
-              <HelperText>{market.logo_url ? "A logo already exists on the backend." : "Upload a market logo here."}</HelperText>
-              {resolveMediaUrl(market.logo_url) ? <Image source={resolveMediaUrl(market.logo_url)} style={styles.marketBrandLogo} contentFit="cover" /> : null}
-              <AppButton variant="secondary" onPress={() => void pickLogo()}>
-                Choose logo
-              </AppButton>
-              {selectedLogo ? <HelperText>{selectedLogo.name}</HelperText> : null}
-              {uploadLogoM.error ? <HelperText tone="danger">{getErrorMessage(uploadLogoM.error)}</HelperText> : null}
-              <AppButton onPress={() => uploadLogoM.mutate()} disabled={!selectedLogo || uploadLogoM.isPending}>
-                {uploadLogoM.isPending ? "Uploading..." : "Upload logo"}
-              </AppButton>
+          {flash ? <Alert tone="success" title={flash} /> : null}
 
-              <HelperText>{market.banner_url ? "A banner already exists on the backend." : "Upload a market banner here."}</HelperText>
-              {resolveMediaUrl(market.banner_url) ? <Image source={resolveMediaUrl(market.banner_url)} style={styles.marketBannerPreview} contentFit="cover" /> : null}
-              <AppButton variant="secondary" onPress={() => void pickBanner()}>
-                Choose banner
-              </AppButton>
-              {selectedBanner ? <HelperText>{selectedBanner.name}</HelperText> : null}
-              {uploadBannerM.error ? <HelperText tone="danger">{getErrorMessage(uploadBannerM.error)}</HelperText> : null}
-              <AppButton onPress={() => uploadBannerM.mutate()} disabled={!selectedBanner || uploadBannerM.isPending}>
-                {uploadBannerM.isPending ? "Uploading..." : "Upload banner"}
-              </AppButton>
-            </SectionCard>
-          ) : (
+          <SegmentedControl<SettingsTab>
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "general", label: "General" },
+              { value: "branding", label: "Branding" },
+              { value: "team", label: "Team" },
+              { value: "danger", label: "Danger" },
+            ]}
+          />
+
+          {tab === "general" ? (
+            <Card title="General" description="The market name and location shown to customers and used for deliveries." footer={saveFooter}>
+              <Input label="Name" value={name} onChangeText={setName} placeholder="Market name" error={!name.trim() ? "A name is required." : null} />
+              <Input label="Code" value={market.code} onChangeText={() => undefined} editable={false} helper="The market code can only be changed by an admin." />
+              <Input label="Address" value={address} onChangeText={setAddress} placeholder="Address" multiline icon="location-outline" />
+            </Card>
+          ) : null}
+
+          {tab === "branding" ? (
             <>
-              <SectionCard title="Add staff">
-                <OptionPicker
-                  options={assignableUsersQ.data ?? []}
-                  value={staffUserId}
-                  onChange={setStaffUserId}
-                  getLabel={(user) => `${user.name} (${user.email})${user.is_owner ? " - owner" : ""}`}
-                  emptyText="No assignable users available."
-                />
-                {addStaffM.error ? <HelperText tone="danger">{getErrorMessage(addStaffM.error)}</HelperText> : null}
-                <AppButton onPress={() => addStaffM.mutate()} disabled={addStaffM.isPending || !staffUserId}>
-                  {addStaffM.isPending ? "Adding..." : "Add staff"}
-                </AppButton>
-              </SectionCard>
+              <Card
+                title="Market logo"
+                description="A square image works best. It appears on the storefront and in market lists."
+                footer={
+                  <Button
+                    icon="cloud-upload-outline"
+                    onPress={() => uploadLogoM.mutate(undefined, { onSuccess: () => setFlash("Logo uploaded") })}
+                    disabled={!selectedLogo}
+                    loading={uploadLogoM.isPending}
+                    fullWidth
+                  >
+                    {uploadLogoM.isPending ? "Uploading..." : "Upload logo"}
+                  </Button>
+                }
+              >
+                <Row gap={14}>
+                  <View style={[styles.logo, { backgroundColor: c.muted, borderColor: c.border }]}>
+                    {logoSrc ? <Image source={logoSrc} style={styles.fill} contentFit="cover" /> : <Ionicons name="storefront-outline" size={24} color={c.mutedForeground} />}
+                  </View>
+                  <View style={[styles.flex, styles.gap6]}>
+                    <Button variant="outline" size="sm" icon="image-outline" onPress={() => void pickLogo()} style={styles.selfStart}>
+                      Choose image
+                    </Button>
+                    <AppText variant="caption" numberOfLines={2}>
+                      {selectedLogo ? `Previewing ${selectedLogo.name}. Upload to publish it.` : market.logo_url ? "A logo is already set." : "No logo yet."}
+                    </AppText>
+                  </View>
+                </Row>
+                {uploadLogoM.error ? <Alert tone="destructive" title="Logo upload failed" description={getErrorMessage(uploadLogoM.error)} /> : null}
+              </Card>
 
-              <SectionCard title="Staff list">
-                {staffQ.isLoading ? (
-                  <LoadingBlock message="Loading staff..." />
-                ) : (staffQ.data ?? []).length === 0 ? (
-                  <HelperText>No staff loaded.</HelperText>
+              <Card
+                title="Market banner"
+                description="A wide image shown at the top of the storefront and on market cards."
+                footer={
+                  <Button
+                    icon="cloud-upload-outline"
+                    onPress={() => uploadBannerM.mutate(undefined, { onSuccess: () => setFlash("Banner uploaded") })}
+                    disabled={!selectedBanner}
+                    loading={uploadBannerM.isPending}
+                    fullWidth
+                  >
+                    {uploadBannerM.isPending ? "Uploading..." : "Upload banner"}
+                  </Button>
+                }
+              >
+                <View style={[styles.banner, { backgroundColor: c.muted, borderColor: c.border }]}>
+                  {bannerSrc ? <Image source={bannerSrc} style={styles.fill} contentFit="cover" /> : <Ionicons name="image-outline" size={26} color={c.mutedForeground} />}
+                </View>
+                <Row justify="space-between" gap={8}>
+                  <AppText variant="caption" numberOfLines={2} style={styles.flex}>
+                    {selectedBanner ? `Previewing ${selectedBanner.name}. Upload to publish it.` : market.banner_url ? "A banner is already set." : "No banner yet."}
+                  </AppText>
+                  <Button variant="outline" size="sm" icon="image-outline" onPress={() => void pickBanner()}>
+                    Choose image
+                  </Button>
+                </Row>
+                {uploadBannerM.error ? <Alert tone="destructive" title="Banner upload failed" description={getErrorMessage(uploadBannerM.error)} /> : null}
+              </Card>
+
+              <View style={styles.gap6}>
+                <AppText variant="label">Storefront preview</AppText>
+                <AppText variant="caption">How your market card looks to customers, including unsaved images.</AppText>
+              </View>
+              <Card padded={false}>
+                <View style={[styles.previewBanner, { backgroundColor: c.muted }]}>
+                  {bannerSrc ? <Image source={bannerSrc} style={styles.fill} contentFit="cover" /> : null}
+                  {market.is_featured ? (
+                    <View style={styles.previewBadge}>
+                      <Badge tone="warning" variant="solid" icon="sparkles-outline">
+                        {market.featured_badge || "Promoted"}
+                      </Badge>
+                    </View>
+                  ) : null}
+                </View>
+                <Row align="flex-start" gap={12} style={styles.previewBody}>
+                  <View style={[styles.previewLogo, { backgroundColor: c.card, borderColor: c.card }]}>
+                    {logoSrc ? <Image source={logoSrc} style={styles.fill} contentFit="cover" /> : <Ionicons name="storefront-outline" size={20} color={c.mutedForeground} />}
+                  </View>
+                  <View style={styles.flex}>
+                    <AppText variant="heading" numberOfLines={1}>
+                      {name || market.name}
+                    </AppText>
+                    <AppText variant="caption" numberOfLines={1}>
+                      {address || "No address yet"}
+                    </AppText>
+                  </View>
+                </Row>
+                <View style={styles.previewFooter}>
+                  <AppText variant="small" tone="muted" numberOfLines={2}>
+                    {market.featured_headline || `Discover ${name || market.name}`}
+                  </AppText>
+                  <AppText variant="caption">{market.active_items_count ?? 0} items available</AppText>
+                </View>
+              </Card>
+            </>
+          ) : null}
+
+          {tab === "team" ? (
+            <>
+              <Card
+                title="Add staff"
+                description="Select a user and attach them to this market as staff."
+                footer={
+                  <Button
+                    icon="person-add-outline"
+                    onPress={() => addStaffM.mutate(undefined, { onSuccess: () => setFlash("Staff member added") })}
+                    disabled={!staffUserId}
+                    loading={addStaffM.isPending}
+                    fullWidth
+                  >
+                    {addStaffM.isPending ? "Adding..." : "Add staff"}
+                  </Button>
+                }
+              >
+                {assignableUsersQ.isLoading ? (
+                  <LoadingBlock rows={2} message="Loading users..." />
+                ) : assignableUsersQ.isError ? (
+                  <Alert tone="destructive" title="Failed to load available users." />
+                ) : (assignableUsersQ.data ?? []).length === 0 ? (
+                  <EmptyState compact icon="people-outline" title="No assignable users available." />
                 ) : (
-                  <View style={uiStyles.listGap}>
-                    {(staffQ.data ?? []).map((user) => (
-                      <SectionCard key={user.id} title={user.name} subtitle={user.email} right={<Pill>{user.pivot?.role ?? "-"}</Pill>}>
-                        <AppButton variant="danger" compact onPress={() => removeStaffM.mutate(user.id)}>
-                          Remove
-                        </AppButton>
-                      </SectionCard>
+                  <View style={styles.gap8}>
+                    {(assignableUsersQ.data ?? []).map((user) => (
+                      <OptionCard
+                        key={user.id}
+                        selected={staffUserId === String(user.id)}
+                        onPress={() => setStaffUserId(String(user.id))}
+                        title={user.name}
+                        description={user.email}
+                        right={user.is_owner ? <Badge tone="info">Owner</Badge> : undefined}
+                      />
                     ))}
                   </View>
                 )}
-              </SectionCard>
+                {addStaffM.error ? <Alert tone="destructive" title="Could not add staff" description={getErrorMessage(addStaffM.error)} /> : null}
+              </Card>
+
+              <Card title="Team" description="People who can manage orders and products for this market.">
+                {staffQ.isError ? <Alert tone="destructive" title="Could not load staff" description={getErrorMessage(staffQ.error)} /> : null}
+                {staffQ.isLoading ? (
+                  <LoadingBlock message="Loading staff..." rows={2} />
+                ) : (staffQ.data ?? []).length === 0 ? (
+                  <EmptyState compact icon="people-outline" title="No staff assigned yet" description="Add a user above to give them access to this market." />
+                ) : (
+                  <View style={styles.gap8}>
+                    {(staffQ.data ?? []).map((user) => (
+                      <Panel key={user.id}>
+                        <Row gap={10}>
+                          <Avatar name={user.name} size={36} />
+                          <View style={styles.flex}>
+                            <AppText variant="label" numberOfLines={1}>
+                              {user.name}
+                            </AppText>
+                            <AppText variant="caption" numberOfLines={1}>
+                              {user.email}
+                            </AppText>
+                          </View>
+                          <Badge>{user.pivot?.role ?? "staff"}</Badge>
+                        </Row>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          icon="trash-outline"
+                          onPress={() => confirmRemoveStaff(user)}
+                          disabled={removeStaffM.isPending}
+                          style={styles.selfEnd}
+                        >
+                          Remove
+                        </Button>
+                      </Panel>
+                    ))}
+                  </View>
+                )}
+                {removeStaffM.error ? <Alert tone="destructive" title="Could not remove staff" description={getErrorMessage(removeStaffM.error)} /> : null}
+              </Card>
             </>
-          )}
+          ) : null}
+
+          {tab === "danger" ? (
+            <Card title="Danger zone" description="Changes here affect whether customers can find this market at all." footer={saveFooter} style={{ borderColor: withAlpha(c.destructive, 0.4) }}>
+              <View style={[styles.dangerBox, { borderColor: withAlpha(c.destructive, 0.3), backgroundColor: withAlpha(c.destructive, 0.05) }]}>
+                <View style={styles.flex}>
+                  <AppText variant="label">Storefront active</AppText>
+                  <AppText variant="caption">Controls public availability. Turning this off hides the market from the marketplace.</AppText>
+                </View>
+                <Switch value={isActive} onValueChange={setIsActive} />
+              </View>
+            </Card>
+          ) : null}
         </>
       )}
     </AppShell>
   );
 }
+
+/* =================================================================================================
+ * Products
+ * ===============================================================================================*/
+
+type StatusFilter = "all" | "active" | "hidden";
+type StockFilter = "all" | "in" | "low" | "out" | "attention";
+type PriceFilter = "all" | "discounted";
+type SortKey = "default" | "name" | "price-asc" | "price-desc" | "stock-asc" | "newest";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "default", label: "Default order" },
+  { value: "name", label: "Name A-Z" },
+  { value: "price-asc", label: "Price: low to high" },
+  { value: "price-desc", label: "Price: high to low" },
+  { value: "stock-asc", label: "Stock: lowest first" },
+  { value: "newest", label: "Newest first" },
+];
+
+const STOCK_OPTIONS: { value: StockFilter; label: string }[] = [
+  { value: "all", label: "Any stock" },
+  { value: "in", label: "In stock" },
+  { value: "attention", label: "Low or out" },
+  { value: "low", label: "Low stock" },
+  { value: "out", label: "Out of stock" },
+];
 
 export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
   const { marketId } = route.params;
@@ -883,7 +614,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
   const [lowStockThreshold, setLowStockThreshold] = useState("5");
   const [createVariants, setCreateVariants] = useState<ItemVariant[]>([]);
   const [createSchedule, setCreateSchedule] = useState<AvailabilitySlot[]>([]);
-  const [createSelectedImages, setCreateSelectedImages] = useState<{ uri: string; name: string; type: string }[]>([]);
+  const [createSelectedImages, setCreateSelectedImages] = useState<PickedImage[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [createItemKind, setCreateItemKind] = useState<"regular" | "combo">("regular");
   const [createIngredients, setCreateIngredients] = useState<ItemIngredient[]>([]);
@@ -891,7 +622,20 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [editVariants, setEditVariants] = useState<ItemVariant[]>([]);
   const [editSchedule, setEditSchedule] = useState<AvailabilitySlot[]>([]);
-  const [editSelectedImages, setEditSelectedImages] = useState<{ uri: string; name: string; type: string }[]>([]);
+  const [editSelectedImages, setEditSelectedImages] = useState<PickedImage[]>([]);
+  const [createTab, setCreateTab] = useState<ItemFormTab>("basics");
+  const [editTab, setEditTab] = useState<ItemFormTab>("basics");
+  const [actionItem, setActionItem] = useState<Item | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [flash, setFlash] = useFlash();
+
+  /* list presentation state */
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("default");
 
   const id = Number(marketId);
   const itemsQ = useQuery({
@@ -899,8 +643,9 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
     queryFn: async () => (await api.get(`/api/markets/${id}/items`)).data as Item[],
     enabled: access.ready && Number.isFinite(id),
   });
-  const createComboSelectableItems = getComboSelectableItems(itemsQ.data ?? []);
-  const editComboSelectableItems = getComboSelectableItems(itemsQ.data ?? [], editItem?.id ?? null);
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
+  const createComboSelectableItems = getComboSelectableItems(items);
+  const editComboSelectableItems = getComboSelectableItems(items, editItem?.id ?? null);
   const editItemKind: "regular" | "combo" = editItem?.item_kind === "combo" ? "combo" : "regular";
 
   const createM = useMutation({
@@ -947,6 +692,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["market-items", id] });
       setCreateOpen(false);
+      setFlash("Product added");
       setName("");
       setSku("");
       setPrice("");
@@ -963,6 +709,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
       setCreateComboOffers([]);
       setCreateSelectedImages([]);
       setIsActive(true);
+      setCreateTab("basics");
     },
   });
 
@@ -1014,6 +761,7 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["market-items", id] });
       setEditOpen(false);
+      setFlash("Product saved");
       setEditItem(null);
       setEditVariants([]);
       setEditSchedule([]);
@@ -1079,261 +827,534 @@ export function MarketItemsScreen({ navigation, route }: MarketItemsProps) {
     setEditSelectedImages(selectedImages);
   }
 
+  function openEdit(item: Item, tab: ItemFormTab) {
+    setEditItem({
+      ...item,
+      item_kind: item.item_kind ?? "regular",
+      ingredients: item.ingredients ?? [],
+      combo_offers: hydrateComboOffers(item.combo_offers, getComboSelectableItems(items, item.id)),
+    });
+    setEditVariants((item.variants as ItemVariant[] | null) ?? []);
+    setEditSchedule((item.availability_schedule as AvailabilitySlot[] | null) ?? []);
+    setEditSelectedImages([]);
+    setEditTab(tab);
+    setEditOpen(true);
+  }
+
+  /* ---------------- form adapters ---------------- */
+  const createValues: ItemFormValues = {
+    itemKind: createItemKind,
+    name,
+    sku,
+    category,
+    price,
+    discountType,
+    discountValue,
+    stockQty,
+    lowStockThreshold,
+    isActive,
+    imageUrl,
+    images: createSelectedImages,
+    variants: createVariants,
+    schedule: createSchedule,
+    ingredients: createIngredients,
+    comboOffers: createComboOffers,
+  };
+
+  const patchCreate = (patch: Partial<ItemFormValues>) => {
+    if (patch.itemKind !== undefined) setCreateItemKind(patch.itemKind);
+    if (patch.name !== undefined) setName(patch.name);
+    if (patch.sku !== undefined) setSku(patch.sku);
+    if (patch.category !== undefined) setCategory(patch.category);
+    if (patch.price !== undefined) setPrice(patch.price);
+    if (patch.discountType !== undefined) setDiscountType(patch.discountType);
+    if (patch.discountValue !== undefined) setDiscountValue(patch.discountValue);
+    if (patch.stockQty !== undefined) setStockQty(patch.stockQty);
+    if (patch.lowStockThreshold !== undefined) setLowStockThreshold(patch.lowStockThreshold);
+    if (patch.isActive !== undefined) setIsActive(patch.isActive);
+    if (patch.imageUrl !== undefined) setImageUrl(patch.imageUrl);
+    if (patch.images !== undefined) setCreateSelectedImages(patch.images);
+    if (patch.variants !== undefined) setCreateVariants(patch.variants);
+    if (patch.schedule !== undefined) setCreateSchedule(patch.schedule);
+    if (patch.ingredients !== undefined) setCreateIngredients(patch.ingredients);
+    if (patch.comboOffers !== undefined) setCreateComboOffers(patch.comboOffers);
+  };
+
+  const editValues: ItemFormValues | null = editItem
+    ? {
+        itemKind: editItemKind,
+        name: editItem.name,
+        sku: editItem.sku,
+        category: editItem.category ?? "",
+        price: String(editItem.price),
+        discountType: editItem.discount_type ?? "none",
+        discountValue: String(editItem.discount_value ?? 0),
+        stockQty: String(editItem.stock_qty),
+        lowStockThreshold: String(editItem.low_stock_threshold ?? 5),
+        isActive: !!editItem.is_active,
+        imageUrl: editItem.image_url ?? "",
+        images: editSelectedImages,
+        variants: editVariants,
+        schedule: editSchedule,
+        ingredients: (editItem.ingredients as ItemIngredient[] | null) ?? [],
+        comboOffers: (editItem.combo_offers as ComboOffer[] | null) ?? [],
+      }
+    : null;
+
+  const patchEdit = (patch: Partial<ItemFormValues>) => {
+    if (patch.images !== undefined) setEditSelectedImages(patch.images);
+    if (patch.variants !== undefined) setEditVariants(patch.variants);
+    if (patch.schedule !== undefined) setEditSchedule(patch.schedule);
+    if (!editItem) return;
+    const next: Item = { ...editItem };
+    let changed = false;
+    if (patch.itemKind !== undefined) {
+      next.item_kind = patch.itemKind;
+      changed = true;
+    }
+    if (patch.name !== undefined) {
+      next.name = patch.name;
+      changed = true;
+    }
+    if (patch.sku !== undefined) {
+      next.sku = patch.sku;
+      changed = true;
+    }
+    if (patch.category !== undefined) {
+      next.category = patch.category;
+      changed = true;
+    }
+    if (patch.price !== undefined) {
+      next.price = patch.price;
+      changed = true;
+    }
+    if (patch.discountType !== undefined) {
+      next.discount_type = patch.discountType;
+      changed = true;
+    }
+    if (patch.discountValue !== undefined) {
+      next.discount_value = patch.discountValue;
+      changed = true;
+    }
+    if (patch.stockQty !== undefined) {
+      next.stock_qty = Number(patch.stockQty);
+      changed = true;
+    }
+    if (patch.lowStockThreshold !== undefined) {
+      next.low_stock_threshold = Number(patch.lowStockThreshold || 0);
+      changed = true;
+    }
+    if (patch.isActive !== undefined) {
+      next.is_active = patch.isActive;
+      changed = true;
+    }
+    if (patch.imageUrl !== undefined) {
+      next.image_url = patch.imageUrl;
+      changed = true;
+    }
+    if (patch.ingredients !== undefined) {
+      next.ingredients = patch.ingredients;
+      changed = true;
+    }
+    if (patch.comboOffers !== undefined) {
+      next.combo_offers = patch.comboOffers;
+      changed = true;
+    }
+    if (changed) setEditItem(next);
+  };
+
+  const createMissing = [
+    !name.trim() ? "Name" : null,
+    !sku.trim() ? "SKU" : null,
+    !price.trim() ? "Price" : null,
+    createItemKind === "combo" && !buildComboPayload("combo", createComboOffers, price) ? "Combo products" : null,
+  ].filter((entry): entry is string => Boolean(entry));
+
+  /* ---------------- derived list data ---------------- */
+  const categories = useMemo(
+    () =>
+      Array.from(new Set(items.map((item) => item.category?.trim()).filter((value): value is string => Boolean(value)))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [items],
+  );
+
+  const stats = useMemo(() => {
+    let active = 0;
+    let low = 0;
+    let out = 0;
+    let discounted = 0;
+    for (const item of items) {
+      if (item.is_active) active += 1;
+      const state = getStockState(item);
+      if (state === "low") low += 1;
+      if (state === "out") out += 1;
+      if (hasDiscount(item)) discounted += 1;
+    }
+    return { total: items.length, active, hidden: items.length - active, low, out, discounted };
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const result = items.filter((item) => {
+      if (query) {
+        const haystack = `${item.name} ${item.sku} ${item.category ?? ""} ${item.id}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (categoryFilter !== "all") {
+        if (categoryFilter === "__none__" ? Boolean(item.category?.trim()) : item.category?.trim() !== categoryFilter) return false;
+      }
+      if (statusFilter === "active" && !item.is_active) return false;
+      if (statusFilter === "hidden" && item.is_active) return false;
+      if (stockFilter !== "all") {
+        const state = getStockState(item);
+        if (stockFilter === "attention" ? state === "in" : state !== stockFilter) return false;
+      }
+      if (priceFilter === "discounted" && !hasDiscount(item)) return false;
+      return true;
+    });
+
+    const finalPrice = (item: Item) => computeFinalPrice(item.price, item.discount_type, item.discount_value);
+    switch (sortKey) {
+      case "name":
+        return [...result].sort((a, b) => a.name.localeCompare(b.name));
+      case "price-asc":
+        return [...result].sort((a, b) => finalPrice(a) - finalPrice(b));
+      case "price-desc":
+        return [...result].sort((a, b) => finalPrice(b) - finalPrice(a));
+      case "stock-asc":
+        return [...result].sort((a, b) => Number(a.stock_qty || 0) - Number(b.stock_qty || 0));
+      case "newest":
+        return [...result].sort((a, b) => b.id - a.id);
+      default:
+        return result;
+    }
+  }, [items, search, categoryFilter, statusFilter, stockFilter, priceFilter, sortKey]);
+
+  const sheetFilterCount = (statusFilter !== "all" ? 1 : 0) + (stockFilter !== "all" ? 1 : 0) + (priceFilter !== "all" ? 1 : 0) + (sortKey !== "default" ? 1 : 0);
+  const filtersActive = search.trim() !== "" || categoryFilter !== "all" || statusFilter !== "all" || stockFilter !== "all" || priceFilter !== "all";
+
+  const resetFilters = () => {
+    setSearch("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+    setStockFilter("all");
+    setPriceFilter("all");
+  };
+
   if (!access.ready) {
     return access.fallback;
   }
 
+  const openCreate = () => {
+    setCreateTab("basics");
+    setCreateOpen(true);
+  };
+
+  const quickActions: { label: string; icon: IconName; tab: ItemFormTab }[] = actionItem
+    ? [
+        { label: "Edit details", icon: "create-outline", tab: "basics" },
+        { label: "Price & discount", icon: "pricetag-outline", tab: "pricing" },
+        { label: "Update stock", icon: "cube-outline", tab: "inventory" },
+        { label: "Manage images", icon: "images-outline", tab: "media" },
+        { label: "Variants & schedule", icon: "options-outline", tab: "options" },
+        { label: actionItem.item_kind === "combo" ? "Combo contents" : "Ingredients & combos", icon: "layers-outline", tab: "composition" },
+      ]
+    : [];
+
   return (
-    <AppShell navigation={navigation} screenName="MarketItems" title="Market Items" subtitle={`Catalog management for market #${marketId}.`}>
-      <SectionCard title="Catalog tools">
-        <AppButton onPress={() => setCreateOpen(true)}>Add item</AppButton>
-      </SectionCard>
+    <AppShell
+      navigation={navigation}
+      screenName="MarketItems"
+      marketId={marketId}
+      title="Products"
+      subtitle="Prices, discounts, stock, images, ingredients and combos."
+    >
+      <Button icon="add" onPress={openCreate} fullWidth>
+        Add product
+      </Button>
+
+      {flash ? <Alert tone="success" title={flash} /> : null}
+
+      <StatGrid>
+        <StatCard
+          label="Total products"
+          value={stats.total}
+          icon="cube-outline"
+          tone="primary"
+          note={`${categories.length} categor${categories.length === 1 ? "y" : "ies"}`}
+          onPress={resetFilters}
+          active={!filtersActive && stats.total > 0}
+        />
+        <StatCard
+          label="Active"
+          value={stats.active}
+          icon="checkmark-circle-outline"
+          tone="success"
+          note={stats.hidden > 0 ? `${stats.hidden} hidden` : "All visible in store"}
+          onPress={() => setStatusFilter(statusFilter === "active" ? "all" : "active")}
+          active={statusFilter === "active"}
+        />
+        <StatCard
+          label="Low / out of stock"
+          value={`${stats.low} / ${stats.out}`}
+          icon="warning-outline"
+          tone={stats.out > 0 ? "destructive" : stats.low > 0 ? "warning" : "neutral"}
+          note={stats.low + stats.out > 0 ? "Needs restocking" : "Stock looks healthy"}
+          onPress={() => setStockFilter(stockFilter === "attention" ? "all" : "attention")}
+          active={stockFilter === "attention"}
+        />
+        <StatCard
+          label="Discounted"
+          value={stats.discounted}
+          icon="pricetags-outline"
+          tone="info"
+          note="Products with an active discount"
+          onPress={() => setPriceFilter(priceFilter === "discounted" ? "all" : "discounted")}
+          active={priceFilter === "discounted"}
+        />
+      </StatGrid>
+
+      <View style={styles.gap10}>
+        <Row gap={8} align="flex-start">
+          <View style={styles.flex}>
+            <Input
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search name, SKU or category"
+              icon="search-outline"
+              autoCapitalize="none"
+              right={search ? <IconButton icon="close" size={30} onPress={() => setSearch("")} accessibilityLabel="Clear search" /> : undefined}
+            />
+          </View>
+          <IconButton icon="options-outline" variant="outline" onPress={() => setFiltersOpen(true)} accessibilityLabel="Filter and sort" badge={sheetFilterCount} size={42} />
+        </Row>
+        {categories.length > 0 ? (
+          <ChipRow>
+            <Chip label="All categories" selected={categoryFilter === "all"} onPress={() => setCategoryFilter("all")} />
+            {categories.map((entry) => (
+              <Chip key={entry} label={entry} selected={categoryFilter === entry} onPress={() => setCategoryFilter(categoryFilter === entry ? "all" : entry)} />
+            ))}
+            <Chip label="No category" selected={categoryFilter === "__none__"} onPress={() => setCategoryFilter(categoryFilter === "__none__" ? "all" : "__none__")} />
+          </ChipRow>
+        ) : null}
+        <Row justify="space-between" gap={8}>
+          <AppText variant="caption">
+            Showing {filteredItems.length} of {items.length}
+            {sortKey !== "default" ? ` · ${SORT_OPTIONS.find((option) => option.value === sortKey)?.label}` : ""}
+          </AppText>
+          {filtersActive ? (
+            <Button variant="ghost" size="sm" icon="close" onPress={resetFilters}>
+              Clear filters
+            </Button>
+          ) : null}
+        </Row>
+      </View>
 
       {itemsQ.isLoading ? (
-        <LoadingBlock message="Loading items..." />
+        <LoadingBlock message="Loading items..." rows={4} />
       ) : itemsQ.isError ? (
-        <EmptyBlock message="Failed to load items." />
+        <Alert
+          tone="destructive"
+          title="Failed to load products"
+          description={getErrorMessage(itemsQ.error, "Something went wrong while loading this market's products.")}
+          action={
+            <Button variant="outline" size="sm" icon="refresh" onPress={() => void itemsQ.refetch()} style={styles.selfStart}>
+              Try again
+            </Button>
+          }
+        />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon="cube-outline"
+          title="No products yet"
+          description="Add your first product to start selling in this market."
+          action={
+            <Button icon="add" onPress={openCreate}>
+              Add product
+            </Button>
+          }
+        />
+      ) : filteredItems.length === 0 ? (
+        <EmptyState
+          icon="search-outline"
+          title="No products match your filters"
+          description="Try a different search term or clear the filters to see all products."
+          action={
+            <Button variant="outline" icon="close" onPress={resetFilters}>
+              Clear filters
+            </Button>
+          }
+        />
       ) : (
-        <View style={uiStyles.listGap}>
-          {(itemsQ.data ?? []).map((item) => (
-            <SectionCard key={item.id} title={item.name} subtitle={`${item.sku} • ${formatMoney(item.price, "en")}`}>
-              {getItemImageUrls(item)[0] ? <Image source={getItemImageUrls(item)[0]} style={styles.itemPreview} contentFit="cover" /> : null}
-              <HelperText>Type: {item.item_kind === "combo" ? "Combo item" : "Regular item"}</HelperText>
-              <HelperText>Discount: {item.discount_type === "none" ? "None" : `${item.discount_type} ${item.discount_value}`}</HelperText>
-              <HelperText>Stock: {item.stock_qty}</HelperText>
-              <HelperText>Status: {item.is_active ? "Active" : "Inactive"}</HelperText>
-              {item.item_kind === "combo" && (item.combo_offers?.[0]?.items ?? []).length > 0 ? (
-                <HelperText>Includes: {(item.combo_offers?.[0]?.items ?? []).map((comboItem) => comboItem.name).join(", ")}</HelperText>
-              ) : null}
-              <AppButton
-                compact
-                variant="secondary"
-                onPress={() => {
-                  setEditItem({
-                    ...item,
-                    item_kind: item.item_kind ?? "regular",
-                    ingredients: item.ingredients ?? [],
-                    combo_offers: hydrateComboOffers(item.combo_offers, getComboSelectableItems(itemsQ.data ?? [], item.id)),
-                  });
-                  setEditVariants((item.variants as ItemVariant[] | null) ?? []);
-                  setEditSchedule((item.availability_schedule as AvailabilitySlot[] | null) ?? []);
-                  setEditSelectedImages([]);
-                  setEditOpen(true);
-                }}
-              >
-                Edit item
-              </AppButton>
-            </SectionCard>
+        <View style={styles.gap12}>
+          {filteredItems.map((item) => (
+            <ProductCard key={item.id} item={item} onEdit={() => openEdit(item, "basics")} onMore={() => setActionItem(item)} />
           ))}
         </View>
       )}
 
-      <AppModal visible={createOpen} title="Add item" onClose={() => setCreateOpen(false)}>
-        <HelperText>Item type</HelperText>
-        <ChoiceRow
-          value={createItemKind}
-          onChange={(value) => {
-            const nextKind = value as "regular" | "combo";
-            setCreateItemKind(nextKind);
-
-            if (nextKind === "combo") {
-              setCreateIngredients([]);
-              setCreateComboOffers(createComboOffers.length > 0 ? [createComboOffers[0]] : [emptyComboOffer()]);
-              return;
-            }
-
-            setCreateComboOffers([]);
-          }}
-          options={["regular", "combo"]}
-        />
-        <InputField label="Name" value={name} onChangeText={setName} placeholder="Item name" />
-        <InputField label="SKU" value={sku} onChangeText={setSku} placeholder="SKU" />
-        <HelperText>Must be unique inside this market.</HelperText>
-        <InputField label="Category" value={category} onChangeText={setCategory} placeholder="General" />
-        <InputField label={createItemKind === "combo" ? "Combo price" : "Price"} value={price} onChangeText={setPrice} keyboardType="numeric" />
-        <HelperText>Discount type</HelperText>
-        <ChoiceRow value={discountType} onChange={setDiscountType as (value: string) => void} options={["none", "percent", "fixed"]} />
-        <InputField label="Discount value" value={discountValue} onChangeText={setDiscountValue} keyboardType="numeric" />
-        <InputField label="Stock quantity" value={stockQty} onChangeText={setStockQty} keyboardType="numeric" />
-        <InputField label="Low stock threshold" value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="numeric" />
-        <InputField label="External image URL" value={imageUrl} onChangeText={setImageUrl} placeholder="Optional fallback URL" />
-        <AppButton variant="secondary" onPress={() => void pickItemImage("create")}>
-          Choose item images
-        </AppButton>
-        {createSelectedImages.length > 0 ? <HelperText>{createSelectedImages.length} image(s) selected</HelperText> : null}
-        <SectionCard title="Variants" subtitle="Add customer choices like size, color, or pack type without writing JSON.">
-          <VariantEditor variants={createVariants} onChange={setCreateVariants} />
-        </SectionCard>
-        <SectionCard title="Availability schedule" subtitle="Leave this empty if the item is always available, or add day and time rows below.">
-          <ScheduleEditor schedule={createSchedule} onChange={setCreateSchedule} />
-        </SectionCard>
-        {createItemKind === "regular" ? (
-          <SectionCard title="Ingredients" subtitle="Add every ingredient the market uses in this item and mark the ones customers can remove.">
-            <IngredientEditor ingredients={createIngredients} onChange={setCreateIngredients} />
-          </SectionCard>
-        ) : null}
-        {createItemKind === "combo" || createComboOffers.length > 0 ? (
-          <SectionCard
-            title="Combo offers"
-            subtitle={
-              createItemKind === "combo"
-                ? "Build combo deals by selecting other items from this market. The top price is the combo price."
-                : "Add optional bundle prices customers can choose during checkout."
-            }
-          >
-            <ComboOfferEditor
-              comboOffers={createComboOffers}
-              availableItems={createComboSelectableItems}
-              itemKind={createItemKind}
-              onChange={setCreateComboOffers}
-            />
-          </SectionCard>
-        ) : null}
-        <ToggleRow label="Active" value={isActive} onValueChange={setIsActive} />
-        {createM.error ? <HelperText tone="danger">{getErrorMessage(createM.error)}</HelperText> : null}
-        <AppButton
-          onPress={() => createM.mutate()}
-          disabled={
-            createM.isPending ||
-            !name.trim() ||
-            !sku.trim() ||
-            !price.trim() ||
-            (createItemKind === "combo" && !buildComboPayload("combo", createComboOffers, price))
-          }
-        >
-          {createM.isPending ? "Saving..." : "Save"}
-        </AppButton>
-      </AppModal>
-
-      <AppModal visible={editOpen} title="Edit item" onClose={() => setEditOpen(false)}>
-        {editItem ? (
+      {/* Filter & sort */}
+      <Sheet
+        visible={filtersOpen}
+        title="Filter & sort"
+        description={`Showing ${filteredItems.length} of ${items.length} products`}
+        onClose={() => setFiltersOpen(false)}
+        footer={
           <>
-            <HelperText>Item type</HelperText>
-            <ChoiceRow
-              value={editItemKind}
-              onChange={(value) => {
-                const nextKind = value as "regular" | "combo";
-                setEditItem({
-                  ...editItem,
-                  item_kind: nextKind,
-                  ingredients: nextKind === "combo" ? [] : editItem.ingredients ?? [],
-                  combo_offers:
-                    nextKind === "combo"
-                      ? (editItem.combo_offers ?? []).length > 0
-                        ? [((editItem.combo_offers ?? [])[0] as ComboOffer) ?? emptyComboOffer()]
-                        : [emptyComboOffer()]
-                      : [],
-                });
+            <Button
+              variant="outline"
+              onPress={() => {
+                resetFilters();
+                setSortKey("default");
               }}
-              options={["regular", "combo"]}
-            />
-            <InputField label="Name" value={editItem.name} onChangeText={(value) => setEditItem({ ...editItem, name: value })} placeholder="Item name" />
-            <InputField label="SKU" value={editItem.sku} onChangeText={(value) => setEditItem({ ...editItem, sku: value })} placeholder="SKU" />
-            <HelperText>Must be unique inside this market.</HelperText>
-            <InputField
-              label="Category"
-              value={editItem.category ?? ""}
-              onChangeText={(value) => setEditItem({ ...editItem, category: value })}
-              placeholder="General"
-            />
-            <InputField
-              label={editItemKind === "combo" ? "Combo price" : "Price"}
-              value={String(editItem.price)}
-              onChangeText={(value) => setEditItem({ ...editItem, price: value })}
-              keyboardType="numeric"
-            />
-            <ChoiceRow value={editItem.discount_type ?? "none"} onChange={(value) => setEditItem({ ...editItem, discount_type: value as Item["discount_type"] })} options={["none", "percent", "fixed"]} />
-            <InputField label="Discount value" value={String(editItem.discount_value ?? 0)} onChangeText={(value) => setEditItem({ ...editItem, discount_value: value })} keyboardType="numeric" />
-            <InputField label="Stock quantity" value={String(editItem.stock_qty)} onChangeText={(value) => setEditItem({ ...editItem, stock_qty: Number(value) })} keyboardType="numeric" />
-            <InputField
-              label="Low stock threshold"
-              value={String(editItem.low_stock_threshold ?? 5)}
-              onChangeText={(value) => setEditItem({ ...editItem, low_stock_threshold: Number(value || 0) })}
-              keyboardType="numeric"
-            />
-            <InputField
-              label="External image URL"
-              value={editItem.image_url ?? ""}
-              onChangeText={(value) => setEditItem({ ...editItem, image_url: value })}
-              placeholder="Optional fallback URL"
-            />
-            <AppButton variant="secondary" onPress={() => void pickItemImage("edit")}>
-              Choose item images
-            </AppButton>
-            {editSelectedImages.length > 0 ? <HelperText>{editSelectedImages.length} new image(s) selected</HelperText> : null}
-            {getItemImageUrls(editItem).length > 0 ? (
-              <SectionCard title="Current gallery" subtitle={`${getItemImageUrls(editItem).length} image(s)`}>
-                <View style={styles.galleryGrid}>
-                  {getItemImageUrls(editItem).map((url, index) => (
-                    <View key={`${url}-${index}`} style={styles.galleryCard}>
-                      <Image source={url} style={styles.galleryImage} contentFit="cover" />
-                      <AppButton
-                        variant="secondary"
-                        compact
-                        onPress={() => deleteImageM.mutate(index)}
-                        disabled={deleteImageM.isPending || clearImagesM.isPending}
-                      >
-                        Delete
-                      </AppButton>
-                    </View>
-                  ))}
-                </View>
-                <AppButton
-                  variant="secondary"
-                  onPress={() => clearImagesM.mutate()}
-                  disabled={deleteImageM.isPending || clearImagesM.isPending}
-                >
-                  Delete all images
-                </AppButton>
-              </SectionCard>
-            ) : null}
-            <SectionCard title="Variants" subtitle="Add customer-selectable options here instead of raw JSON.">
-              <VariantEditor variants={editVariants} onChange={setEditVariants} />
-            </SectionCard>
-            <SectionCard title="Availability schedule" subtitle="Add rows for limited windows, or leave it empty to keep the item available all day.">
-              <ScheduleEditor schedule={editSchedule} onChange={setEditSchedule} />
-            </SectionCard>
-            {editItemKind === "regular" ? (
-              <SectionCard title="Ingredients" subtitle="Mark only optional ingredients as removable so customers can order without them.">
-                <IngredientEditor
-                  ingredients={(editItem.ingredients as ItemIngredient[] | null) ?? []}
-                  onChange={(ingredients) => setEditItem({ ...editItem, ingredients })}
-                />
-              </SectionCard>
-            ) : null}
-            {editItemKind === "combo" || (editItem.combo_offers ?? []).length > 0 ? (
-              <SectionCard
-                title="Combo offers"
-                subtitle={
-                  editItemKind === "combo"
-                    ? "Build combo deals by selecting other items from this market. The top price is the combo price."
-                    : "Add optional bundle prices customers can choose during checkout."
-                }
-              >
-                <ComboOfferEditor
-                  comboOffers={(editItem.combo_offers as ComboOffer[] | null) ?? []}
-                  availableItems={editComboSelectableItems}
-                  itemKind={editItemKind}
-                  onChange={(combo_offers) => setEditItem({ ...editItem, combo_offers })}
-                />
-              </SectionCard>
-            ) : null}
-            <ToggleRow label="Active" value={!!editItem.is_active} onValueChange={(value) => setEditItem({ ...editItem, is_active: value })} />
-            {updateM.error ? <HelperText tone="danger">{getErrorMessage(updateM.error)}</HelperText> : null}
-            <AppButton onPress={() => updateM.mutate()} disabled={updateM.isPending}>
-              {updateM.isPending ? "Saving..." : "Save"}
-            </AppButton>
+              style={styles.flex}
+            >
+              Reset
+            </Button>
+            <Button onPress={() => setFiltersOpen(false)} style={styles.flex}>
+              Done
+            </Button>
           </>
-        ) : null}
-      </AppModal>
+        }
+      >
+        <View style={styles.gap8}>
+          <AppText variant="label">Status</AppText>
+          <SegmentedControl<StatusFilter>
+            value={statusFilter}
+            onChange={setStatusFilter}
+            options={[
+              { value: "all", label: "Any" },
+              { value: "active", label: "Active" },
+              { value: "hidden", label: "Hidden" },
+            ]}
+          />
+        </View>
+        <View style={styles.gap8}>
+          <AppText variant="label">Stock</AppText>
+          <Row wrap gap={8}>
+            {STOCK_OPTIONS.map((option) => (
+              <Chip key={option.value} label={option.label} selected={stockFilter === option.value} onPress={() => setStockFilter(option.value)} />
+            ))}
+          </Row>
+        </View>
+        <View style={styles.gap8}>
+          <AppText variant="label">Price</AppText>
+          <SegmentedControl<PriceFilter>
+            value={priceFilter}
+            onChange={setPriceFilter}
+            options={[
+              { value: "all", label: "Any price" },
+              { value: "discounted", label: "Discounted only" },
+            ]}
+          />
+        </View>
+        <View style={styles.gap8}>
+          <AppText variant="label">Sort by</AppText>
+          {SORT_OPTIONS.map((option) => (
+            <OptionCard key={option.value} selected={sortKey === option.value} onPress={() => setSortKey(option.value)} title={option.label} />
+          ))}
+        </View>
+      </Sheet>
+
+      {/* Quick actions */}
+      <Sheet visible={!!actionItem} title={actionItem?.name ?? "Product"} description={actionItem ? `${actionItem.sku} · #${actionItem.id}` : undefined} onClose={() => setActionItem(null)}>
+        <View>
+          {quickActions.map((action) => (
+            <ListItem
+              key={action.tab}
+              title={action.label}
+              icon={action.icon}
+              onPress={() => {
+                const target = actionItem;
+                setActionItem(null);
+                if (target) openEdit(target, action.tab);
+              }}
+            />
+          ))}
+        </View>
+      </Sheet>
+
+      <ItemFormSheet
+        visible={createOpen}
+        onClose={() => setCreateOpen(false)}
+        mode="create"
+        tab={createTab}
+        onTabChange={setCreateTab}
+        values={createValues}
+        onChange={patchCreate}
+        comboItems={createComboSelectableItems}
+        categories={categories}
+        onPickImages={() => void pickItemImage("create")}
+        error={createM.error ? getErrorMessage(createM.error) : null}
+        missing={createMissing}
+        canSubmit={!createM.isPending && createMissing.length === 0}
+        submitting={createM.isPending}
+        onSubmit={() => createM.mutate()}
+      />
+
+      <ItemFormSheet
+        visible={editOpen}
+        onClose={() => setEditOpen(false)}
+        mode="edit"
+        tab={editTab}
+        onTabChange={setEditTab}
+        values={editValues}
+        onChange={(patch) => {
+          if (patch.itemKind !== undefined && editItem) {
+            // Same kind switch rules as before: combos drop ingredients and keep a single combo offer.
+            const nextKind = patch.itemKind;
+            setEditItem({
+              ...editItem,
+              item_kind: nextKind,
+              ingredients: nextKind === "combo" ? [] : editItem.ingredients ?? [],
+              combo_offers:
+                nextKind === "combo"
+                  ? (editItem.combo_offers ?? []).length > 0
+                    ? [((editItem.combo_offers ?? [])[0] as ComboOffer) ?? emptyComboOffer()]
+                    : [emptyComboOffer()]
+                  : [],
+            });
+            return;
+          }
+          patchEdit(patch);
+        }}
+        comboItems={editComboSelectableItems}
+        categories={categories}
+        gallery={{
+          urls: getItemImageUrls(editItem),
+          onDelete: (index) => deleteImageM.mutate(index, { onSuccess: () => setFlash("Image deleted") }),
+          onClearAll: () => clearImagesM.mutate(undefined, { onSuccess: () => setFlash("All images deleted") }),
+          busy: deleteImageM.isPending || clearImagesM.isPending,
+        }}
+        onPickImages={() => void pickItemImage("edit")}
+        error={
+          updateM.error
+            ? getErrorMessage(updateM.error)
+            : deleteImageM.error
+              ? getErrorMessage(deleteImageM.error)
+              : clearImagesM.error
+                ? getErrorMessage(clearImagesM.error)
+                : null
+        }
+        missing={[]}
+        canSubmit={!!editItem && !updateM.isPending}
+        submitting={updateM.isPending}
+        onSubmit={() => updateM.mutate()}
+      />
     </AppShell>
   );
 }
+
+/* =================================================================================================
+ * Promo codes
+ * ===============================================================================================*/
 
 export function MarketPromoCodesScreen({ navigation, route }: MarketPromoCodesProps) {
   const { marketId } = route.params;
   const access = useProtectedAccess("MarketPromoCodes", { marketId });
   const queryClient = useQueryClient();
+  const valueLabel = usePromoValueLabel();
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -1344,6 +1365,8 @@ export function MarketPromoCodesScreen({ navigation, route }: MarketPromoCodesPr
   const [maxUses, setMaxUses] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [editPromo, setEditPromo] = useState<PromoCode | null>(null);
+  const [now] = useState(() => Date.now());
+  const [flash, setFlash] = useFlash();
 
   const id = Number(marketId);
   const q = useQuery({
@@ -1351,6 +1374,24 @@ export function MarketPromoCodesScreen({ navigation, route }: MarketPromoCodesPr
     queryFn: async () => (await api.get(`/api/markets/${id}/promo-codes`)).data as PromoCode[],
     enabled: access.ready && Number.isFinite(id),
   });
+
+  const promos = useMemo(() => q.data ?? [], [q.data]);
+  const activePromo = useMemo(() => promos.find((promo) => promo.is_active) ?? null, [promos]);
+
+  const stats = useMemo(() => {
+    let live = 0;
+    let expired = 0;
+    let scheduled = 0;
+    let uses = 0;
+    for (const promo of promos) {
+      const status = promoStatus(promo, now);
+      if (status === "active") live += 1;
+      if (status === "expired") expired += 1;
+      if (promo.starts_at || promo.ends_at) scheduled += 1;
+      uses += toNumber(promo.uses);
+    }
+    return { live, expired, scheduled, uses };
+  }, [promos, now]);
 
   const createM = useMutation({
     mutationFn: async () => {
@@ -1368,6 +1409,7 @@ export function MarketPromoCodesScreen({ navigation, route }: MarketPromoCodesPr
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["promo-codes", id] });
       setCreateOpen(false);
+      setFlash("Promo code created");
       setCode("");
       setType("percent");
       setValue("");
@@ -1399,6 +1441,7 @@ export function MarketPromoCodesScreen({ navigation, route }: MarketPromoCodesPr
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["promo-codes", id] });
       setEditOpen(false);
+      setFlash("Promo code updated");
       setEditPromo(null);
     },
   });
@@ -1407,159 +1450,176 @@ export function MarketPromoCodesScreen({ navigation, route }: MarketPromoCodesPr
     return access.fallback;
   }
 
+  const createValues: PromoFormValues = { code, type, value, maxUses, startsAt, endsAt, active: isActive };
+  const patchCreate = (patch: Partial<PromoFormValues>) => {
+    if (patch.code !== undefined) setCode(patch.code);
+    if (patch.type !== undefined) setType(patch.type);
+    if (patch.value !== undefined) setValue(patch.value);
+    if (patch.maxUses !== undefined) setMaxUses(patch.maxUses);
+    if (patch.startsAt !== undefined) setStartsAt(patch.startsAt);
+    if (patch.endsAt !== undefined) setEndsAt(patch.endsAt);
+    if (patch.active !== undefined) setIsActive(patch.active);
+  };
+
+  const editValues: PromoFormValues | null = editPromo
+    ? {
+        code: editPromo.code,
+        type: editPromo.type,
+        value: String(editPromo.value),
+        maxUses: editPromo.max_uses?.toString() ?? "",
+        startsAt: editPromo.starts_at ?? "",
+        endsAt: editPromo.ends_at ?? "",
+        active: !!editPromo.is_active,
+      }
+    : null;
+  const patchEdit = (patch: Partial<PromoFormValues>) => {
+    if (!editPromo) return;
+    const next: PromoCode = { ...editPromo };
+    if (patch.code !== undefined) next.code = patch.code;
+    if (patch.type !== undefined) next.type = patch.type;
+    if (patch.value !== undefined) next.value = patch.value;
+    if (patch.maxUses !== undefined) next.max_uses = patch.maxUses ? Number(patch.maxUses) : null;
+    if (patch.startsAt !== undefined) next.starts_at = patch.startsAt || null;
+    if (patch.endsAt !== undefined) next.ends_at = patch.endsAt || null;
+    if (patch.active !== undefined) next.is_active = patch.active;
+    setEditPromo(next);
+  };
+
+  const createDescription =
+    code || value
+      ? `${code || "New promo"} · ${value.trim() ? valueLabel({ type, value }) : "Set discount value"} · ${maxUses.trim() ? `0 / ${maxUses} uses` : "Unlimited uses"}`
+      : "Set the discount, an optional schedule and usage limit, and whether it goes live now.";
+
   return (
-    <AppShell navigation={navigation} screenName="MarketPromoCodes" title="Promo Codes" subtitle={`Promotion management for market #${marketId}.`}>
-      <SectionCard title="Promotion tools">
-        <AppButton onPress={() => setCreateOpen(true)}>Add promo code</AppButton>
-      </SectionCard>
+    <AppShell
+      navigation={navigation}
+      screenName="MarketPromoCodes"
+      marketId={marketId}
+      title="Promo codes"
+      subtitle="Discount codes customers can apply at checkout in this market."
+    >
+      <Button icon="add" onPress={() => setCreateOpen(true)} fullWidth>
+        Create promo code
+      </Button>
+
+      {flash ? <Alert tone="success" title={flash} /> : null}
+
+      <StatGrid>
+        <StatCard label="Live now" value={stats.live} icon="sparkles-outline" tone="success" note={`${promos.length} codes in total`} />
+        <StatCard label="Expired" value={stats.expired} icon="timer-outline" tone="destructive" />
+        <StatCard label="Scheduled" value={stats.scheduled} icon="calendar-outline" tone="info" note="Codes with start or end dates" />
+        <StatCard label="Total uses" value={stats.uses} icon="people-outline" tone="primary" />
+      </StatGrid>
+
+      {!q.isLoading && !q.isError ? (
+        activePromo ? (
+          <Alert
+            icon="sparkles-outline"
+            title={`Active offer: ${activePromo.code} · ${activePromo.uses} uses`}
+            description={`${valueLabel(activePromo)} is live for this market.`}
+          />
+        ) : promos.length > 0 ? (
+          <Alert icon="pricetags-outline" title="No active offer" description="No active promo code yet. Create one to add a public-facing offer to this storefront." />
+        ) : null
+      ) : null}
 
       {q.isLoading ? (
-        <LoadingBlock message="Loading promo codes..." />
+        <LoadingBlock message="Loading promo codes..." rows={3} />
       ) : q.isError ? (
-        <EmptyBlock message="Failed to load promo codes." />
+        <Alert
+          tone="destructive"
+          title="Failed to load promo codes."
+          description="Try again in a moment."
+          action={
+            <Button variant="outline" size="sm" icon="refresh" onPress={() => void q.refetch()} style={styles.selfStart}>
+              Try again
+            </Button>
+          }
+        />
+      ) : promos.length === 0 ? (
+        <EmptyState
+          icon="pricetags-outline"
+          title="No promo codes yet"
+          description="Create a public-facing offer customers can apply at checkout in this storefront."
+          action={
+            <Button icon="add" onPress={() => setCreateOpen(true)}>
+              Create promo code
+            </Button>
+          }
+        />
       ) : (
-        <View style={uiStyles.listGap}>
-          {(q.data ?? []).map((promo) => (
-            <SectionCard key={promo.id} title={promo.code} subtitle={`${promo.type} • ${promo.value}`} right={<Pill tone={promo.is_active ? "success" : "warning"}>{promo.is_active ? "Active" : "Inactive"}</Pill>}>
-              <HelperText>
-                Uses: {promo.uses}
-                {promo.max_uses ? ` / ${promo.max_uses}` : ""}
-              </HelperText>
-              <HelperText>Starts: {promo.starts_at || "-"} • Ends: {promo.ends_at || "-"}</HelperText>
-              <AppButton
-                compact
-                variant="secondary"
-                onPress={() => {
-                  setEditPromo({ ...promo });
-                  setEditOpen(true);
-                }}
-              >
-                Edit promo
-              </AppButton>
-            </SectionCard>
+        <View style={styles.gap12}>
+          {promos.map((promo) => (
+            <PromoCard
+              key={promo.id}
+              promo={promo}
+              now={now}
+              onEdit={() => {
+                setEditPromo({ ...promo });
+                setEditOpen(true);
+              }}
+            />
           ))}
         </View>
       )}
 
-      <AppModal visible={createOpen} title="Add promo code" onClose={() => setCreateOpen(false)}>
-        <InputField label="Code" value={code} onChangeText={setCode} placeholder="SAVE10" />
-        <HelperText>Promo type</HelperText>
-        <ChoiceRow value={type} onChange={setType as (value: string) => void} options={["percent", "fixed"]} />
-        <InputField label="Value" value={value} onChangeText={setValue} keyboardType="numeric" />
-        <InputField label="Starts at" value={startsAt} onChangeText={setStartsAt} placeholder="YYYY-MM-DD HH:mm:ss" />
-        <InputField label="Ends at" value={endsAt} onChangeText={setEndsAt} placeholder="YYYY-MM-DD HH:mm:ss" />
-        <InputField label="Max uses" value={maxUses} onChangeText={setMaxUses} keyboardType="numeric" placeholder="Optional" />
-        <ToggleRow label="Active" value={isActive} onValueChange={setIsActive} />
-        {createM.error ? <HelperText tone="danger">{getErrorMessage(createM.error)}</HelperText> : null}
-        <AppButton onPress={() => createM.mutate()} disabled={createM.isPending || !code.trim() || !value.trim()}>
-          {createM.isPending ? "Saving..." : "Save promo"}
-        </AppButton>
-      </AppModal>
+      <PromoFormSheet
+        visible={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create promo code"
+        description={createDescription}
+        values={createValues}
+        onChange={patchCreate}
+        activeTitle="Activate immediately"
+        activeBody="When enabled, the public storefront can surface this live offer."
+        error={createM.error ? getErrorMessage(createM.error) : null}
+        canSubmit={!createM.isPending && !!code.trim() && !!value.trim()}
+        submitting={createM.isPending}
+        submitLabel="Save promo"
+        onSubmit={() => createM.mutate()}
+      />
 
-      <AppModal visible={editOpen} title="Edit promo code" onClose={() => setEditOpen(false)}>
-        {editPromo ? (
-          <>
-            <InputField label="Code" value={editPromo.code} onChangeText={(nextValue) => setEditPromo({ ...editPromo, code: nextValue })} placeholder="SAVE10" />
-            <ChoiceRow value={editPromo.type} onChange={(nextValue) => setEditPromo({ ...editPromo, type: nextValue as PromoCode["type"] })} options={["percent", "fixed"]} />
-            <InputField label="Value" value={String(editPromo.value)} onChangeText={(nextValue) => setEditPromo({ ...editPromo, value: nextValue })} keyboardType="numeric" />
-            <InputField label="Starts at" value={editPromo.starts_at ?? ""} onChangeText={(nextValue) => setEditPromo({ ...editPromo, starts_at: nextValue || null })} placeholder="YYYY-MM-DD HH:mm:ss" />
-            <InputField label="Ends at" value={editPromo.ends_at ?? ""} onChangeText={(nextValue) => setEditPromo({ ...editPromo, ends_at: nextValue || null })} placeholder="YYYY-MM-DD HH:mm:ss" />
-            <InputField label="Max uses" value={editPromo.max_uses?.toString() ?? ""} onChangeText={(nextValue) => setEditPromo({ ...editPromo, max_uses: nextValue ? Number(nextValue) : null })} keyboardType="numeric" />
-            <ToggleRow label="Active" value={!!editPromo.is_active} onValueChange={(nextValue) => setEditPromo({ ...editPromo, is_active: nextValue })} />
-            {updateM.error ? <HelperText tone="danger">{getErrorMessage(updateM.error)}</HelperText> : null}
-            <AppButton onPress={() => updateM.mutate()} disabled={updateM.isPending}>
-              {updateM.isPending ? "Saving..." : "Save changes"}
-            </AppButton>
-          </>
-        ) : null}
-      </AppModal>
+      <PromoFormSheet
+        visible={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit promo code"
+        description={
+          editPromo
+            ? `${editPromo.code || "Promo code"} · ${valueLabel(editPromo)} · used ${editPromo.uses}${editPromo.max_uses ? ` / ${editPromo.max_uses}` : ""} times`
+            : "Update the code, schedule, limit and live state."
+        }
+        values={editValues}
+        onChange={patchEdit}
+        activeTitle="Active"
+        activeBody="Only active promo codes appear as live offers."
+        error={updateM.error ? getErrorMessage(updateM.error) : null}
+        canSubmit={!!editPromo && !updateM.isPending}
+        submitting={updateM.isPending}
+        submitLabel="Save changes"
+        onSubmit={() => updateM.mutate()}
+      />
     </AppShell>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  itemPreview: {
-    width: "100%",
-    height: 160,
-    borderRadius: 18,
-    marginBottom: 12,
-    backgroundColor: "#e5e7eb",
-  },
-  marketBrandLogo: {
-    width: 88,
-    height: 88,
-    borderRadius: 20,
-    marginBottom: 12,
-    backgroundColor: "#ffffff",
-  },
-  marketBannerPreview: {
-    width: "100%",
-    height: 180,
-    borderRadius: 20,
-    marginBottom: 12,
-    backgroundColor: "#e5e7eb",
-  },
-  galleryGrid: {
-    gap: 12,
-  },
-  galleryCard: {
-    gap: 8,
-  },
-  galleryImage: {
-    width: "100%",
-    height: 160,
-    borderRadius: 18,
-    backgroundColor: "#e5e7eb",
-  },
-  choiceWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  choiceChip: {
-    minHeight: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#d7deed",
-    backgroundColor: "#eef2ff",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-  },
-  choiceChipActive: {
-    backgroundColor: "#bae6fd",
-    borderColor: "#38bdf8",
-  },
-  choiceChipText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#0f172a",
-  },
-  optionRow: {
-    minHeight: 54,
-    borderWidth: 1,
-    borderColor: "#d7deed",
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-  },
-  optionRowSelected: {
-    backgroundColor: "#ecfeff",
-    borderColor: "#06b6d4",
-  },
-  optionLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#0f172a",
-  },
+  flex: { flex: 1 },
+  fill: { width: "100%", height: "100%" },
+  gap6: { gap: 6 },
+  gap8: { gap: 8 },
+  gap10: { gap: 10 },
+  gap12: { gap: 12 },
+  selfStart: { alignSelf: "flex-start" },
+  selfEnd: { alignSelf: "flex-end" },
+  footerStack: { flex: 1, gap: 10 },
+  tileGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  summaryTile: { flexGrow: 1, flexBasis: "46%", paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
+  logo: { width: 80, height: 80, borderRadius: 14, borderWidth: 1, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  banner: { height: 150, borderRadius: 10, borderWidth: 1, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  previewBanner: { height: 120, overflow: "hidden" },
+  previewBadge: { position: "absolute", top: 10, left: 10 },
+  previewBody: { paddingHorizontal: 16, paddingTop: 12 },
+  previewLogo: { width: 56, height: 56, marginTop: -36, borderRadius: 12, borderWidth: 2, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  previewFooter: { paddingHorizontal: 16, paddingBottom: 16, gap: 6 },
+  dangerBox: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 10, padding: 14 },
 });
