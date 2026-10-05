@@ -1,28 +1,43 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
+  AlertCircle,
   ArrowLeft,
-  ArrowRight,
+  ChevronDown,
+  Clock3,
   MapPin,
+  Minus,
+  Plus,
   ShieldCheck,
   ShoppingBag,
-  Sparkles,
   Store,
   TicketPercent,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 
-import ThemeToggle from "@/components/ThemeToggle";
+import { EmptyState } from "@/components/app/empty-state";
+import { PageHeader } from "@/components/app/page-header";
+import { StorefrontHeader } from "@/components/app/storefront-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { clearCart, getActiveMarketId, loadCart, saveCart } from "@/lib/cart";
 import type { CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
+import { resolveApiMediaUrl } from "@/lib/media";
 import { useMe } from "@/lib/useMe";
+import { cn } from "@/lib/utils";
 
 type Market = {
   id: number;
@@ -197,219 +212,265 @@ export default function CheckoutPage() {
     Number.isFinite(Number(dropoffLat)) &&
     Number.isFinite(Number(dropoffLng));
 
+  const marketName = marketQ.data?.name || (marketId ? `Market #${marketId}` : "Select a market");
+  const backPath = marketId ? `/m/${marketId}` : "/";
+  const missing: string[] = [];
+  if (effectiveCustomerName.trim().length < 2) missing.push("your name (at least 2 characters)");
+  if (effectiveCustomerPhone.trim().length < 6) missing.push("a phone number (at least 6 digits)");
+  if (effectiveCustomerAddress.trim().length < 5) missing.push("a delivery address (at least 5 characters)");
+  if (!Number.isFinite(Number(dropoffLat)) || !Number.isFinite(Number(dropoffLng))) missing.push("valid map coordinates");
+
+  const placeOrderButton = (
+    <Button
+      size="lg"
+      className="w-full"
+      onClick={() => createOrderM.mutate()}
+      disabled={!canSubmit || createOrderM.isPending}
+    >
+      {createOrderM.isPending ? (
+        <>
+          <Spinner />
+          Placing order...
+        </>
+      ) : (
+        <>Place order · {formatMoney(finalTotal)}</>
+      )}
+    </Button>
+  );
+
+  const errorAlert = errorMessage ? (
+    <Alert variant="destructive">
+      <AlertCircle />
+      <AlertTitle>Could not place the order</AlertTitle>
+      <AlertDescription>{errorMessage}</AlertDescription>
+    </Alert>
+  ) : null;
+
+  const totalsRows = (
+    <div className="grid gap-2 text-sm">
+      <SummaryRow label={`Subtotal (${totals.items} ${totals.items === 1 ? "item" : "items"})`} value={formatMoney(totals.subtotal)} />
+      <SummaryRow
+        label={promoPreview?.valid && promoPreview.promo?.code ? `Discount (${promoPreview.promo.code})` : "Discount"}
+        value={discountTotal > 0 ? `-${formatMoney(discountTotal)}` : formatMoney(0)}
+        valueClassName={discountTotal > 0 ? "text-success" : undefined}
+      />
+      <SummaryRow label="Delivery" value="Calculated by dispatch" valueClassName="text-muted-foreground font-normal" />
+      <Separator className="my-1" />
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-semibold">Total</span>
+        <span className="text-xl font-semibold tabular-nums">{formatMoney(finalTotal)}</span>
+      </div>
+    </div>
+  );
+
+  const lineItems = (
+    <ul className="grid gap-3">
+      {cart.map((item) => (
+        <SummaryLineItem key={item.cart_id} item={item} />
+      ))}
+    </ul>
+  );
+
+  const marketBlock = (
+    <div className="flex items-center gap-3">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Store className="size-5" />
+      </div>
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold">{marketName}</div>
+        {marketQ.data?.address ? (
+          <div className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <MapPin className="size-3 shrink-0" />
+            <span className="truncate">{marketQ.data.address}</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const trustNote = (
+    <div className="flex items-start gap-2 text-xs text-muted-foreground">
+      <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
+      <span>Your order goes straight to the market and our live dispatch team as soon as it is placed.</span>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 via-white to-zinc-100/40 text-zinc-900 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 dark:text-zinc-100">
-      <nav className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/90 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/90">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-          <button
-            type="button"
-            onClick={() => navigate(marketId ? `/m/${marketId}` : "/")}
-            className="flex items-center gap-3 text-zinc-700 transition-colors hover:text-cyan-600 dark:text-zinc-300"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="font-medium">{marketId ? "Back to Market" : "Back to Markets"}</span>
-          </button>
+    <div className="min-h-screen bg-background">
+      <StorefrontHeader showLinks={false} />
 
-          <div className="flex items-center gap-4">
-            <div className="hidden rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 sm:block">
-              Secure checkout
-            </div>
-            <ThemeToggle />
-          </div>
-        </div>
-      </nav>
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8">
+        <Button variant="ghost" size="sm" className="-ml-2 mb-2" onClick={() => navigate(backPath)}>
+          <ArrowLeft />
+          {marketId ? "Back to market" : "Back to markets"}
+        </Button>
 
-      <div className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6 sm:pt-10">
-        <section className="relative mb-10 overflow-hidden rounded-[2.25rem] border border-zinc-200 shadow-[0_20px_80px_rgba(0,0,0,0.18)] dark:border-zinc-800">
-          <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(34,211,238,0.18),transparent_24%),radial-gradient(circle_at_86%_14%,rgba(168,85,247,0.16),transparent_22%),radial-gradient(circle_at_50%_100%,rgba(244,114,182,0.12),transparent_30%)]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-
-          <div className="relative px-6 py-8 text-white sm:px-10 sm:py-10 lg:px-12 lg:py-12">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 py-2 backdrop-blur-md">
-                <Sparkles className="h-4 w-4 text-cyan-300" />
-                <span className="text-sm font-medium">Premium Checkout</span>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm backdrop-blur-md">
-                  {totals.items} items
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm backdrop-blur-md">
-                  {formatMoney(finalTotal)}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-10 grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
-              <div>
-                <div className="mb-5 flex flex-wrap gap-3">
-                  <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm">
-                    Live dispatch routing
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm">
-                    Promo-ready summary
-                  </span>
-                  <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm">
-                    Customer-first flow
-                  </span>
-                </div>
-
-                <h1 className="text-4xl font-bold tracking-tighter sm:text-6xl lg:text-7xl">
-                  Finish your order with confidence
-                </h1>
-
-                <p className="mt-5 max-w-2xl text-base leading-relaxed text-white/80 sm:text-lg">
-                  Review your cart, confirm delivery details, and send this order straight into the
-                  Smart Dispatch workflow with the same premium storefront feel.
-                </p>
-              </div>
-
-              <div className="grid gap-4">
-                <div className="rounded-[1.75rem] border border-white/10 bg-white/10 p-5 backdrop-blur-xl">
-                  <div className="mb-2 text-xs uppercase tracking-wider text-white/60">Active Market</div>
-                  <div className="text-2xl font-semibold tracking-tight">
-                    {marketQ.data?.name || (marketId ? `Market #${marketId}` : "Select a market")}
-                  </div>
-                  <div className="mt-3 text-sm leading-relaxed text-white/75">
-                    {marketQ.data?.address || "Orders from this session will be checked out here."}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 backdrop-blur-xl">
-                    <div className="mb-2 text-xs uppercase tracking-wider text-white/60">Cart Count</div>
-                    <div className="text-3xl font-bold">{totals.items}</div>
-                  </div>
-
-                  <div className="rounded-[1.5rem] border border-white/10 bg-white/10 p-5 backdrop-blur-xl">
-                    <div className="mb-2 text-xs uppercase tracking-wider text-white/60">Discount</div>
-                    <div className="text-3xl font-bold">
-                      {discountTotal > 0 ? `-${formatMoney(discountTotal)}` : formatMoney(0)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <PageHeader
+          title="Checkout"
+          description="Confirm where to deliver, choose your options, and place your order."
+          actions={
+            marketId && cart.length > 0 ? (
+              <Badge variant="secondary" className="gap-1.5">
+                <ShieldCheck className="size-3.5" />
+                Secure checkout
+              </Badge>
+            ) : null
+          }
+        />
 
         {!marketId ? (
-          <div className="rounded-[2rem] border border-dashed border-zinc-300 bg-white p-12 text-center shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
-            <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
-              <Store className="h-6 w-6 text-zinc-500 dark:text-zinc-300" />
-            </div>
-            <div className="text-xl font-semibold text-zinc-900 dark:text-white">No market selected</div>
-            <p className="mt-2 text-zinc-500 dark:text-zinc-400">
-              Start from a public market to build a cart before checking out.
-            </p>
-            <Button className="mt-6 rounded-2xl" onClick={() => navigate("/")}>
-              Browse Markets
-            </Button>
-          </div>
+          <EmptyState
+            icon={Store}
+            title="No market selected"
+            description="Start from a market to build a cart before checking out."
+            action={<Button onClick={() => navigate("/")}>Browse markets</Button>}
+          />
+        ) : cart.length === 0 ? (
+          <EmptyState
+            icon={ShoppingBag}
+            title="Your cart is empty"
+            description="Add items from a market before placing an order."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={() => navigate(backPath)}>Back to {marketQ.data?.name ?? "market"}</Button>
+                <Button variant="outline" onClick={() => navigate("/")}>
+                  Browse markets
+                </Button>
+              </div>
+            }
+          />
         ) : (
-          <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:gap-10">
-            <div className="grid gap-8">
-              <section className="rounded-[2rem] border border-zinc-200 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 sm:p-8">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-50 dark:bg-cyan-950/40">
-                    <MapPin className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+            {/* Mobile: collapsible summary on top */}
+            <Card className="gap-0 py-0 lg:hidden">
+              <Collapsible>
+                <CollapsibleTrigger asChild>
+                  <button type="button" className="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                      <ShoppingBag className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">
+                        Order summary · {totals.items} {totals.items === 1 ? "item" : "items"}
+                      </span>
+                      <ChevronDown className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    </span>
+                    <span className="shrink-0 font-semibold tabular-nums">{formatMoney(finalTotal)}</span>
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-4 border-t px-4 py-4">
+                    {marketBlock}
+                    {lineItems}
+                    <Separator />
+                    {totalsRows}
                   </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
-                      Delivery
-                    </div>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                      Customer Details
-                    </h2>
-                  </div>
-                </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </Card>
 
-                <div className="grid gap-5">
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Email</Label>
-                    <Input
-                      value={meQ.data?.email || ""}
-                      readOnly
-                      className="h-14 rounded-2xl border-zinc-300 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Name</Label>
-                    <Input
-                      value={effectiveCustomerName}
-                      onChange={(event) => setCustomerName(event.target.value)}
-                      className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                    />
-                  </div>
-
-                  <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid min-w-0 gap-6">
+              {/* Step 1 */}
+              <Card>
+                <CardHeader>
+                  <StepTitle step={1} title="Delivery details" description="Who receives the order and where we should bring it." />
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Phone</Label>
+                      <Label htmlFor="checkout-name">Full name</Label>
                       <Input
-                        value={effectiveCustomerPhone}
-                        onChange={(event) => setCustomerPhone(event.target.value)}
-                        className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                        placeholder="Phone number"
+                        id="checkout-name"
+                        value={effectiveCustomerName}
+                        onChange={(event) => setCustomerName(event.target.value)}
+                        aria-invalid={effectiveCustomerName.trim().length > 0 && effectiveCustomerName.trim().length < 2}
+                        placeholder="Your name"
                       />
                     </div>
-
                     <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Priority</Label>
-                      <Input
-                        value={priority}
-                        onChange={(event) => setPriority(event.target.value)}
-                        className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                      />
+                      <Label htmlFor="checkout-email">Email</Label>
+                      <Input id="checkout-email" value={meQ.data?.email || ""} readOnly disabled placeholder="Not signed in" />
                     </div>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Address</Label>
+                    <Label htmlFor="checkout-phone">Phone</Label>
                     <Input
+                      id="checkout-phone"
+                      value={effectiveCustomerPhone}
+                      onChange={(event) => setCustomerPhone(event.target.value)}
+                      aria-invalid={effectiveCustomerPhone.trim().length > 0 && effectiveCustomerPhone.trim().length < 6}
+                      placeholder="Phone number"
+                      inputMode="tel"
+                    />
+                    <p className="text-xs text-muted-foreground">The driver will call this number if they need help finding you.</p>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="checkout-address">Delivery address</Label>
+                    <Input
+                      id="checkout-address"
                       value={effectiveCustomerAddress}
                       onChange={(event) => setCustomerAddress(event.target.value)}
-                      className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                      placeholder="Delivery address"
+                      aria-invalid={effectiveCustomerAddress.trim().length > 0 && effectiveCustomerAddress.trim().length < 5}
+                      placeholder="Street, building, apartment"
                     />
                   </div>
 
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Latitude</Label>
-                      <Input
-                        value={dropoffLat}
-                        onChange={(event) => setDropoffLat(event.target.value)}
-                        className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                      />
+                  <div className="grid gap-3 rounded-lg border bg-muted/30 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <MapPin className="size-4 text-muted-foreground" />
+                      Drop-off location
                     </div>
-
-                    <div className="grid gap-2">
-                      <Label className="text-sm font-medium">Longitude</Label>
-                      <Input
-                        value={dropoffLng}
-                        onChange={(event) => setDropoffLng(event.target.value)}
-                        className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                      />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="checkout-lat">Latitude</Label>
+                        <Input
+                          id="checkout-lat"
+                          value={dropoffLat}
+                          onChange={(event) => setDropoffLat(event.target.value)}
+                          aria-invalid={!Number.isFinite(Number(dropoffLat))}
+                          inputMode="decimal"
+                          className="bg-background tabular-nums"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="checkout-lng">Longitude</Label>
+                        <Input
+                          id="checkout-lng"
+                          value={dropoffLng}
+                          onChange={(event) => setDropoffLng(event.target.value)}
+                          aria-invalid={!Number.isFinite(Number(dropoffLng))}
+                          inputMode="decimal"
+                          className="bg-background tabular-nums"
+                        />
+                      </div>
                     </div>
+                    <p className="text-xs text-muted-foreground">Used to route the driver. Leave the defaults if you are not sure.</p>
                   </div>
 
                   <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Delivery Notes</Label>
-                    <Input
+                    <Label htmlFor="checkout-notes">Delivery notes</Label>
+                    <Textarea
+                      id="checkout-notes"
                       value={notes}
                       onChange={(event) => setNotes(event.target.value)}
                       placeholder="Apartment, gate code, or handoff notes"
-                      className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
+                      rows={3}
                     />
+                    <p className="text-xs text-muted-foreground">Optional.</p>
                   </div>
+                </CardContent>
+              </Card>
 
+              {/* Step 2 */}
+              <Card>
+                <CardHeader>
+                  <StepTitle step={2} title="Delivery options" description="Pick a delivery time and how urgent the order is." />
+                </CardHeader>
+                <CardContent className="grid gap-4">
                   {deliverySlots.length > 0 ? (
-                    <div className="grid gap-3">
-                      <Label className="text-sm font-medium">Delivery Slot</Label>
-                      <div className="flex flex-wrap gap-2">
+                    <div className="grid gap-2">
+                      <Label>Delivery slot</Label>
+                      <div className="grid gap-2 sm:grid-cols-2">
                         {deliverySlots.map((slot, index) => {
                           const label =
                             typeof slot === "string" ? slot : slot.label || `${slot.from} - ${slot.to}`;
@@ -417,247 +478,259 @@ export default function CheckoutPage() {
                             typeof slot === "string"
                               ? `${slot}|${slot}|${slot}`
                               : `${label}|${slot.from}|${slot.to}`;
+                          const selected = deliverySlot === value;
 
                           return (
                             <button
                               key={`${label}-${index}`}
                               type="button"
+                              aria-pressed={selected}
                               onClick={() => setDeliverySlot(value)}
-                              className={[
-                                "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-                                deliverySlot === value
-                                  ? "border-cyan-600 bg-cyan-600 text-white"
-                                  : "border-zinc-300 bg-zinc-50 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800",
-                              ].join(" ")}
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg border p-3 text-left text-sm transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                                selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-accent",
+                              )}
                             >
-                              {label}
+                              <Clock3 className={cn("size-4 shrink-0", selected ? "text-primary" : "text-muted-foreground")} />
+                              <span className="min-w-0 truncate font-medium">{label}</span>
                             </button>
                           );
                         })}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        {deliverySlot ? "You can change the slot any time before placing the order." : "No slot selected: we will deliver as soon as possible."}
+                      </p>
                     </div>
-                  ) : null}
-                </div>
-              </section>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                      <Clock3 className="size-4 shrink-0" />
+                      This market delivers as soon as possible. No time slots to choose.
+                    </div>
+                  )}
 
-              <section className="rounded-[2rem] border border-zinc-200 bg-white/90 p-6 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 sm:p-8">
-                <div className="mb-6 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-50 dark:bg-cyan-950/40">
-                      <ShoppingBag className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
-                    </div>
-                    <div>
-                      <div className="text-xs uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
-                        Cart
-                      </div>
-                      <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                        Review Items
-                      </h2>
-                    </div>
+                  <div className="grid gap-2 sm:max-w-xs">
+                    <Label htmlFor="checkout-priority">Priority</Label>
+                    <Input
+                      id="checkout-priority"
+                      value={priority}
+                      onChange={(event) => setPriority(event.target.value)}
+                      inputMode="numeric"
+                      className="tabular-nums"
+                    />
+                    <p className="text-xs text-muted-foreground">Dispatch priority level. The default is 2.</p>
                   </div>
+                </CardContent>
+              </Card>
 
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl"
-                    onClick={() => {
-                      if (!marketId) {
-                        return;
-                      }
+              {/* Step 3 */}
+              <Card>
+                <CardHeader>
+                  <StepTitle step={3} title="Review items" description="Adjust quantities before you place the order." />
+                  <CardAction>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (!marketId) {
+                          return;
+                        }
 
-                      clearCart(marketId);
-                      setCart([]);
-                    }}
-                    disabled={!cart.length}
-                  >
-                    Clear Cart
-                  </Button>
-                </div>
-
-                {cart.length === 0 ? (
-                  <div className="rounded-[1.75rem] border border-dashed border-zinc-300 bg-zinc-50 p-10 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-400">
-                    Your cart is empty. Add items before placing an order.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
+                        clearCart(marketId);
+                        setCart([]);
+                      }}
+                      disabled={!cart.length}
+                    >
+                      <Trash2 />
+                      Clear cart
+                    </Button>
+                  </CardAction>
+                </CardHeader>
+                <CardContent>
+                  <ul className="divide-y rounded-lg border">
                     {cart.map((item) => (
-                      <div
-                        key={item.cart_id}
-                        className="rounded-[1.75rem] border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/70 sm:p-5"
-                      >
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <li key={item.cart_id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <ItemThumb item={item} />
                           <div className="min-w-0">
-                            <div className="truncate text-lg font-semibold">{item.name}</div>
-                            <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                              {formatMoney(item.price)} each
-                            </div>
-                            {item.combo_offer ? (
-                              <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                                Combo: {item.combo_offer.name}
-                              </div>
-                            ) : null}
-                            {(item.removed_ingredients ?? []).length > 0 ? (
-                              <div className="mt-2 text-sm text-violet-600 dark:text-violet-300">
-                                Without: {item.removed_ingredients?.join(", ")}
-                              </div>
-                            ) : null}
-                          </div>
-
-                          <div className="flex items-center gap-3 self-start sm:self-center">
-                            <div className="text-right font-semibold text-zinc-900 dark:text-white">
-                              {formatMoney(item.price * item.qty)}
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <Button
-                                variant="outline"
-                                className="h-10 w-10 rounded-xl px-0"
-                                onClick={() => decrement(item.cart_id)}
-                              >
-                                -
-                              </Button>
-                              <div className="w-8 text-center font-medium">{item.qty}</div>
-                              <Button
-                                variant="outline"
-                                className="h-10 w-10 rounded-xl px-0"
-                                onClick={() => increment(item.cart_id)}
-                              >
-                                +
-                              </Button>
-                            </div>
+                            <div className="truncate text-sm font-medium">{item.name}</div>
+                            <div className="text-xs text-muted-foreground tabular-nums">{formatMoney(item.price)} each</div>
+                            <ItemCustomizations item={item} />
                           </div>
                         </div>
-                      </div>
+                        <div className="flex items-center justify-between gap-4 sm:justify-end">
+                          <div className="flex items-center gap-1 rounded-md border">
+                            <Button variant="ghost" size="icon-sm" aria-label={`Remove one ${item.name}`} onClick={() => decrement(item.cart_id)}>
+                              <Minus />
+                            </Button>
+                            <span className="w-7 text-center text-sm font-medium tabular-nums">{item.qty}</span>
+                            <Button variant="ghost" size="icon-sm" aria-label={`Add one ${item.name}`} onClick={() => increment(item.cart_id)}>
+                              <Plus />
+                            </Button>
+                          </div>
+                          <div className="w-20 text-right text-sm font-semibold tabular-nums">{formatMoney(item.price * item.qty)}</div>
+                        </div>
+                      </li>
                     ))}
-                  </div>
-                )}
-              </section>
-            </div>
+                  </ul>
+                </CardContent>
+              </Card>
 
-            <aside className="lg:w-full">
-              <div className="sticky top-24 rounded-[2rem] border border-zinc-200 bg-white/90 p-6 shadow-xl backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/90 sm:p-7">
-                <div className="mb-6 flex items-center gap-4">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-50 dark:bg-cyan-950/40">
-                    <Store className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
-                  </div>
-                  <div>
-                    <div className="text-xs uppercase tracking-[3px] text-cyan-600 dark:text-cyan-400">
-                      Summary
+              {/* Step 4 */}
+              <Card>
+                <CardHeader>
+                  <StepTitle step={4} title="Promo code" description="Have a code from this market? It is checked as you type." />
+                </CardHeader>
+                <CardContent className="grid gap-3">
+                  <div className="grid gap-2 sm:max-w-sm">
+                    <Label htmlFor="checkout-promo">Promo code</Label>
+                    <div className="relative">
+                      <TicketPercent className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="checkout-promo"
+                        value={promoCode}
+                        onChange={(event) => setPromoCode(event.target.value)}
+                        placeholder="Optional"
+                        className="pl-9 uppercase placeholder:normal-case"
+                        aria-invalid={!!promoCode.trim() && !promoQuery.isLoading && !promoPreview?.valid}
+                      />
                     </div>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-tight">Order Snapshot</h2>
-                  </div>
-                </div>
-
-                <div className="rounded-[1.75rem] bg-gradient-to-br from-zinc-900 to-black p-5 text-white">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10">
-                      <ShoppingBag className="h-5 w-5 text-cyan-300" />
-                    </div>
-                    <div>
-                      <div className="text-sm text-white/70">Active market</div>
-                      <div className="font-semibold">
-                        {marketQ.data?.name || `Market #${marketId}`}
-                      </div>
-                    </div>
-                  </div>
-
-                  {marketQ.data?.address ? (
-                    <div className="mt-4 flex items-start gap-2 text-sm text-white/75">
-                      <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>{marketQ.data.address}</span>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="mt-6 space-y-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500 dark:text-zinc-400">Items</span>
-                    <span className="font-semibold">{totals.items}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500 dark:text-zinc-400">Subtotal</span>
-                    <span className="font-semibold">{formatMoney(totals.subtotal)}</span>
-                  </div>
-
-                  <Separator />
-
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Promo Code</Label>
-                    <Input
-                      value={promoCode}
-                      onChange={(event) => setPromoCode(event.target.value)}
-                      placeholder="Optional"
-                      className="h-14 rounded-2xl border-zinc-300 dark:border-zinc-700"
-                    />
                   </div>
 
                   {promoCode.trim() ? (
                     promoQuery.isLoading ? (
-                      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Spinner />
                         Checking promo code...
                       </div>
                     ) : promoPreview?.valid ? (
-                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
-                        <div className="flex items-center gap-2 font-semibold">
-                          <TicketPercent className="h-4 w-4" />
-                          {promoPreview.promo?.code} applied
-                        </div>
-                        <div className="mt-1">
-                          {promoPreview.promo?.type === "percent"
-                            ? `${toNumber(promoPreview.promo.value)}% discount applied`
-                            : `${formatMoney(promoPreview.promo?.value)} discount applied`}
+                      <div className="flex items-start gap-2 rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
+                        <TicketPercent className="mt-0.5 size-4 shrink-0" />
+                        <div>
+                          <div className="font-medium">{promoPreview.promo?.code} applied</div>
+                          <div className="text-success/90">
+                            {promoPreview.promo?.type === "percent"
+                              ? `${toNumber(promoPreview.promo.value)}% discount applied`
+                              : `${formatMoney(promoPreview.promo?.value)} discount applied`}
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                        {promoPreview?.message || "Promo code was not found for this market."}
-                      </div>
+                      <p className="text-sm text-destructive">{promoPreview?.message || "Promo code was not found for this market."}</p>
                     )
                   ) : null}
+                </CardContent>
+              </Card>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500 dark:text-zinc-400">Discount</span>
-                    <span className={discountTotal > 0 ? "font-semibold text-emerald-600 dark:text-emerald-400" : "font-semibold"}>
-                      {discountTotal > 0 ? `-${formatMoney(discountTotal)}` : formatMoney(0)}
-                    </span>
-                  </div>
+              {/* Mobile: totals + CTA at the bottom */}
+              <Card className="lg:hidden">
+                <CardContent className="grid gap-4">
+                  {totalsRows}
+                  {!canSubmit && missing.length > 0 ? <MissingFields missing={missing} /> : null}
+                  {errorAlert}
+                  {placeOrderButton}
+                  {trustNote}
+                </CardContent>
+              </Card>
+            </div>
 
-                  <div className="flex items-center justify-between text-base">
-                    <span className="font-semibold text-zinc-700 dark:text-zinc-200">Total</span>
-                    <span className="text-2xl font-semibold text-zinc-950 dark:text-white">
-                      {formatMoney(finalTotal)}
-                    </span>
-                  </div>
-                </div>
-
-                {errorMessage ? (
-                  <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
-                    {errorMessage}
-                  </div>
-                ) : null}
-
-                <Button
-                  className="mt-6 h-14 w-full rounded-2xl text-base font-semibold"
-                  onClick={() => createOrderM.mutate()}
-                  disabled={!canSubmit || createOrderM.isPending}
-                >
-                  {createOrderM.isPending ? "Placing Order..." : "Place Order"}
-                  {!createOrderM.isPending ? <ArrowRight className="ml-2 h-4 w-4" /> : null}
-                </Button>
-
-                <div className="mt-6 rounded-[1.75rem] border border-cyan-200 bg-cyan-50/80 p-4 text-sm text-cyan-900 dark:border-cyan-900 dark:bg-cyan-950/20 dark:text-cyan-100">
-                  <div className="flex items-center gap-2 font-semibold">
-                    <ShieldCheck className="h-4 w-4" />
-                    Live dispatch handoff
-                  </div>
-                  <div className="mt-2 leading-relaxed text-cyan-900/80 dark:text-cyan-100/80">
-                    This order goes straight into the live dispatch workflow as soon as it is created.
-                  </div>
-                </div>
-              </div>
+            {/* Desktop: sticky summary */}
+            <aside className="hidden lg:sticky lg:top-24 lg:block">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Order summary</CardTitle>
+                  <CardDescription>
+                    {totals.items} {totals.items === 1 ? "item" : "items"} from one market
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  {marketBlock}
+                  <Separator />
+                  {lineItems}
+                  <Separator />
+                  {totalsRows}
+                  {!canSubmit && missing.length > 0 ? <MissingFields missing={missing} /> : null}
+                  {errorAlert}
+                </CardContent>
+                <CardFooter className="flex-col items-stretch gap-3">
+                  {placeOrderButton}
+                  {trustNote}
+                </CardFooter>
+              </Card>
             </aside>
           </div>
         )}
+      </main>
+    </div>
+  );
+}
+
+function StepTitle({ step, title, description }: { step: number; title: string; description: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground tabular-nums">
+        {step}
+      </span>
+      <div className="grid gap-1">
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
       </div>
     </div>
+  );
+}
+
+function SummaryRow({ label, value, valueClassName }: { label: ReactNode; value: ReactNode; valueClassName?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-medium tabular-nums", valueClassName)}>{value}</span>
+    </div>
+  );
+}
+
+function ItemThumb({ item }: { item: CartItem }) {
+  const src = resolveApiMediaUrl(item.image_url);
+  return (
+    <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted text-muted-foreground">
+      {src ? <img src={src} alt={item.name} className="size-full object-cover" /> : <ShoppingBag className="size-4" />}
+    </div>
+  );
+}
+
+function ItemCustomizations({ item }: { item: CartItem }) {
+  const removed = item.removed_ingredients ?? [];
+  if (!item.combo_offer && removed.length === 0) return null;
+  return (
+    <div className="mt-0.5 grid gap-0.5 text-xs text-muted-foreground">
+      {item.combo_offer ? <span className="truncate">Combo: {item.combo_offer.name}</span> : null}
+      {removed.length > 0 ? <span className="truncate">Without: {removed.join(", ")}</span> : null}
+    </div>
+  );
+}
+
+function SummaryLineItem({ item }: { item: CartItem }) {
+  return (
+    <li className="flex items-start gap-3">
+      <ItemThumb item={item} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{item.name}</div>
+        <ItemCustomizations item={item} />
+        <div className="text-xs text-muted-foreground tabular-nums">
+          {item.qty} × {formatMoney(item.price)}
+        </div>
+      </div>
+      <div className="text-sm font-medium tabular-nums">{formatMoney(item.price * item.qty)}</div>
+    </li>
+  );
+}
+
+function MissingFields({ missing }: { missing: string[] }) {
+  return (
+    <Alert>
+      <AlertCircle />
+      <AlertTitle>Almost there</AlertTitle>
+      <AlertDescription>
+        <p>To place the order, please add {missing.join(", ")}.</p>
+      </AlertDescription>
+    </Alert>
   );
 }

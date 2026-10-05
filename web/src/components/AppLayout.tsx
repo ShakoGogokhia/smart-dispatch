@@ -1,42 +1,59 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
   BarChart3,
+  Bell,
+  Boxes,
+  ChevronsUpDown,
+  ClipboardList,
   Compass,
-  Cog,
+  DatabaseZap,
+  ExternalLink,
+  History,
   Home,
+  LayoutDashboard,
   LogOut,
   Map,
+  Menu,
+  MessageSquareText,
   Package,
-  PanelLeftOpen,
+  ScrollText,
+  ShieldCheck,
   ShoppingBag,
-  Sparkles,
   Store,
   Truck,
+  UserRound,
   Users,
-  Warehouse,
-  Bell,
-  ChevronRight,
-  PanelTop,
-  History,
   Wallet,
-  ClipboardList,
-  Boxes,
-  DatabaseZap,
-  MessageSquareText,
-  ShieldCheck,
-  ScrollText,
+  Warehouse,
+  type LucideIcon,
 } from "lucide-react";
+import { motion } from "motion/react";
 import { Link, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
+import { Brand } from "@/components/app/brand";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { getActiveMarketId, setActiveMarketId } from "@/lib/cart";
+import { formatDateTime } from "@/lib/format";
+import { resolveApiMediaUrl } from "@/lib/media";
 import { useMe } from "@/lib/useMe";
+import { cn } from "@/lib/utils";
 import type { NotificationRecord } from "@/types/api";
 
 type MarketLite = { id: number; name: string; code: string };
@@ -44,10 +61,13 @@ type MarketLite = { id: number; name: string; code: string };
 type NavEntry = {
   label: string;
   to: string;
-  icon: typeof Package;
+  icon: LucideIcon;
   end?: boolean;
   mobileLabel?: string;
+  badge?: number;
 };
+
+type NavSection = { title: string; items: NavEntry[] };
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -57,15 +77,22 @@ const ROLE_LABELS: Record<string, string> = {
   driver: "Driver",
 };
 
-function AppNavLink({
-  entry,
-  onNavigate,
-  badge,
-}: {
-  entry: NavEntry;
-  onNavigate?: () => void;
-  badge?: string | number;
-}) {
+function initials(name?: string | null) {
+  return (
+    (name ?? "User")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "U"
+  );
+}
+
+function isEntryActive(entry: NavEntry, path: string) {
+  return entry.end ? path === entry.to : path === entry.to || path.startsWith(`${entry.to}/`);
+}
+
+function SidebarLink({ entry, onNavigate }: { entry: NavEntry; onNavigate?: () => void }) {
   const Icon = entry.icon;
 
   return (
@@ -74,86 +101,123 @@ function AppNavLink({
       end={entry.end}
       onClick={onNavigate}
       className={({ isActive }) =>
-        [
-          "group relative flex items-center gap-3 rounded-[20px] border px-3 py-3 transition-all duration-200",
+        cn(
+          "group/nav relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13.5px] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring",
           isActive
-            ? "border-cyan-200 bg-cyan-50 text-slate-950 shadow-[0_10px_30px_rgba(8,145,178,0.10)] dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-white dark:shadow-[0_10px_30px_rgba(6,182,212,0.12)]"
-            : "border-transparent bg-white/70 text-slate-700 hover:-translate-y-[1px] hover:border-slate-200 hover:bg-white hover:text-slate-950 hover:shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:bg-slate-900/70 dark:text-slate-200 dark:hover:border-slate-700 dark:hover:bg-slate-900 dark:hover:text-white dark:hover:shadow-[0_12px_28px_rgba(0,0,0,0.25)]",
-        ].join(" ")
+            ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+        )
       }
     >
       {({ isActive }) => (
         <>
-          <span
-            className={[
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border transition-all",
-              isActive
-                ? "border-cyan-200 bg-white text-cyan-700 shadow-sm dark:border-cyan-500/30 dark:bg-cyan-500/15 dark:text-cyan-200 dark:shadow-none"
-                : "border-slate-200/80 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200",
-            ].join(" ")}
-          >
-            <Icon className="h-4 w-4" />
-          </span>
-
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{entry.label}</div>
-          </div>
-
-          {badge !== undefined ? (
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-              {badge}
+          {isActive ? (
+            <motion.span
+              layoutId="sidebar-active"
+              className="absolute top-1.5 bottom-1.5 -left-3 w-[3px] rounded-full bg-sidebar-primary"
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              aria-hidden
+            />
+          ) : null}
+          <Icon
+            className={cn(
+              "size-4 shrink-0 transition-colors",
+              isActive ? "text-sidebar-primary" : "text-muted-foreground group-hover/nav:text-current",
+            )}
+          />
+          <span className="flex-1 truncate">{entry.label}</span>
+          {entry.badge ? (
+            <span className="rounded-full bg-sidebar-primary px-1.5 text-[10px] font-semibold text-sidebar-primary-foreground tabular-nums">
+              {entry.badge > 99 ? "99+" : entry.badge}
             </span>
           ) : null}
-
-          <ChevronRight
-            className={[
-              "h-4 w-4 shrink-0 transition-all",
-              isActive ? "translate-x-0 text-cyan-600 dark:text-cyan-300" : "text-slate-400 group-hover:translate-x-0.5 dark:text-slate-500",
-            ].join(" ")}
-          />
         </>
       )}
     </NavLink>
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function NotificationsButton({ notifications, unreadCount }: { notifications: NotificationRecord[]; unreadCount: number }) {
   return (
-    <div className="px-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-      {children}
-    </div>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative" aria-label={`Notifications (${unreadCount} unread)`}>
+          <Bell className="size-[18px]" />
+          {unreadCount > 0 ? (
+            <span className="absolute top-1 right-1 flex min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-4 font-semibold text-white tabular-nums">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <div className="text-sm font-semibold">Notifications</div>
+          <span className="text-xs text-muted-foreground">{unreadCount} unread</span>
+        </div>
+        <div className="max-h-80 overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">You're all caught up.</div>
+          ) : (
+            notifications.slice(0, 6).map((notification) => (
+              <div key={notification.id} className="flex gap-3 border-b px-4 py-3 last:border-0">
+                <span
+                  className={cn("mt-1.5 size-2 shrink-0 rounded-full", notification.read_at ? "bg-transparent" : "bg-primary")}
+                  aria-hidden
+                />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{notification.title}</div>
+                  <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{notification.message}</div>
+                  {notification.created_at ? (
+                    <div className="mt-1 text-[11px] text-muted-foreground/80">{formatDateTime(notification.created_at)}</div>
+                  ) : null}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="border-t p-2">
+          <Button asChild variant="ghost" size="sm" className="w-full">
+            <Link to="/notifications">View all notifications</Link>
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { marketId: routeMarketId } = useParams();
   const meQ = useMe();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const roles = meQ.data?.roles ?? [];
+  const user = meQ.data;
+  const roles = user?.roles ?? [];
   const roleLabels = roles.map((role: string) => ROLE_LABELS[role] ?? role);
   const isAdmin = roles.includes("admin");
   const isDriver = roles.includes("driver");
   const isCustomerOnly =
     roles.includes("customer") && !isAdmin && !roles.includes("owner") && !roles.includes("staff");
+  const profilePhotoUrl = resolveApiMediaUrl(user?.profile_photo_url);
 
   const myMarketsQ = useQuery({
     queryKey: ["my-markets-lite"],
     queryFn: async () => (await api.get("/api/my/markets")).data as MarketLite[],
-    enabled: !!meQ.data && !roles.includes("customer"),
+    enabled: !!user && !roles.includes("customer"),
     retry: false,
   });
 
   const notificationsQ = useQuery({
     queryKey: ["notifications"],
     queryFn: async () => (await api.get("/api/notifications")).data as NotificationRecord[],
-    enabled: !!meQ.data,
+    enabled: !!user,
     refetchInterval: 15000,
   });
 
-  const unreadCount = notificationsQ.data?.filter((item) => !item.read_at).length ?? 0;
+  const notifications = notificationsQ.data ?? [];
+  const unreadCount = notifications.filter((item) => !item.read_at).length;
 
   const storedMarketId = getActiveMarketId() || undefined;
   const autoMarketId = myMarketsQ.data?.length === 1 ? String(myMarketsQ.data[0].id) : undefined;
@@ -176,392 +240,300 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [autoMarketId, routeMarketId, storedMarketId]);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [currentPath]);
+
   function logout() {
     auth.clear();
     navigate("/login", { replace: true });
   }
 
-  const primaryNav: NavEntry[] = isCustomerOnly
-    ? [
-        { label: "Orders", to: "/orders", icon: Package },
-        { label: "Order history", to: "/order-history", icon: History },
-        { label: "Notifications", to: "/notifications", icon: Bell },
-      ]
-    : [
-        ...(isDriver ? [{ label: "Driver hub", to: "/driver-hub", icon: Truck, mobileLabel: "Driver" }] : []),
-        ...(isDriver ? [{ label: "Earnings", to: "/driver-earnings", icon: Wallet, mobileLabel: "Earn" }] : []),
+  function switchMarket(market: MarketLite) {
+    setActiveMarketId(String(market.id));
+    navigate(`/markets/${market.id}/dashboard`);
+  }
+
+  const sections: NavSection[] = useMemo(() => {
+    if (isCustomerOnly) {
+      return [
+        {
+          title: "My account",
+          items: [
+            { label: "Orders", to: "/orders", icon: Package, end: true },
+            { label: "Order history", to: "/order-history", icon: History, end: true },
+            { label: "Notifications", to: "/notifications", icon: Bell, end: true, badge: unreadCount },
+          ],
+        },
+      ];
+    }
+
+    const result: NavSection[] = [];
+
+    if (isDriver) {
+      result.push({
+        title: "Driver",
+        items: [
+          { label: "Driver hub", to: "/driver-hub", icon: Truck, end: true, mobileLabel: "Driver" },
+          { label: "Earnings", to: "/driver-earnings", icon: Wallet, end: true, mobileLabel: "Earn" },
+        ],
+      });
+    }
+
+    result.push({
+      title: "Operations",
+      items: [
         { label: "Orders", to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
         { label: "Dispatch", to: "/dispatch", icon: ClipboardList, end: true, mobileLabel: "Dispatch" },
         { label: "Routes", to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
         { label: "Live map", to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
         { label: "Analytics", to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
-        { label: "Notifications", to: "/notifications", icon: Bell, end: true, mobileLabel: "Alerts" },
-        { label: "Support", to: "/support", icon: MessageSquareText, end: true, mobileLabel: "Help" },
-      ];
+        { label: "Notifications", to: "/notifications", icon: Bell, end: true, badge: unreadCount },
+        { label: "Support", to: "/support", icon: MessageSquareText, end: true },
+      ],
+    });
 
-  const marketNav: NavEntry[] = currentMarketId
+    result.push({
+      title: currentMarket ? currentMarket.name : "Markets",
+      items: [
+        { label: isAdmin ? "All markets" : "My markets", to: isAdmin ? "/markets" : "/my-markets", icon: Store, end: true, mobileLabel: "Markets" },
+        ...(currentMarketId
+          ? [
+              { label: "Dashboard", to: `/markets/${currentMarketId}/dashboard`, icon: LayoutDashboard, end: true },
+              { label: "Products", to: `/markets/${currentMarketId}/items`, icon: ShoppingBag, end: true },
+              { label: "Inventory alerts", to: `/markets/${currentMarketId}/inventory-alerts`, icon: Boxes, end: true },
+              { label: "Promo codes", to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
+              { label: "Market settings", to: `/markets/${currentMarketId}`, icon: Compass, end: true },
+            ]
+          : []),
+      ],
+    });
+
+    if (isAdmin) {
+      result.push({
+        title: "Admin",
+        items: [
+          { label: "Drivers", to: "/drivers", icon: Warehouse, end: true },
+          { label: "Users", to: "/users", icon: Users, end: true },
+          { label: "Global promos", to: "/promo-codes", icon: Activity, end: true },
+          { label: "Badge pricing", to: "/badge-pricing", icon: ShieldCheck, end: true },
+          { label: "Approvals", to: "/approvals", icon: ShieldCheck, end: true },
+          { label: "Audit logs", to: "/audit-logs", icon: ScrollText, end: true },
+          { label: "Demo scenario", to: "/demo-scenario", icon: DatabaseZap, end: true },
+        ],
+      });
+    }
+
+    return result;
+  }, [currentMarket, currentMarketId, isAdmin, isCustomerOnly, isDriver, unreadCount]);
+
+  const allEntries = sections.flatMap((section) => section.items);
+  const currentEntry = allEntries.find((entry) => isEntryActive(entry, currentPath));
+  const currentSection = sections.find((section) => section.items.includes(currentEntry as NavEntry));
+  const pageTitle =
+    currentEntry?.label ??
+    (currentPath === "/profile" ? "Profile" : currentPath.startsWith("/markets/") ? "Market" : "Workspace");
+
+  const bottomNav: NavEntry[] = isCustomerOnly
     ? [
-        { label: "Dashboard", to: `/markets/${currentMarketId}/dashboard`, icon: BarChart3, end: true },
-        { label: "Settings", to: `/markets/${currentMarketId}`, icon: Compass, end: true },
-        { label: "Items", to: `/markets/${currentMarketId}/items`, icon: ShoppingBag, end: true },
-        { label: "Inventory alerts", to: `/markets/${currentMarketId}/inventory-alerts`, icon: Boxes, end: true },
-        { label: "Promo codes", to: `/markets/${currentMarketId}/promo-codes`, icon: Activity, end: true },
+        { label: "Orders", to: "/orders", icon: Home, end: true },
+        { label: "History", to: "/order-history", icon: History, end: true },
+        { label: "Alerts", to: "/notifications", icon: Bell, end: true },
+        { label: "Shop", to: "/", icon: Store, end: true },
       ]
-    : [];
-
-  const marketHubEntry: NavEntry | null = isCustomerOnly
-    ? null
-    : {
-        label: isAdmin ? "Markets" : "My markets",
-        to: isAdmin ? "/markets" : "/my-markets",
-        icon: Store,
-        end: true,
-        mobileLabel: "Markets",
-      };
-
-  const bottomNav = isCustomerOnly
-    ? [{ label: "Orders", to: "/orders", icon: Home, end: true, mobileLabel: "Orders" }]
     : [
-        { label: "Orders", to: "/orders", icon: Home, end: true, mobileLabel: "Home" },
+        { label: "Orders", to: "/orders", icon: Package, end: true },
         isDriver
-          ? { label: "Driver hub", to: "/driver-hub", icon: Truck, end: true, mobileLabel: "Driver" }
-          : { label: "Routes", to: "/routes", icon: Truck, end: true, mobileLabel: "Routes" },
-        { label: "Live map", to: "/live-map", icon: Map, end: true, mobileLabel: "Map" },
-        marketHubEntry ?? { label: "Orders", to: "/orders", icon: Package, end: true, mobileLabel: "Orders" },
-        { label: "Analytics", to: "/analytics", icon: BarChart3, end: true, mobileLabel: "Stats" },
+          ? { label: "Driver", to: "/driver-hub", icon: Truck, end: true }
+          : { label: "Routes", to: "/routes", icon: Truck, end: true },
+        { label: "Map", to: "/live-map", icon: Map, end: true },
+        { label: "Markets", to: isAdmin ? "/markets" : "/my-markets", icon: Store, end: true },
+        { label: "Stats", to: "/analytics", icon: BarChart3, end: true },
       ];
 
-  const activeBottomEntry = bottomNav.find((entry) =>
-    entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`),
-  );
-
-  const currentSectionTitle = useMemo(() => {
-    const allEntries = [
-      ...primaryNav,
-      ...(marketHubEntry ? [marketHubEntry] : []),
-      ...marketNav,
-      ...(isAdmin
-        ? [
-            { label: "Drivers", to: "/drivers", icon: Warehouse, end: true },
-            { label: "Global promos", to: "/promo-codes", icon: Activity, end: true },
-            { label: "Approvals", to: "/approvals", icon: ShieldCheck, end: true },
-            { label: "Audit logs", to: "/audit-logs", icon: ScrollText, end: true },
-            { label: "Users", to: "/users", icon: Users, end: true },
-            { label: "Demo scenario", to: "/demo-scenario", icon: DatabaseZap, end: true },
-          ]
-        : []),
-    ];
-
-    const matchingEntry = allEntries.find((entry) =>
-      entry.end ? currentPath === entry.to : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`),
-    );
-
-    return matchingEntry?.label ?? "Smart Dispatch workspace";
-  }, [currentPath, isAdmin, marketHubEntry, marketNav, primaryNav]);
-
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [currentPath]);
+  const showMarketSwitcher = !isCustomerOnly && (myMarketsQ.data?.length ?? 0) > 0;
 
   const sidebar = (
-    <div className="flex h-full flex-col gap-4">
-      <div className="relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-[0_18px_50px_rgba(0,0,0,0.40)]">
-        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl dark:bg-sky-400/10" />
-
-        <Link to="/" onClick={() => setMobileOpen(false)} className="relative flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-slate-900 text-white shadow-[0_18px_40px_rgba(15,23,42,0.18)] dark:bg-cyan-500/14 dark:text-cyan-100 dark:shadow-none">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-[22px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
-              Smart Dispatch
-            </div>
-            <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
-              Markets, deliveries, and dispatch in one workspace
-            </div>
-          </div>
-        </Link>
+    <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
+      <div className="flex h-14 shrink-0 items-center border-b border-sidebar-border px-4">
+        <Brand to="/" subtitle="Workspace" />
       </div>
 
-      <div className="rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-          Signed in as
-        </div>
-
-        <div className="mt-3 text-xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
-          {meQ.data?.name || "Loading user..."}
-        </div>
-
-        <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
-          {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {roles.map((role: string) => (
-            <span
-              key={role}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              {ROLE_LABELS[role] ?? role}
-            </span>
-          ))}
-          {(meQ.data?.permissions ?? []).slice(0, 3).map((permission: string) => (
-            <span
-              key={permission}
-              className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-700 dark:border-cyan-500/25 dark:bg-cyan-500/10 dark:text-cyan-200"
-            >
-              {permission}
-            </span>
-          ))}
-        </div>
-
-        <Button
-          variant="secondary"
-          className="mt-4 h-11 w-full justify-start rounded-[18px] border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
-          onClick={() => navigate("/profile")}
-        >
-          <Cog className="mr-2 h-4 w-4" />
-          Profile settings
-        </Button>
-
-        {currentMarket && (
-          <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-              Active market
-            </div>
-            <div className="mt-2 text-base font-semibold text-slate-950 dark:text-white">{currentMarket.name}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-300">{currentMarket.code}</div>
-          </div>
-        )}
-
-        <div className="mt-4 rounded-[22px] border border-slate-200/70 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-              Notifications
-            </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-cyan-500/15 dark:text-cyan-200">
-              <Bell className="h-4 w-4" />
-            </div>
-          </div>
-
-          <div className="mt-3 text-lg font-semibold text-slate-950 dark:text-white">{unreadCount} unread</div>
-
-          <div className="mt-3 grid gap-2">
-            {(notificationsQ.data ?? []).slice(0, 3).map((notification) => (
-              <div
-                key={notification.id}
-                className="rounded-[18px] border border-slate-200/70 bg-white px-3 py-3 text-sm shadow-sm dark:border-slate-700 dark:bg-slate-800/90"
+      {showMarketSwitcher ? (
+        <div className="shrink-0 border-b border-sidebar-border p-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2.5 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               >
-                <div className="font-semibold text-slate-900 dark:text-white">{notification.title}</div>
-                <div className="mt-1 line-clamp-2 text-xs text-slate-500 dark:text-slate-300">
-                  {notification.message}
-                </div>
+                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Store className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11px] text-muted-foreground">Active market</span>
+                  <span className="block truncate text-sm font-medium">{currentMarket?.name ?? "Choose a market"}</span>
+                </span>
+                <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-56">
+              <DropdownMenuLabel className="text-xs text-muted-foreground">Switch market</DropdownMenuLabel>
+              {(myMarketsQ.data ?? []).map((market) => (
+                <DropdownMenuItem
+                  key={market.id}
+                  onClick={() => switchMarket(market)}
+                  className={cn(String(market.id) === currentMarketId && "bg-accent font-medium")}
+                >
+                  <Store />
+                  <span className="flex-1 truncate">{market.name}</span>
+                  <span className="text-xs text-muted-foreground">{market.code}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : null}
+
+      <ScrollArea className="min-h-0 flex-1">
+        <nav className="flex flex-col gap-5 p-3 pb-6">
+          {sections.map((section) => (
+            <div key={section.title} className="flex flex-col gap-0.5">
+              <div className="truncate px-2.5 pb-1.5 text-[11px] font-semibold tracking-wider text-muted-foreground/80 uppercase">
+                {section.title}
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
-        <SectionLabel>Operations</SectionLabel>
-        <div className="space-y-2">
-          {primaryNav.map((entry) => (
-            <AppNavLink key={entry.to} entry={entry} onNavigate={() => setMobileOpen(false)} />
+              {section.items.map((entry) => (
+                <SidebarLink key={entry.to} entry={entry} onNavigate={() => setMobileOpen(false)} />
+              ))}
+            </div>
           ))}
-        </div>
-      </div>
+        </nav>
+      </ScrollArea>
 
-      {!isCustomerOnly && (
-        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
-          <SectionLabel>Markets</SectionLabel>
-          <div className="space-y-2">
-            <AppNavLink
-              entry={{
-                label: isAdmin ? "Markets" : "My markets",
-                to: isAdmin ? "/markets" : "/my-markets",
-                icon: Store,
-                end: true,
-              }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-            {marketNav.map((entry) => (
-              <AppNavLink key={entry.to} entry={entry} onNavigate={() => setMobileOpen(false)} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {isAdmin && (
-        <div className="space-y-3 rounded-[30px] border border-slate-200/70 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
-          <SectionLabel>Admin</SectionLabel>
-          <div className="space-y-2">
-            <AppNavLink
-              entry={{ label: "Drivers", to: "/drivers", icon: Warehouse, end: true }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-            <AppNavLink
-              entry={{ label: "Global promos", to: "/promo-codes", icon: Activity, end: true }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-            <AppNavLink
-              entry={{ label: "Approvals", to: "/approvals", icon: ShieldCheck, end: true }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-            <AppNavLink
-              entry={{ label: "Audit logs", to: "/audit-logs", icon: ScrollText, end: true }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-            <AppNavLink
-              entry={{ label: "Users", to: "/users", icon: Users, end: true }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-            <AppNavLink
-              entry={{ label: "Demo scenario", to: "/demo-scenario", icon: DatabaseZap, end: true }}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      <div className="mt-auto">
-        <Button
-          variant="secondary"
-          className="h-14 w-full justify-start rounded-[22px] border border-slate-200 bg-white text-slate-900 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:hover:bg-slate-800"
-          onClick={logout}
+      <div className="shrink-0 border-t border-sidebar-border p-3">
+        <Link
+          to="/profile"
+          className="flex items-center gap-2.5 rounded-md p-1.5 transition-colors hover:bg-sidebar-accent"
         >
-          <LogOut className="mr-2 h-4 w-4" />
-          Log out
-        </Button>
+          <Avatar className="size-8">
+            {profilePhotoUrl ? <AvatarImage src={profilePhotoUrl} alt={user?.name ?? "Profile"} /> : null}
+            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials(user?.name)}</AvatarFallback>
+          </Avatar>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{user?.name ?? "Loading..."}</span>
+            <span className="block truncate text-xs text-muted-foreground">
+              {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
+            </span>
+          </span>
+        </Link>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-[#020617] dark:text-white">
-      <div className="mx-auto flex min-h-screen max-w-[1700px] gap-5 px-3 py-3 md:px-5 md:py-5">
-        <aside className="hidden w-[340px] shrink-0 xl:block">{sidebar}</aside>
+    <div className="flex h-svh overflow-hidden bg-background">
+      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border lg:block">{sidebar}</aside>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="xl:hidden">
-            <div className="rounded-[28px] border border-slate-200/70 bg-white/85 p-3 shadow-[0_16px_40px_rgba(15,23,42,0.07)] backdrop-blur-sm dark:border-slate-800 dark:bg-[#0f172a] dark:shadow-[0_16px_40px_rgba(0,0,0,0.30)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <Button
-                    variant="secondary"
-                    className="h-11 w-11 rounded-[16px] border border-slate-200 bg-white p-0 shadow-sm dark:border-slate-700 dark:bg-slate-800"
-                    onClick={() => setMobileOpen(true)}
-                    aria-label="Open navigation"
-                  >
-                    <PanelLeftOpen className="h-4 w-4" />
-                  </Button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-xl md:px-5">
+          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open navigation">
+            <Menu className="size-5" />
+          </Button>
 
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                      {activeBottomEntry?.mobileLabel || "Workspace"}
-                    </div>
-                    <div className="truncate text-lg font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
-                      {currentSectionTitle}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="flex h-10 min-w-[40px] items-center justify-center rounded-full bg-slate-900 px-3 text-sm font-semibold text-white dark:bg-cyan-500/15 dark:text-cyan-200">
-                    {unreadCount}
-                  </div>
-                  <ThemeToggle className="h-11 w-11 rounded-[16px] border border-slate-200 bg-white p-0 shadow-sm dark:border-slate-700 dark:bg-slate-800" />
-                </div>
-              </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 text-sm">
+              {currentSection ? (
+                <span className="hidden truncate text-muted-foreground sm:inline">{currentSection.title}</span>
+              ) : null}
+              {currentSection ? <span className="hidden text-muted-foreground/50 sm:inline">/</span> : null}
+              <span className="truncate font-medium">{pageTitle}</span>
             </div>
           </div>
 
-          <div className="hidden overflow-hidden rounded-[34px] border border-white/10 bg-slate-950 px-6 py-6 shadow-[0_25px_80px_rgba(0,0,0,0.22)] xl:flex xl:items-start xl:justify-between dark:bg-[#08111b]">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white/85">
-                <PanelTop className="h-3.5 w-3.5" />
-                Workspace
-              </div>
+          <Button asChild variant="ghost" size="sm" className="hidden md:inline-flex">
+            <Link to="/">
+              <ExternalLink />
+              Storefront
+            </Link>
+          </Button>
+          <NotificationsButton notifications={notifications} unreadCount={unreadCount} />
+          <ThemeToggle compact />
 
-              <div className="mt-4 text-3xl font-semibold tracking-[-0.05em] text-white">
-                Smart Dispatch control center
-              </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account menu">
+                <Avatar className="size-7">
+                  {profilePhotoUrl ? <AvatarImage src={profilePhotoUrl} alt={user?.name ?? "Profile"} /> : null}
+                  <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials(user?.name)}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuLabel className="font-normal">
+                <div className="truncate text-sm font-medium">{user?.name ?? "Loading..."}</div>
+                <div className="truncate text-xs text-muted-foreground">{user?.email ?? ""}</div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link to="/profile">
+                  <UserRound />
+                  Profile settings
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link to="/">
+                  <Store />
+                  Open storefront
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={logout}>
+                <LogOut />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
 
-              <div className="mt-2 text-sm leading-6 text-white/70">
-                Orders, routes, live operations, users, analytics, and market tools in one high-end workspace.
-              </div>
+        <main className="scrollbar-thin min-w-0 flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-7xl px-4 py-5 pb-24 md:px-6 md:py-6 lg:pb-8">{children}</div>
+        </main>
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/85">
-                  {roleLabels.length ? roleLabels.join(", ") : "Workspace member"}
-                </span>
-                <span className="rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm text-white/85">
-                  {currentMarket?.code || "Global workspace"}
-                </span>
-                <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100">
-                  {unreadCount} unread notifications
-                </span>
-              </div>
-            </div>
+        <nav
+          className="fixed inset-x-0 bottom-0 z-40 grid border-t bg-background/90 px-2 pt-1.5 backdrop-blur-xl lg:hidden"
+          style={{
+            gridTemplateColumns: `repeat(${bottomNav.length}, minmax(0, 1fr))`,
+            paddingBottom: "calc(0.375rem + env(safe-area-inset-bottom, 0px))",
+          }}
+          aria-label="Primary"
+        >
+          {bottomNav.map((entry) => {
+            const Icon = entry.icon;
+            const active = isEntryActive(entry, currentPath);
 
-            <div className="ml-6 flex items-center gap-3">
-              <div className="hidden text-right md:block">
-                <div className="text-xs uppercase tracking-[0.22em] text-white/50">Signed in as</div>
-                <div className="mt-2 text-sm font-semibold text-white">{meQ.data?.name || "Loading user..."}</div>
-              </div>
-              <ThemeToggle />
-            </div>
-          </div>
-
-          <main className="min-w-0 flex-1 overflow-hidden rounded-[34px] border border-slate-200/70 bg-white/88 p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-sm md:p-6 dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-[0_18px_50px_rgba(0,0,0,0.32)]">
-            {children}
-          </main>
-
-          <nav
-            className="fixed bottom-3 left-3 right-3 z-40 grid grid-cols-5 gap-2 rounded-[24px] border border-slate-200/70 bg-white/92 p-2 shadow-[0_20px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl xl:hidden dark:border-slate-800 dark:bg-[#0b1220]/95 dark:shadow-[0_20px_40px_rgba(0,0,0,0.35)]"
-            aria-label="Primary"
-          >
-            {bottomNav.map((entry) => {
-              const Icon = entry.icon;
-              const isActive = entry.end
-                ? currentPath === entry.to
-                : currentPath === entry.to || currentPath.startsWith(`${entry.to}/`);
-
-              return (
-                <NavLink
-                  key={entry.to}
-                  to={entry.to}
-                  end={entry.end}
-                  className={[
-                    "flex flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2.5 text-[11px] font-semibold transition-all",
-                    isActive
-                      ? "bg-slate-950 text-white shadow-sm dark:bg-cyan-500/14 dark:text-cyan-200 dark:shadow-none"
-                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
-                  ].join(" ")}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{entry.mobileLabel ?? entry.label}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
+            return (
+              <NavLink
+                key={entry.to}
+                to={entry.to}
+                end={entry.end}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-0.5 rounded-md py-1.5 text-[11px] font-medium transition-colors",
+                  active ? "text-primary" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="size-5" />
+                <span>{entry.label}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent
-          side="left"
-          className="border-0 bg-transparent p-0 shadow-none sm:max-w-md"
-          showCloseButton={false}
-        >
-          <SheetHeader className="sr-only">
-            <SheetTitle>Smart Dispatch workspace</SheetTitle>
-            <SheetDescription>Orders, routes, live operations, and market tools in one place.</SheetDescription>
-          </SheetHeader>
-          <div className="h-full overflow-y-auto p-3">
-            <div className="h-full rounded-[30px] border border-slate-200/70 bg-slate-100/95 p-3 shadow-[0_25px_80px_rgba(15,23,42,0.12)] backdrop-blur-xl dark:border-slate-800 dark:bg-[#020817]/98 dark:shadow-[0_25px_80px_rgba(0,0,0,0.45)]">
-              {sidebar}
-            </div>
-          </div>
+        <SheetContent side="left" className="w-72 gap-0 p-0" showCloseButton={false}>
+          <SheetTitle className="sr-only">Smart Dispatch navigation</SheetTitle>
+          <SheetDescription className="sr-only">Orders, routes, live operations, and market tools.</SheetDescription>
+          {sidebar}
         </SheetContent>
       </Sheet>
     </div>

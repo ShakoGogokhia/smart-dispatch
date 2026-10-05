@@ -1,8 +1,11 @@
-import { DatabaseZap } from "lucide-react";
+import { AlertCircle, CheckCircle2, DatabaseZap, TriangleAlert } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 
+import { PageHeader } from "@/components/app/page-header";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 
 type DemoScenarioResult = {
@@ -13,42 +16,76 @@ type DemoScenarioResult = {
   route_id: number;
 };
 
+const CREATES = [
+  "Demo users",
+  "Market items",
+  "Low-stock alerts",
+  "Orders across the lifecycle",
+  "Route stops",
+  "Location pings",
+  "Reviews",
+  "A notification",
+];
+
 export default function DemoScenarioPage() {
   const demoM = useMutation({
     mutationFn: async () => (await api.post("/api/demo/scenario")).data as DemoScenarioResult,
   });
 
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">Demo scenario</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader title="Demo scenario" description="Fill the workspace with realistic sample data for demos and testing." />
 
-      <Card className="rounded-[30px]">
+      <Alert>
+        <TriangleAlert />
+        <AlertTitle>This writes real records to the database</AlertTitle>
+        <AlertDescription>Run it only on a demo or test environment. Generated data shows up for every user.</AlertDescription>
+      </Alert>
+
+      <Card className="max-w-3xl">
         <CardHeader>
-          <CardTitle className="text-2xl">Generate a realistic demo workspace</CardTitle>
+          <CardTitle>Generate a realistic demo workspace</CardTitle>
+          <CardDescription>One click creates everything below so you can walk through the full order flow.</CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-5">
-          <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5 text-sm leading-6 theme-copy dark:border-slate-800 dark:bg-slate-900">
-            Creates demo users, market items, low-stock alerts, orders across the lifecycle, route stops, location pings, reviews, and a notification.
-          </div>
-          <div>
-            <Button onClick={() => demoM.mutate()} disabled={demoM.isPending}>
-              <DatabaseZap className="h-4 w-4" />
-              {demoM.isPending ? "Generating..." : "Generate demo scenario"}
-            </Button>
-          </div>
+        <CardContent className="grid gap-4">
+          <ul className="grid gap-2 rounded-lg border bg-muted/30 p-4 text-sm sm:grid-cols-2">
+            {CREATES.map((item) => (
+              <li key={item} className="flex items-center gap-2">
+                <CheckCircle2 className="size-4 shrink-0 text-muted-foreground" />
+                {item}
+              </li>
+            ))}
+          </ul>
+
           {demoM.data && (
-            <div className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900 dark:border-emerald-300/15 dark:bg-emerald-300/10 dark:text-emerald-100">
-              {demoM.data.message} Market #{demoM.data.market_id}, {demoM.data.orders_created} orders, route #{demoM.data.route_id}.
+            <div className="grid gap-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-success">
+                <CheckCircle2 className="size-4" />
+                {demoM.data.message}
+              </div>
+              <pre className="overflow-x-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">
+                {[
+                  `market_id      #${demoM.data.market_id}`,
+                  `orders_created ${demoM.data.orders_created}`,
+                  `items_ready    ${demoM.data.items_ready}`,
+                  `route_id       #${demoM.data.route_id}`,
+                ].join("\n")}
+              </pre>
             </div>
           )}
           {demoM.isError && (
-            <div className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700 dark:border-rose-300/15 dark:bg-rose-300/10 dark:text-rose-100">
-              Demo generation failed. Make sure you are signed in as an admin.
-            </div>
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>Demo generation failed. Make sure you are signed in as an admin.</AlertDescription>
+            </Alert>
           )}
         </CardContent>
+        <CardFooter>
+          <Button onClick={() => demoM.mutate()} disabled={demoM.isPending}>
+            {demoM.isPending ? <Spinner /> : <DatabaseZap />}
+            {demoM.isPending ? "Generating..." : "Generate demo scenario"}
+          </Button>
+        </CardFooter>
       </Card>
     </div>
   );

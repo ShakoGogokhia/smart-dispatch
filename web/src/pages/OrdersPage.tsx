@@ -1,25 +1,55 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
+  AlertCircle,
+  CheckCircle2,
+  Circle,
+  ClipboardList,
   Clock3,
+  Eye,
   MapPin,
   MessageSquareMore,
+  MoreHorizontal,
+  Navigation,
+  PackageCheck,
   PackagePlus,
+  Receipt,
   Search,
   Star,
+  Store,
   Truck,
   Undo2,
   UserRound,
   Wallet,
   XCircle,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 import { MapContainer, Marker, TileLayer } from "react-leaflet";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
 import "leaflet/dist/leaflet.css";
 
-import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { StatusBadge, humanizeStatus, toneForStatus } from "@/components/app/status-badge";
+import { makeDotIcon } from "@/components/operations/map-markers";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -28,26 +58,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { formatDateTime, formatMoney, formatOrderStatus, getOrderStatusTone } from "@/lib/format";
+import { formatDateTime, formatMoney, formatOrderStatus } from "@/lib/format";
+import { useTheme } from "@/lib/theme";
 import { useMe } from "@/lib/useMe";
+import { cn } from "@/lib/utils";
 import type { Order, Paginated } from "@/types/api";
-
-function statusBadgeClass(status: string) {
-  switch (getOrderStatusTone(status)) {
-    case "success":
-      return "status-good";
-    case "warning":
-      return "status-warn";
-    case "danger":
-      return "status-bad";
-    default:
-      return "status-neutral";
-  }
-}
 
 function getErrorMessage(error: unknown) {
   if (!error || typeof error !== "object") return null;
@@ -55,9 +87,41 @@ function getErrorMessage(error: unknown) {
   return axiosError.response?.data?.message ?? (error as Error | null)?.message ?? null;
 }
 
+type StatusFilter = "all" | "pending" | "in_progress" | "delivered" | "cancelled";
+
+const DRIVER_FLOW_STATUSES = ["READY_FOR_PICKUP", "OFFERED", "ASSIGNED", "PICKED_UP"];
+
+const STATUS_GROUPS: Record<Exclude<StatusFilter, "all">, string[]> = {
+  pending: ["MARKET_PENDING"],
+  in_progress: ["MARKET_ACCEPTED", ...DRIVER_FLOW_STATUSES],
+  delivered: ["DELIVERED"],
+  cancelled: ["CANCELLED", "FAILED"],
+};
+
+const STATUS_FILTER_LABELS: Record<StatusFilter, string> = {
+  all: "All statuses",
+  pending: "Waiting for market",
+  in_progress: "In progress",
+  delivered: "Delivered",
+  cancelled: "Cancelled / failed",
+};
+
+function matchesStatus(order: Order, filter: StatusFilter) {
+  return filter === "all" || STATUS_GROUPS[filter].includes(order.status);
+}
+
+function driverNameOf(order: Order) {
+  return order.assigned_driver?.user?.name || order.offered_driver?.user?.name || null;
+}
+
+function customerNameOf(order: Order) {
+  return order.customer_name || order.customer?.name || "Unknown";
+}
+
 export default function OrdersPage() {
   const meQ = useMe();
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
 
   const [dropoffAddress, setDropoffAddress] = useState("Tbilisi Center");
   const [dropoffLat, setDropoffLat] = useState("41.7151");
@@ -68,12 +132,17 @@ export default function OrdersPage() {
   const [rating, setRating] = useState("5");
   const [feedback, setFeedback] = useState("");
   const [refundReason, setRefundReason] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [marketFilter, setMarketFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
 
   const roles = meQ.data?.roles ?? [];
   const isCustomerOnly =
     roles.includes("customer") &&
     !roles.some((role: string) => ["admin", "owner", "staff", "driver"].includes(role));
   const isOpsUser = roles.some((role: string) => ["admin", "owner", "staff"].includes(role));
+  const isDriver = roles.includes("driver");
 
   const ordersQ = useQuery({
     queryKey: ["orders"],
@@ -151,6 +220,21 @@ export default function OrdersPage() {
     },
   });
 
+  // UI-only feedback helpers (toasts); the mutations themselves are unchanged.
+  const notify = (success: string) => ({
+    onSuccess: () => toast.success(success),
+    onError: (error: unknown) => toast.error(getErrorMessage(error) || "Something went wrong."),
+  });
+
+  const acceptOrder = (orderId: number) => marketActionM.mutate({ orderId, action: "market-accept" }, notify("Order accepted"));
+  const markReady = (orderId: number) => marketActionM.mutate({ orderId, action: "mark-ready" }, notify("Order marked ready for pickup"));
+  const reorder = (orderId: number) => reorderM.mutate(orderId, notify("Order placed again"));
+  const confirmCancel = () => {
+    if (cancelTargetId == null) return;
+    cancelM.mutate(cancelTargetId, notify("Cancellation requested"));
+    setCancelTargetId(null);
+  };
+
   const filteredOrders = useMemo(() => {
     const orders = ordersQ.data?.data ?? [];
     const query = search.trim().toLowerCase();
@@ -164,11 +248,27 @@ export default function OrdersPage() {
     );
   }, [ordersQ.data?.data, search]);
 
+  const markets = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const order of ordersQ.data?.data ?? []) {
+      if (order.market) map.set(order.market.id, order.market.name);
+    }
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [ordersQ.data?.data]);
+
+  const visibleOrders = useMemo(
+    () =>
+      filteredOrders.filter(
+        (order) => matchesStatus(order, statusFilter) && (marketFilter === "all" || String(order.market?.id ?? "") === marketFilter),
+      ),
+    [filteredOrders, statusFilter, marketFilter],
+  );
+
   const deliveredCount = filteredOrders.filter((order) => order.status === "DELIVERED").length;
   const marketPendingCount = filteredOrders.filter((order) => order.status === "MARKET_PENDING").length;
-  const driverFlowCount = filteredOrders.filter((order) =>
-    ["READY_FOR_PICKUP", "OFFERED", "ASSIGNED", "PICKED_UP"].includes(order.status),
-  ).length;
+  const driverFlowCount = filteredOrders.filter((order) => DRIVER_FLOW_STATUSES.includes(order.status)).length;
+  const inProgressCount = filteredOrders.filter((order) => matchesStatus(order, "in_progress")).length;
+  const cancelledCount = filteredOrders.filter((order) => matchesStatus(order, "cancelled")).length;
 
   const detailOrder = detailQ.data;
 
@@ -180,659 +280,641 @@ export default function OrdersPage() {
     getErrorMessage(rateM.error) ||
     getErrorMessage(refundM.error);
 
+  const toggleStatus = (value: StatusFilter) => setStatusFilter((current) => (current === value ? "all" : value));
+  const filtersActive = search.trim() !== "" || statusFilter !== "all" || marketFilter !== "all";
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setMarketFilter("all");
+  };
+
+  const title = isCustomerOnly ? "My orders" : isDriver && !isOpsUser ? "My deliveries" : "Orders";
+  const description = isCustomerOnly
+    ? "Follow your orders as they move from the market to your door. This page refreshes automatically."
+    : isDriver && !isOpsUser
+      ? "Orders assigned or offered to you, with addresses, totals and delivery status."
+      : "Review incoming orders, move them through the market and driver flow, and follow up with customers.";
+
+  const actionsFor = (order: Order) => ({
+    onOpenDetail: () => setSelectedOrderId(order.id),
+    onAccept: () => acceptOrder(order.id),
+    onMarkReady: () => markReady(order.id),
+    pending: marketActionM.isPending && marketActionM.variables?.orderId === order.id,
+  });
+
   return (
-    <div className="grid gap-6">
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_420px]">
-        <div className="relative overflow-hidden rounded-[34px] border border-slate-200/70 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 shadow-[0_25px_80px_rgba(0,0,0,0.22)] dark:border-slate-800">
-          <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
-          <div className="absolute -right-16 bottom-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl" />
+    <div className="space-y-6">
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          !isCustomerOnly && isOpsUser ? (
+            <Button onClick={() => setCreateOpen(true)}>
+              <PackagePlus />
+              New order
+            </Button>
+          ) : undefined
+        }
+      />
 
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/80">
-              Orders workspace
-            </div>
+      <StatGrid>
+        <StatCard
+          label={isCustomerOnly ? "Your orders" : "Visible orders"}
+          value={filteredOrders.length}
+          icon={ClipboardList}
+          hint={statusFilter === "all" ? "Showing all" : "Click to show all"}
+          onClick={() => setStatusFilter("all")}
+          active={statusFilter === "all"}
+        />
+        <StatCard
+          label="Waiting for market"
+          value={marketPendingCount}
+          icon={Store}
+          tone="warning"
+          hint="Needs market acceptance"
+          onClick={() => toggleStatus("pending")}
+          active={statusFilter === "pending"}
+        />
+        <StatCard
+          label="In progress"
+          value={inProgressCount}
+          icon={Truck}
+          tone="info"
+          hint={`${driverFlowCount} in driver flow`}
+          onClick={() => toggleStatus("in_progress")}
+          active={statusFilter === "in_progress"}
+        />
+        <StatCard
+          label="Delivered"
+          value={deliveredCount}
+          icon={PackageCheck}
+          tone="success"
+          hint={cancelledCount > 0 ? `${cancelledCount} cancelled / failed` : "With delivery proof"}
+          onClick={() => toggleStatus("delivered")}
+          active={statusFilter === "delivered"}
+        />
+      </StatGrid>
 
-            <h1 className="mt-5 text-5xl font-semibold tracking-[-0.06em] text-white md:text-6xl">
-              Orders
-            </h1>
-
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-              Manage intake, delivery flow, proof of delivery, and customer follow-up in one clean workspace.
-            </p>
-
-            <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <Metric
-                title="Visible orders"
-                value={filteredOrders.length}
-                helper={isCustomerOnly ? "Timeline" : "Search orders"}
-              />
-              <Metric title="Market pending" value={marketPendingCount} helper="Market" />
-              <Metric title="In driver flow" value={driverFlowCount} helper="Driver" />
-              <Metric title="Delivered" value={deliveredCount} helper="Delivery proof" />
-            </div>
-          </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-0 flex-1 sm:min-w-64">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={isCustomerOnly ? "Search by order code or address" : "Search code, address, customer, market..."}
+            className="pl-9"
+            aria-label="Search orders"
+          />
         </div>
-
-        <div className="grid gap-4">
-          {!isCustomerOnly && isOpsUser && (
-            <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.07)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
-                  Create ops order
-                </CardTitle>
-                <p className="text-sm text-slate-500 dark:text-slate-300">
-                  Manual order intake for call center or dispatch scenarios.
-                </p>
-              </CardHeader>
-
-              <CardContent className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                    Address
-                  </Label>
-                  <Input
-                    value={dropoffAddress}
-                    onChange={(event) => setDropoffAddress(event.target.value)}
-                    className="h-12 rounded-[18px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                      Latitude
-                    </Label>
-                    <Input
-                      value={dropoffLat}
-                      onChange={(event) => setDropoffLat(event.target.value)}
-                      className="h-12 rounded-[18px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                      Longitude
-                    </Label>
-                    <Input
-                      value={dropoffLng}
-                      onChange={(event) => setDropoffLng(event.target.value)}
-                      className="h-12 rounded-[18px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    />
-                  </div>
-                </div>
-
-                <Button className="h-12 rounded-[18px]" onClick={() => createOrderM.mutate()} disabled={createOrderM.isPending}>
-                  <PackagePlus className="h-4 w-4" />
-                  {createOrderM.isPending ? "Creating..." : "Create order"}
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="rounded-[30px] border border-slate-200/70 bg-white/85 p-5 shadow-[0_16px_40px_rgba(15,23,42,0.05)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_16px_40px_rgba(0,0,0,0.34)]">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-              Search orders
-            </div>
-
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search orders"
-                className="h-12 rounded-[18px] border-slate-200 bg-white pl-11 text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              />
-            </div>
-
-            {errorMessage && (
-              <div className="mt-4 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-300/20 dark:bg-rose-300/10 dark:text-rose-100">
-                {errorMessage}
-              </div>
-            )}
-          </div>
+        <div className="flex flex-wrap gap-2">
+          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+            <SelectTrigger className="w-full min-w-44 sm:w-auto" aria-label="Filter by status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(STATUS_FILTER_LABELS) as StatusFilter[]).map((key) => (
+                <SelectItem key={key} value={key}>
+                  {STATUS_FILTER_LABELS[key]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {!isCustomerOnly && markets.length > 1 ? (
+            <Select value={marketFilter} onValueChange={setMarketFilter}>
+              <SelectTrigger className="w-full min-w-44 sm:w-auto" aria-label="Filter by market">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All markets</SelectItem>
+                {markets.map(([id, name]) => (
+                  <SelectItem key={id} value={String(id)}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {filtersActive ? (
+            <Button variant="ghost" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          ) : null}
         </div>
-      </section>
+      </div>
+
+      {errorMessage && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Action failed</AlertTitle>
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      )}
 
       {ordersQ.isLoading ? (
-        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 dark:border-slate-800 dark:bg-slate-950/90">
-          <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">
-            Loading orders...
-          </CardContent>
-        </Card>
+        <LoadingState rows={4} />
       ) : ordersQ.isError ? (
-        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 dark:border-slate-800 dark:bg-slate-950/90">
-          <CardContent className="p-8 text-sm text-rose-700 dark:text-rose-200">
-            Failed to load orders.
-          </CardContent>
-        </Card>
-      ) : filteredOrders.length === 0 ? (
-        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 dark:border-slate-800 dark:bg-slate-950/90">
-          <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">
-            {isCustomerOnly ? "You have not placed any orders yet." : "No orders matched your search."}
-          </CardContent>
-        </Card>
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Failed to load orders</AlertTitle>
+          <AlertDescription>Check your connection and reload the page.</AlertDescription>
+        </Alert>
+      ) : visibleOrders.length === 0 ? (
+        <EmptyState
+          icon={ClipboardList}
+          title={
+            isCustomerOnly && (ordersQ.data?.data ?? []).length === 0
+              ? "You have not placed any orders yet."
+              : "No orders matched your filters."
+          }
+          description={
+            isCustomerOnly && (ordersQ.data?.data ?? []).length === 0
+              ? "Browse markets and place your first order. It will show up here with live status."
+              : "Try a different search term or clear the filters."
+          }
+          action={
+            isCustomerOnly && (ordersQ.data?.data ?? []).length === 0 ? (
+              <Button asChild>
+                <Link to="/">Browse markets</Link>
+              </Button>
+            ) : filtersActive ? (
+              <Button variant="outline" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : undefined
+          }
+        />
       ) : isCustomerOnly ? (
-        <div className="grid gap-5">
-          {filteredOrders.map((order) => (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {visibleOrders.map((order) => (
             <CustomerOrderCard
               key={order.id}
               order={order}
               onOpenDetail={() => setSelectedOrderId(order.id)}
-              onCancel={() => cancelM.mutate(order.id)}
-              onReorder={() => reorderM.mutate(order.id)}
+              onCancel={() => setCancelTargetId(order.id)}
+              onReorder={() => reorder(order.id)}
             />
           ))}
         </div>
       ) : (
-        <Card className="rounded-[30px] border border-slate-200/70 bg-white/85 shadow-[0_18px_50px_rgba(15,23,42,0.07)] backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/90 dark:shadow-[0_18px_50px_rgba(0,0,0,0.34)]">
-          <CardHeader className="border-b border-slate-200/80 dark:border-slate-800">
-            <CardTitle className="text-xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
-              Operations orders
-            </CardTitle>
-            <p className="text-sm text-slate-500 dark:text-slate-300">
-              Readable intake, review, and next-step actions in one place.
-            </p>
-          </CardHeader>
-
-          <CardContent className="grid gap-5 pt-6">
-            <div className="mobile-stack-table gap-5">
-              {filteredOrders.map((order) => (
-                <Card
-                  key={order.id}
-                  className="mobile-record rounded-[28px] border-slate-200/80 bg-white/96 py-0 shadow-[0_16px_38px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-900/90"
-                >
-                  <CardContent className="grid gap-4 p-5">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                            {order.market?.code || "ORD"}
-                          </div>
-                          <div className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">
-                            {order.code}
-                          </div>
-                          <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
-                            {order.dropoff_address || "No address set"}
-                          </div>
-                        </div>
-
-                        <span className={`status-chip ${statusBadgeClass(order.status)}`}>
-                          {formatOrderStatus(order.status)}
-                        </span>
-                      </div>
-
-                      <div className="mobile-record-row">
-                        <span className="mobile-record-label">Market</span>
-                        <span className="text-right text-slate-700 dark:text-slate-200">
-                          {order.market?.name || "Direct order"}
-                        </span>
-                      </div>
-
-                      <div className="mobile-record-row">
-                        <span className="mobile-record-label">Customer</span>
-                        <span className="text-right text-slate-700 dark:text-slate-200">
-                          {order.customer_name || order.customer?.name || "Unknown"}
-                        </span>
-                      </div>
-
-                      <div className="mobile-record-row">
-                        <span className="mobile-record-label">Driver</span>
-                        <span className="text-right text-slate-700 dark:text-slate-200">
-                          {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}
-                        </span>
-                      </div>
-
-                      <div className="mobile-record-row">
-                        <span className="mobile-record-label">Total</span>
-                        <span className="text-right text-slate-700 dark:text-slate-200">
-                          {order.total != null ? formatMoney(order.total) : "-"}
-                        </span>
-                      </div>
-
-                      <div className="mobile-record-row">
-                        <span className="mobile-record-label">ETA</span>
-                        <span className="text-right text-slate-700 dark:text-slate-200">
-                          {formatDateTime(order.eta_summary?.estimated_delivery_at)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <OrderActionRow
-                      order={order}
-                      detailLabel="Open detail"
-                      onOpenDetail={() => setSelectedOrderId(order.id)}
-                      onAccept={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })}
-                      onMarkReady={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })}
-                    />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="table-desktop overflow-hidden rounded-[24px] border border-slate-200/80 dark:border-slate-800">
+        <>
+          <Card className="hidden gap-0 overflow-hidden py-0 md:flex">
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/80 dark:bg-slate-900/80">
-                    <TableHead>Code</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Market</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="pl-4">Order</TableHead>
                     <TableHead>Customer</TableHead>
+                    <TableHead>Market</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Driver</TableHead>
-                    <TableHead>Total</TableHead>
                     <TableHead>ETA</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead className="pr-4 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-
                 <TableBody>
-                  {filteredOrders.map((order) => (
-                    <TableRow key={order.id} className="dark:border-slate-800">
-                      <TableCell className="font-semibold text-slate-950 dark:text-white">{order.code}</TableCell>
-                      <TableCell>
-                        <span className={`status-chip ${statusBadgeClass(order.status)}`}>
-                          {formatOrderStatus(order.status)}
-                        </span>
+                  {visibleOrders.map((order) => (
+                    <TableRow key={order.id} className="cursor-pointer" onClick={() => setSelectedOrderId(order.id)}>
+                      <TableCell className="pl-4">
+                        <div className="font-medium">{order.code}</div>
+                        <div className="text-xs text-muted-foreground">{formatDateTime(order.created_at)}</div>
                       </TableCell>
-                      <TableCell>{order.market?.name || "Direct order"}</TableCell>
-                      <TableCell>{order.customer_name || order.customer?.name || "Unknown"}</TableCell>
                       <TableCell>
-                        {order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Unassigned"}
+                        <div className="max-w-44 truncate">{customerNameOf(order)}</div>
+                        <div className="max-w-44 truncate text-xs text-muted-foreground">{order.dropoff_address || "No address set"}</div>
                       </TableCell>
-                      <TableCell>{order.total != null ? formatMoney(order.total) : "-"}</TableCell>
-                      <TableCell>{formatDateTime(order.eta_summary?.estimated_delivery_at)}</TableCell>
+                      <TableCell className="max-w-40 truncate">{order.market?.name || "Direct order"}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        <div>{order.total != null ? formatMoney(order.total) : "-"}</div>
+                        {order.items?.length ? (
+                          <div className="text-xs text-muted-foreground">
+                            {order.items.length} item{order.items.length === 1 ? "" : "s"}
+                          </div>
+                        ) : null}
+                      </TableCell>
                       <TableCell>
-                        <OrderActionRow
-                          order={order}
-                          detailLabel="Open detail"
-                          onOpenDetail={() => setSelectedOrderId(order.id)}
-                          onAccept={() => marketActionM.mutate({ orderId: order.id, action: "market-accept" })}
-                          onMarkReady={() => marketActionM.mutate({ orderId: order.id, action: "mark-ready" })}
-                        />
+                        <div className="flex flex-wrap items-center gap-1">
+                          <StatusBadgeFor status={order.status} />
+                          {order.eta_summary?.is_late && <StatusBadge tone="destructive">Late</StatusBadge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-36 truncate">
+                        {driverNameOf(order) ?? <span className="text-muted-foreground">Unassigned</span>}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDateTime(order.eta_summary?.estimated_delivery_at)}</TableCell>
+                      <TableCell className="pr-4" onClick={(event) => event.stopPropagation()}>
+                        <OrderActionRow order={order} {...actionsFor(order)} />
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-        </Card>
+            <div className="border-t px-4 py-2.5 text-xs text-muted-foreground tabular-nums">
+              Showing {visibleOrders.length} of {(ordersQ.data?.data ?? []).length} orders
+            </div>
+          </Card>
+
+          <div className="grid gap-3 md:hidden">
+            {visibleOrders.map((order) => (
+              <Card key={order.id} className="gap-3 py-4">
+                <CardHeader className="px-4">
+                  <CardTitle className="text-base font-semibold">{order.code}</CardTitle>
+                  <CardDescription className="truncate">{order.dropoff_address || "No address set"}</CardDescription>
+                  <CardAction>
+                    <StatusBadgeFor status={order.status} />
+                  </CardAction>
+                </CardHeader>
+                <CardContent className="grid gap-1.5 px-4 text-sm">
+                  <RecordRow label="Market" value={order.market?.name || "Direct order"} />
+                  <RecordRow label="Customer" value={customerNameOf(order)} />
+                  <RecordRow label="Driver" value={driverNameOf(order) ?? "Unassigned"} />
+                  <RecordRow label="Total" value={order.total != null ? formatMoney(order.total) : "-"} />
+                  <RecordRow label="ETA" value={formatDateTime(order.eta_summary?.estimated_delivery_at)} />
+                  {order.eta_summary?.is_late && (
+                    <div>
+                      <StatusBadge tone="destructive">Late</StatusBadge>
+                    </div>
+                  )}
+                </CardContent>
+                <CardFooter className="px-4">
+                  <OrderActionRow order={order} {...actionsFor(order)} stacked />
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+        </>
       )}
 
-      <Dialog open={selectedOrderId != null} onOpenChange={(open) => !open && setSelectedOrderId(null)}>
-        <DialogContent className="max-h-[92vh] overflow-hidden rounded-[30px] border border-slate-200/70 bg-white p-0 shadow-[0_25px_80px_rgba(15,23,42,0.12)] dark:border-slate-800 dark:bg-[#0b1220] dark:shadow-[0_25px_80px_rgba(0,0,0,0.45)]">
-          <DialogHeader className="border-b border-slate-200/80 px-6 py-5 dark:border-slate-800">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                  {detailOrder?.market?.code || "ORD"}
-                </div>
-
-                <DialogTitle className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
-                  {detailOrder?.code || "Order detail"}
-                </DialogTitle>
-
-                <DialogDescription className="mt-2 pr-10 text-sm leading-6 text-slate-500 dark:text-slate-300">
-                  {detailOrder?.dropoff_address || "No address set"}
-                </DialogDescription>
-              </div>
-
-              {detailOrder ? (
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={`status-chip ${statusBadgeClass(detailOrder.status)}`}>
-                    {formatOrderStatus(detailOrder.status)}
-                  </Badge>
-                  <Badge className="status-chip status-neutral">
-                    {detailOrder.total != null ? formatMoney(detailOrder.total) : "-"}
-                  </Badge>
-                  {detailOrder.eta_summary?.is_late && <Badge className="status-chip status-bad">Late</Badge>}
-                </div>
-              ) : null}
-            </div>
+      {/* Create ops order */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create ops order</DialogTitle>
+            <DialogDescription>Manual order intake for call center or dispatch scenarios.</DialogDescription>
           </DialogHeader>
-
-          <div className="min-h-0 overflow-y-auto overscroll-contain">
-            {detailOrder ? (
-              <div className="grid min-h-full gap-0 xl:grid-cols-[380px_minmax(0,1fr)]">
-                <aside className="border-b border-slate-200 bg-slate-50/80 p-5 xl:border-b-0 xl:border-r dark:border-slate-800 dark:bg-[#101927]">
-                  <div className="grid gap-4 xl:sticky xl:top-0">
-                    <div className="grid gap-3">
-                      <DetailStat
-                        icon={Clock3}
-                        label="ETA"
-                        value={formatDateTime(detailOrder.eta_summary?.estimated_delivery_at)}
-                      />
-                      <DetailStat
-                        icon={Wallet}
-                        label="Total"
-                        value={detailOrder.total != null ? formatMoney(detailOrder.total) : "-"}
-                      />
-                      <DetailStat
-                        icon={Truck}
-                        label="Driver"
-                        value={
-                          detailOrder.assigned_driver?.user?.name ||
-                          detailOrder.offered_driver?.user?.name ||
-                          "Waiting for driver"
-                        }
-                      />
-                      <DetailStat
-                        icon={UserRound}
-                        label="Customer"
-                        value={detailOrder.customer_name || detailOrder.customer?.name || "Unknown"}
-                      />
-                    </div>
-
-                    <div className="rounded-[24px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/90">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                        Rate delivery
-                      </div>
-
-                      <div className="mt-4 grid gap-4">
-                        <div className="grid gap-2">
-                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                            Rating (1-5)
-                          </Label>
-                          <Input
-                            value={rating}
-                            onChange={(event) => setRating(event.target.value)}
-                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                          />
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                            Feedback
-                          </Label>
-                          <Input
-                            value={feedback}
-                            onChange={(event) => setFeedback(event.target.value)}
-                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                          />
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                            Cancellation reason
-                          </Label>
-                          <Input
-                            value={cancelReason}
-                            onChange={(event) => setCancelReason(event.target.value)}
-                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                          />
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                            Refund reason
-                          </Label>
-                          <Input
-                            value={refundReason}
-                            onChange={(event) => setRefundReason(event.target.value)}
-                            className="h-11 rounded-[16px] border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-                          />
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Button
-                            onClick={() => rateM.mutate(detailOrder.id)}
-                            disabled={!detailOrder.actions?.can_rate || rateM.isPending}
-                          >
-                            <Star className="h-4 w-4" />
-                            Submit
-                          </Button>
-
-                          <Button
-                            variant="secondary"
-                            onClick={() => reorderM.mutate(detailOrder.id)}
-                            disabled={!detailOrder.actions?.can_reorder || reorderM.isPending}
-                            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-                          >
-                            <Undo2 className="h-4 w-4" />
-                            Reorder
-                          </Button>
-
-                          <Button
-                            variant="secondary"
-                            onClick={() => cancelM.mutate(detailOrder.id)}
-                            disabled={!detailOrder.actions?.can_cancel || cancelM.isPending}
-                            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-                          >
-                            <XCircle className="h-4 w-4" />
-                            Cancel order
-                          </Button>
-
-                          <Button
-                            variant="secondary"
-                            onClick={() => refundM.mutate(detailOrder.id)}
-                            disabled={!detailOrder.actions?.can_request_refund || refundM.isPending}
-                            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-                          >
-                            Request refund
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </aside>
-
-                <main className="grid gap-5 p-5 sm:p-6">
-                  <section className="grid gap-4 lg:grid-cols-2">
-                    <FlatDetailRow icon={MapPin} label="Market" value={detailOrder.market?.name || "Direct order"} />
-                    <FlatDetailRow icon={Clock3} label="Created" value={formatDateTime(detailOrder.created_at)} />
-                    <FlatDetailRow
-                      icon={MapPin}
-                      label="Dropoff"
-                      value={detailOrder.dropoff_address || "No address set"}
-                      fullWidth
-                    />
-                    <FlatDetailRow
-                      icon={MapPin}
-                      label="Pickup"
-                      value={detailOrder.pickup_address || "No address set"}
-                      fullWidth
-                    />
-                    <FlatDetailRow icon={MessageSquareMore} label="Notes" value={detailOrder.notes || "-"} fullWidth />
-                  </section>
-
-                  <section className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/90">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                          Timeline
-                        </div>
-                        <h3 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">
-                          Order progress
-                        </h3>
-                      </div>
-
-                      <div className="max-w-sm text-right text-sm leading-6 text-slate-500 dark:text-slate-300">
-                        Tracking appears after pickup so the timeline stays signal-first.
-                      </div>
-                    </div>
-
-                    <div className="mt-5 grid gap-3">
-                      {(detailOrder.timeline ?? []).map((step, index) => (
-                        <div
-                          key={step.key}
-                          className="grid gap-3 rounded-[20px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900 sm:grid-cols-[44px_minmax(0,1fr)_auto] sm:items-center"
-                        >
-                          <div
-                            className={`flex h-11 w-11 items-center justify-center rounded-full text-sm font-semibold ${
-                              step.done
-                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-300/12 dark:text-emerald-100"
-                                : "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                            }`}
-                          >
-                            {index + 1}
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="text-base font-semibold text-slate-950 dark:text-white">{step.label}</div>
-                            <div className="mt-1 text-sm text-slate-500 dark:text-slate-300">
-                              {formatDateTime(step.at)}
-                            </div>
-                          </div>
-
-                          <Badge className={`status-chip ${step.done ? "status-good" : "status-neutral"}`}>
-                            {step.done ? "Done" : "Pending"}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-                    <div className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950/90">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                        Delivery proof
-                      </div>
-
-                      <h3 className="mt-2 text-2xl font-semibold text-slate-950 dark:text-white">
-                        Delivery proof
-                      </h3>
-
-                      <div className="mt-5 grid gap-4">
-                        {detailOrder.delivery_proof?.photo_url ? (
-                          <img
-                            src={detailOrder.delivery_proof.photo_url}
-                            alt="Proof of delivery"
-                            className="h-72 w-full rounded-[24px] object-cover"
-                          />
-                        ) : (
-                          <div className="flex min-h-52 items-center justify-center rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                            No delivery proof has been attached yet.
-                          </div>
-                        )}
-
-                        <div className="rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
-                          {detailOrder.delivery_proof?.note || "No delivery proof has been attached yet."}
-                          {detailOrder.delivery_proof?.signature_name
-                            ? ` | Signature: ${detailOrder.delivery_proof.signature_name}`
-                            : ""}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-5">
-                      <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/90">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                          Receipt
-                        </div>
-
-                        <div className="mt-2 text-sm text-slate-500 dark:text-slate-300">
-                          {detailOrder.receipt?.number || "Pending receipt"}
-                        </div>
-
-                        <div className="mt-4 grid gap-2 text-sm text-slate-700 dark:text-slate-200">
-                          {(detailOrder.receipt?.items ?? []).map((item, index) => (
-                            <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3">
-                              <div>
-                                <span>
-                                  {item.name} x{item.qty}
-                                </span>
-
-                                {item.combo_offer ? (
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                                    Combo: {item.combo_offer.name}
-                                  </div>
-                                ) : null}
-
-                                {(item.removed_ingredients ?? []).length > 0 ? (
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                                    Without: {item.removed_ingredients?.join(", ")}
-                                  </div>
-                                ) : null}
-                              </div>
-
-                              <span>{formatMoney(item.line_total ?? 0)}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="mt-4 text-sm font-semibold text-slate-950 dark:text-white">
-                          Total: {formatMoney(detailOrder.receipt?.total ?? detailOrder.total ?? 0)}
-                        </div>
-
-                        <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                          Refund: {detailOrder.refund_summary?.status || "none"}
-                        </div>
-                      </div>
-
-                      {detailOrder.assigned_driver?.latest_ping && detailOrder.status === "PICKED_UP" && (
-                        <div className="rounded-[28px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/90">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                            Live driver tracking
-                          </div>
-
-                          <div className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-300">
-                            Tracking appears after pickup so the timeline stays signal-first.
-                          </div>
-
-                          <div className="mt-4 h-[260px] overflow-hidden rounded-[22px] border border-slate-200 dark:border-slate-800">
-                            <MapContainer
-                              center={[
-                                Number(detailOrder.assigned_driver.latest_ping.lat),
-                                Number(detailOrder.assigned_driver.latest_ping.lng),
-                              ]}
-                              zoom={13}
-                              style={{ height: "100%", width: "100%" }}
-                            >
-                              <TileLayer
-                                attribution="&copy; OpenStreetMap"
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                              />
-                              <Marker
-                                position={[
-                                  Number(detailOrder.assigned_driver.latest_ping.lat),
-                                  Number(detailOrder.assigned_driver.latest_ping.lng),
-                                ]}
-                              />
-                              <Marker
-                                position={[Number(detailOrder.dropoff_lat), Number(detailOrder.dropoff_lng)]}
-                              />
-                            </MapContainer>
-                          </div>
-                        </div>
-                      )}
-
-                      {detailOrder.eta_summary?.is_late && (
-                        <div className="rounded-[24px] border border-rose-200 bg-rose-50 p-5 dark:border-rose-300/20 dark:bg-rose-300/10">
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-rose-600 dark:text-rose-200">
-                            Late
-                          </div>
-                          <div className="mt-2 text-lg font-semibold text-rose-700 dark:text-rose-100">
-                            This order needs attention.
-                          </div>
-                          <div className="mt-1 text-sm leading-6 text-rose-700/80 dark:text-rose-100/80">
-                            ETA has slipped past the expected window.
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                </main>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="ops-dropoff-address">Dropoff address</Label>
+              <Input id="ops-dropoff-address" value={dropoffAddress} onChange={(event) => setDropoffAddress(event.target.value)} />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="ops-dropoff-lat">Latitude</Label>
+                <Input id="ops-dropoff-lat" inputMode="decimal" value={dropoffLat} onChange={(event) => setDropoffLat(event.target.value)} />
               </div>
-            ) : (
-              <div className="p-6">
-                <div className="rounded-[24px] border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/90 dark:text-slate-300">
-                  Loading order detail...
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ops-dropoff-lng">Longitude</Label>
+                <Input id="ops-dropoff-lng" inputMode="decimal" value={dropoffLng} onChange={(event) => setDropoffLng(event.target.value)} />
               </div>
-            )}
+            </div>
+            <p className="text-xs text-muted-foreground">Created with priority 2, size 1 and the note "Manual ops order".</p>
+            {createOrderM.error ? (
+              <Alert variant="destructive">
+                <AlertCircle />
+                <AlertDescription>{getErrorMessage(createOrderM.error)}</AlertDescription>
+              </Alert>
+            ) : null}
           </div>
-
-          <DialogFooter className="border-t border-slate-200/80 px-6 py-4 dark:border-slate-800">
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
             <Button
-              variant="secondary"
-              onClick={() => setSelectedOrderId(null)}
-              className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
+              onClick={() =>
+                createOrderM.mutate(undefined, {
+                  onSuccess: () => {
+                    toast.success("Order created");
+                    setCreateOpen(false);
+                  },
+                })
+              }
+              disabled={createOrderM.isPending}
             >
-              Close
+              <PackagePlus />
+              {createOrderM.isPending ? "Creating..." : "Create order"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Cancel confirmation (customer cards + detail) */}
+      <AlertDialog open={cancelTargetId != null} onOpenChange={(open) => !open && setCancelTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel this order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              We'll send a cancellation request to the market. Orders that are already on the way may not be cancellable.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="cancel-reason-confirm">Reason (optional)</Label>
+            <Textarea
+              id="cancel-reason-confirm"
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="Tell the market why you're cancelling"
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep order</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={confirmCancel}>
+              Cancel order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Order detail */}
+      <Sheet open={selectedOrderId != null} onOpenChange={(open) => !open && setSelectedOrderId(null)}>
+        <SheetContent className="w-full gap-0 sm:max-w-xl">
+          <SheetHeader className="border-b p-5 pr-12">
+            <div className="text-xs font-medium text-muted-foreground">{detailOrder?.market?.code || "Order"}</div>
+            <SheetTitle className="text-lg">{detailOrder?.code || "Order detail"}</SheetTitle>
+            <SheetDescription>{detailOrder?.dropoff_address || (detailOrder ? "No address set" : "Loading order...")}</SheetDescription>
+            {detailOrder ? (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <StatusBadgeFor status={detailOrder.status} />
+                <StatusBadge tone="neutral">{detailOrder.total != null ? formatMoney(detailOrder.total) : "-"}</StatusBadge>
+                {detailOrder.eta_summary?.is_late && <StatusBadge tone="destructive">Late</StatusBadge>}
+              </div>
+            ) : null}
+          </SheetHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            {detailOrder ? (
+              <div className="grid gap-6 p-5">
+                {detailOrder.eta_summary?.is_late && (
+                  <Alert variant="destructive">
+                    <AlertCircle />
+                    <AlertTitle>This order needs attention.</AlertTitle>
+                    <AlertDescription>ETA has slipped past the expected window.</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <DetailStat icon={Clock3} label="ETA" value={formatDateTime(detailOrder.eta_summary?.estimated_delivery_at)} />
+                  <DetailStat icon={Wallet} label="Total" value={detailOrder.total != null ? formatMoney(detailOrder.total) : "-"} />
+                  <DetailStat icon={Truck} label="Driver" value={driverNameOf(detailOrder) || "Waiting for driver"} />
+                  <DetailStat icon={UserRound} label="Customer" value={customerNameOf(detailOrder)} />
+                </div>
+
+                {!isCustomerOnly && (detailOrder.status === "MARKET_PENDING" || detailOrder.status === "MARKET_ACCEPTED") ? (
+                  <div className="flex flex-wrap gap-2">
+                    {detailOrder.status === "MARKET_PENDING" && (
+                      <Button onClick={() => acceptOrder(detailOrder.id)} disabled={marketActionM.isPending}>
+                        <CheckCircle2 />
+                        Accept order
+                      </Button>
+                    )}
+                    {detailOrder.status === "MARKET_ACCEPTED" && (
+                      <Button onClick={() => markReady(detailOrder.id)} disabled={marketActionM.isPending}>
+                        <PackageCheck />
+                        Mark ready for pickup
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+
+                <DetailSection title="Order progress" description="Tracking appears after pickup so the timeline stays signal-first.">
+                  {(detailOrder.timeline ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No timeline events yet.</p>
+                  ) : (
+                    <ol className="grid gap-0">
+                      {(detailOrder.timeline ?? []).map((step, index, steps) => (
+                        <li key={step.key} className="relative flex gap-3 pb-4 last:pb-0">
+                          {index < steps.length - 1 ? (
+                            <span className={cn("absolute top-6 bottom-0 left-[11px] w-px", step.done ? "bg-success/50" : "bg-border")} />
+                          ) : null}
+                          <span
+                            className={cn(
+                              "relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full",
+                              step.done ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {step.done ? <CheckCircle2 className="size-4" /> : <Circle className="size-3" />}
+                          </span>
+                          <div className="flex min-w-0 flex-1 flex-wrap items-start justify-between gap-x-3 gap-y-0.5">
+                            <div className={cn("text-sm font-medium", !step.done && "text-muted-foreground")}>{step.label}</div>
+                            <div className="text-xs text-muted-foreground">{step.done ? formatDateTime(step.at) : "Pending"}</div>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </DetailSection>
+
+                <DetailSection title="Delivery details">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <FlatDetailRow icon={Store} label="Market" value={detailOrder.market?.name || "Direct order"} />
+                    <FlatDetailRow icon={Clock3} label="Created" value={formatDateTime(detailOrder.created_at)} />
+                    <FlatDetailRow icon={MapPin} label="Dropoff" value={detailOrder.dropoff_address || "No address set"} fullWidth />
+                    <FlatDetailRow icon={MapPin} label="Pickup" value={detailOrder.pickup_address || "No address set"} fullWidth />
+                    <FlatDetailRow icon={MessageSquareMore} label="Notes" value={detailOrder.notes || "-"} fullWidth />
+                  </div>
+                </DetailSection>
+
+                {detailOrder.assigned_driver?.latest_ping && detailOrder.status === "PICKED_UP" && (
+                  <DetailSection title="Live driver tracking" description="Tracking appears after pickup so the timeline stays signal-first.">
+                    <div className="h-[260px] overflow-hidden rounded-lg border">
+                      <MapContainer
+                        center={[
+                          Number(detailOrder.assigned_driver.latest_ping.lat),
+                          Number(detailOrder.assigned_driver.latest_ping.lng),
+                        ]}
+                        zoom={13}
+                        style={{ height: "100%", width: "100%" }}
+                      >
+                        <TileLayer
+                          attribution={theme === "dark" ? "&copy; OpenStreetMap &copy; CARTO" : "&copy; OpenStreetMap"}
+                          url={
+                            theme === "dark"
+                              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                              : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                          }
+                        />
+                        <Marker
+                          position={[
+                            Number(detailOrder.assigned_driver.latest_ping.lat),
+                            Number(detailOrder.assigned_driver.latest_ping.lng),
+                          ]}
+                          icon={makeDotIcon("bg-primary")}
+                        />
+                        <Marker position={[Number(detailOrder.dropoff_lat), Number(detailOrder.dropoff_lng)]} icon={makeDotIcon("bg-success")} />
+                      </MapContainer>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2.5 rounded-full bg-primary" /> Driver
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="size-2.5 rounded-full bg-success" /> Dropoff
+                      </span>
+                    </div>
+                  </DetailSection>
+                )}
+
+                <DetailSection title="Receipt" description={detailOrder.receipt?.number || "Pending receipt"} icon={Receipt}>
+                  <div className="grid gap-2 text-sm">
+                    {(detailOrder.receipt?.items ?? []).map((item, index) => (
+                      <div key={`${item.name}-${index}`} className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <span>
+                            {item.name} <span className="text-muted-foreground">x{item.qty}</span>
+                          </span>
+                          {item.combo_offer ? <div className="text-xs text-muted-foreground">Combo: {item.combo_offer.name}</div> : null}
+                          {(item.removed_ingredients ?? []).length > 0 ? (
+                            <div className="text-xs text-muted-foreground">Without: {item.removed_ingredients?.join(", ")}</div>
+                          ) : null}
+                        </div>
+                        <span className="shrink-0 tabular-nums">{formatMoney(item.line_total ?? 0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between text-sm font-semibold">
+                    <span>Total</span>
+                    <span className="tabular-nums">{formatMoney(detailOrder.receipt?.total ?? detailOrder.total ?? 0)}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {detailOrder.receipt?.payment?.method || detailOrder.receipt?.payment?.status ? (
+                      <span>
+                        Payment: {[detailOrder.receipt.payment.method, detailOrder.receipt.payment.status ? humanizeStatus(detailOrder.receipt.payment.status) : null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    ) : null}
+                    <span>Refund: {detailOrder.refund_summary?.status || "none"}</span>
+                  </div>
+                </DetailSection>
+
+                <DetailSection title="Delivery proof">
+                  {detailOrder.delivery_proof?.photo_url ? (
+                    <img src={detailOrder.delivery_proof.photo_url} alt="Proof of delivery" className="h-60 w-full rounded-lg border object-cover" />
+                  ) : null}
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                    {detailOrder.delivery_proof?.note || "No delivery proof has been attached yet."}
+                    {detailOrder.delivery_proof?.signature_name ? ` | Signature: ${detailOrder.delivery_proof.signature_name}` : ""}
+                  </div>
+                </DetailSection>
+
+                <DetailSection title="Rate delivery" description="Available once the order has been delivered." icon={Star}>
+                  <div className="grid gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
+                    <div className="grid gap-2">
+                      <Label htmlFor="order-rating">Rating</Label>
+                      <Select value={rating} onValueChange={setRating}>
+                        <SelectTrigger id="order-rating" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["5", "4", "3", "2", "1"].map((value) => (
+                            <SelectItem key={value} value={value}>
+                              {value} / 5
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="order-feedback">Feedback</Label>
+                      <Input id="order-feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="How did it go?" />
+                    </div>
+                  </div>
+                  <Button
+                    className="w-fit"
+                    onClick={() => rateM.mutate(detailOrder.id, notify("Thanks for your rating"))}
+                    disabled={!detailOrder.actions?.can_rate || rateM.isPending}
+                  >
+                    <Star />
+                    Submit rating
+                  </Button>
+                </DetailSection>
+
+                <DetailSection title="Order changes" description="Reorder, cancel or request a refund. Buttons are enabled when the action is allowed for this order.">
+                  <div className="grid gap-2">
+                    <Label htmlFor="order-cancel-reason">Cancellation reason</Label>
+                    <Input id="order-cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Optional" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="order-refund-reason">Refund reason</Label>
+                    <Input
+                      id="order-refund-reason"
+                      value={refundReason}
+                      onChange={(event) => setRefundReason(event.target.value)}
+                      placeholder='Defaults to "Requested by customer"'
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" onClick={() => reorder(detailOrder.id)} disabled={!detailOrder.actions?.can_reorder || reorderM.isPending}>
+                      <Undo2 />
+                      Reorder
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => refundM.mutate(detailOrder.id, notify("Refund requested"))}
+                      disabled={!detailOrder.actions?.can_request_refund || refundM.isPending}
+                    >
+                      <Wallet />
+                      Request refund
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => setCancelTargetId(detailOrder.id)}
+                      disabled={!detailOrder.actions?.can_cancel || cancelM.isPending}
+                    >
+                      <XCircle />
+                      Cancel order
+                    </Button>
+                  </div>
+                </DetailSection>
+              </div>
+            ) : detailQ.isError ? (
+              <div className="p-5">
+                <Alert variant="destructive">
+                  <AlertCircle />
+                  <AlertTitle>Could not load this order</AlertTitle>
+                  <AlertDescription>Close the panel and try again.</AlertDescription>
+                </Alert>
+              </div>
+            ) : (
+              <div className="grid gap-3 p-5" aria-busy="true">
+                <span className="sr-only">Loading order detail...</span>
+                <div className="grid grid-cols-2 gap-3">
+                  {Array.from({ length: 4 }, (_, i) => (
+                    <Skeleton key={i} className="h-16 rounded-lg" />
+                  ))}
+                </div>
+                <Skeleton className="h-40 rounded-lg" />
+                <Skeleton className="h-32 rounded-lg" />
+              </div>
+            )}
+          </div>
+
+          <SheetFooter className="flex-row justify-end border-t p-4">
+            {detailOrder && isCustomerOnly ? (
+              <Button variant="outline" asChild>
+                <Link to={`/track/${encodeURIComponent(detailOrder.code)}`}>
+                  <Navigation />
+                  Track order
+                </Link>
+              </Button>
+            ) : null}
+            <Button variant="secondary" onClick={() => setSelectedOrderId(null)}>
+              Close
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
+  );
+}
+
+function StatusBadgeFor({ status }: { status: string }) {
+  return (
+    <StatusBadge tone={toneForStatus(status)} dot>
+      {formatOrderStatus(status)}
+    </StatusBadge>
   );
 }
 
@@ -847,178 +929,198 @@ function CustomerOrderCard({
   onCancel: () => void;
   onReorder: () => void;
 }) {
+  const steps = order.timeline ?? [];
+  const doneSteps = steps.filter((step) => step.done).length;
+
   return (
-    <Card className="rounded-[30px] border-slate-200/80 bg-white/98 shadow-[0_18px_44px_rgba(15,23,42,0.06)] dark:border-slate-800 dark:bg-slate-950/90">
-      <CardContent className="grid gap-5 p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-              {order.market?.code || "ORD"}
-            </div>
-            <div className="mt-2 text-4xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
-              {order.code}
-            </div>
-            <div className="mt-2 text-sm text-slate-500 dark:text-slate-300">
-              {order.dropoff_address || "No address set"}
-            </div>
-          </div>
+    <Card className="gap-4">
+      <CardHeader>
+        <div className="text-xs font-medium text-muted-foreground">{order.market?.name || order.market?.code || "Order"}</div>
+        <CardTitle className="text-lg font-semibold">{order.code}</CardTitle>
+        <CardDescription className="truncate">{order.dropoff_address || "No address set"}</CardDescription>
+        <CardAction className="flex flex-col items-end gap-1.5">
+          <StatusBadgeFor status={order.status} />
+          {order.eta_summary?.is_late && <StatusBadge tone="destructive">Late</StatusBadge>}
+        </CardAction>
+      </CardHeader>
 
-          <div className="flex flex-wrap gap-2">
-            <span className={`status-chip ${statusBadgeClass(order.status)}`}>
-              {formatOrderStatus(order.status)}
-            </span>
-            {order.total != null && <Badge className="status-chip status-neutral">{formatMoney(order.total)}</Badge>}
-            {order.eta_summary?.is_late && <Badge className="status-chip status-bad">Late</Badge>}
-          </div>
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <CardContent className="grid gap-4">
+        <div className="grid grid-cols-2 gap-3">
           <InfoCard icon={Clock3} label="Created" value={formatDateTime(order.created_at)} />
-          <InfoCard icon={MapPin} label="Market" value={order.market?.name || "-"} />
-          <InfoCard
-            icon={Truck}
-            label="Driver"
-            value={order.assigned_driver?.user?.name || order.offered_driver?.user?.name || "Waiting for driver"}
-          />
+          <InfoCard icon={Store} label="Market" value={order.market?.name || "-"} />
+          <InfoCard icon={Truck} label="Driver" value={driverNameOf(order) || "Waiting for driver"} />
           <InfoCard icon={Wallet} label="ETA" value={formatDateTime(order.eta_summary?.estimated_delivery_at)} />
         </div>
 
-        <div className="grid gap-3">
-          {(order.timeline ?? []).slice(0, 3).map((step) => (
-            <div
-              key={step.key}
-              className="flex items-center justify-between rounded-[18px] border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm dark:border-slate-800 dark:bg-slate-900"
-            >
-              <span className="font-medium text-slate-950 dark:text-white">{step.label}</span>
-              <span className="text-slate-500 dark:text-slate-300">{formatDateTime(step.at)}</span>
+        {steps.length > 0 ? (
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Progress</span>
+              <span className="tabular-nums">
+                {doneSteps} of {steps.length} steps
+              </span>
             </div>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            onClick={onOpenDetail}
-            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-          >
-            <MessageSquareMore className="h-4 w-4" />
-            Open detail
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={onReorder}
-            disabled={!order.actions?.can_reorder}
-            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-          >
-            <Undo2 className="h-4 w-4" />
-            Reorder
-          </Button>
-
-          <Button
-            variant="secondary"
-            onClick={onCancel}
-            disabled={!order.actions?.can_cancel}
-            className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-          >
-            <XCircle className="h-4 w-4" />
-            Cancel order
-          </Button>
-        </div>
+            <div className="grid gap-1.5">
+              {steps.slice(0, 3).map((step) => (
+                <div key={step.key} className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                  <span className="flex min-w-0 items-center gap-2 font-medium">
+                    {step.done ? <CheckCircle2 className="size-4 shrink-0 text-success" /> : <Circle className="size-4 shrink-0 text-muted-foreground" />}
+                    <span className="truncate">{step.label}</span>
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(step.at)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
+
+      <CardFooter className="flex flex-wrap gap-2">
+        <Button asChild>
+          <Link to={`/track/${encodeURIComponent(order.code)}`}>
+            <Navigation />
+            Track
+          </Link>
+        </Button>
+        <Button variant="outline" onClick={onOpenDetail}>
+          <Eye />
+          Details
+        </Button>
+        <Button variant="outline" onClick={onReorder} disabled={!order.actions?.can_reorder}>
+          <Undo2 />
+          Reorder
+        </Button>
+        <Button variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={onCancel} disabled={!order.actions?.can_cancel}>
+          <XCircle />
+          Cancel
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
 
-function Metric({ title, value, helper }: { title: string; value: number; helper?: string }) {
+function InfoCard({ icon: Icon, label, value }: { icon?: LucideIcon; label: string; value: string }) {
   return (
-    <div className="min-h-[132px] rounded-[24px] border border-white/10 bg-white/10 p-5 backdrop-blur-sm">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">{title}</div>
-      <div className="mt-3 text-5xl font-semibold tracking-[-0.05em] text-white">{value}</div>
-      {helper ? <div className="mt-2 text-sm text-white/65">{helper}</div> : null}
+    <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        {Icon ? <Icon className="size-3.5" /> : null}
+        {label}
+      </div>
+      <div className="mt-1 truncate text-sm font-medium">{value}</div>
     </div>
   );
 }
 
-function InfoCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon?: typeof Clock3;
-  label: string;
-  value: string;
-}) {
+function RecordRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[22px] border border-slate-200 bg-slate-50/80 px-4 py-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="flex items-center gap-2">
-        {Icon ? <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" /> : null}
-        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-          {label}
-        </div>
-      </div>
-      <div className="mt-3 text-sm font-semibold leading-6 text-slate-950 dark:text-white">{value}</div>
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right">{value}</span>
     </div>
   );
 }
 
 function OrderActionRow({
   order,
-  detailLabel,
   onOpenDetail,
   onAccept,
   onMarkReady,
+  pending = false,
+  stacked = false,
 }: {
   order: Order;
-  detailLabel: string;
   onOpenDetail: () => void;
   onAccept: () => void;
   onMarkReady: () => void;
+  pending?: boolean;
+  stacked?: boolean;
 }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        size="sm"
-        variant="secondary"
-        onClick={onOpenDetail}
-        className="dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:hover:bg-slate-800"
-      >
-        {detailLabel}
+  const primary =
+    order.status === "MARKET_PENDING" ? (
+      <Button size="sm" onClick={onAccept} disabled={pending}>
+        <CheckCircle2 />
+        Accept
       </Button>
+    ) : order.status === "MARKET_ACCEPTED" ? (
+      <Button size="sm" onClick={onMarkReady} disabled={pending}>
+        <PackageCheck />
+        Mark ready
+      </Button>
+    ) : null;
 
-      {order.status === "MARKET_PENDING" && (
-        <Button size="sm" onClick={onAccept}>
-          Accept
+  return (
+    <div className={cn("flex items-center gap-2", stacked ? "w-full flex-wrap" : "justify-end")}>
+      {primary}
+      {stacked ? (
+        <Button size="sm" variant="outline" onClick={onOpenDetail}>
+          <Eye />
+          Open detail
         </Button>
-      )}
-
-      {order.status === "MARKET_ACCEPTED" && (
-        <Button size="sm" onClick={onMarkReady}>
-          Mark ready
-        </Button>
-      )}
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon-sm" variant="ghost" aria-label={`More actions for ${order.code}`} className={cn(stacked && "ml-auto")}>
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel className="text-xs text-muted-foreground">{order.code}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={onOpenDetail}>
+            <Eye />
+            Open detail
+          </DropdownMenuItem>
+          {order.status === "MARKET_PENDING" || order.status === "MARKET_ACCEPTED" ? <DropdownMenuSeparator /> : null}
+          {order.status === "MARKET_PENDING" && (
+            <DropdownMenuItem onSelect={onAccept} disabled={pending}>
+              <CheckCircle2 />
+              Accept order
+            </DropdownMenuItem>
+          )}
+          {order.status === "MARKET_ACCEPTED" && (
+            <DropdownMenuItem onSelect={onMarkReady} disabled={pending}>
+              <PackageCheck />
+              Mark ready for pickup
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
 
-function DetailStat({
+function DetailSection({
+  title,
+  description,
   icon: Icon,
-  label,
-  value,
+  children,
 }: {
-  icon: typeof Clock3;
-  label: string;
-  value: string;
+  title: string;
+  description?: string;
+  icon?: LucideIcon;
+  children: ReactNode;
 }) {
   return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900/90">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-          {label}
-        </div>
+    <section className="grid gap-3">
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          {Icon ? <Icon className="size-4 text-muted-foreground" /> : null}
+          {title}
+        </h3>
+        {description ? <p className="mt-0.5 text-xs text-muted-foreground">{description}</p> : null}
       </div>
-      <div className="mt-4 text-base font-semibold leading-7 text-slate-950 dark:text-white">{value}</div>
+      {children}
+    </section>
+  );
+}
+
+function DetailStat({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <Icon className="size-3.5" />
+        {label}
+      </div>
+      <div className="mt-1 truncate text-sm font-semibold">{value}</div>
     </div>
   );
 }
@@ -1029,24 +1131,18 @@ function FlatDetailRow({
   value,
   fullWidth = false,
 }: {
-  icon: typeof Clock3;
+  icon: LucideIcon;
   label: string;
   value: string;
   fullWidth?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-[24px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950/90 ${
-        fullWidth ? "lg:col-span-2" : ""
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-        <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-          {label}
-        </div>
+    <div className={cn("flex gap-3 rounded-lg border bg-muted/30 p-3", fullWidth && "sm:col-span-2")}>
+      <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="mt-0.5 text-sm break-words">{value}</div>
       </div>
-      <div className="mt-3 text-sm font-semibold leading-6 text-slate-950 dark:text-white">{value}</div>
     </div>
   );
 }

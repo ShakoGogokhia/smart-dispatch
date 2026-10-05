@@ -1,12 +1,19 @@
-import { Bell, CheckCheck, Filter } from "lucide-react";
+import { Bell, BellOff, Check, CheckCheck, Package, Store, Truck } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { PageHeader } from "@/components/app/page-header";
+import { formatRelativeTime } from "@/components/insights/relative-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { NotificationRecord } from "@/types/api";
 
 const filters = [
@@ -16,6 +23,14 @@ const filters = [
   { label: "Drivers", value: "driver" },
   { label: "Markets", value: "market" },
 ];
+
+function iconForType(type: string): { icon: LucideIcon; className: string } {
+  const t = type.toLowerCase();
+  if (t.includes("order")) return { icon: Package, className: "bg-primary/10 text-primary" };
+  if (t.includes("driver")) return { icon: Truck, className: "bg-info/15 text-info" };
+  if (t.includes("market")) return { icon: Store, className: "bg-success/15 text-success" };
+  return { icon: Bell, className: "bg-muted text-muted-foreground" };
+}
 
 export default function NotificationsPage() {
   const [filter, setFilter] = useState("");
@@ -48,65 +63,99 @@ export default function NotificationsPage() {
   }
 
   const notifications = notificationsQ.data ?? [];
+  const unread = notifications.filter((n) => !n.read_at);
+  const earlier = notifications.filter((n) => n.read_at);
+
+  const renderItem = (notification: NotificationRecord) => {
+    const { icon: Icon, className } = iconForType(notification.type);
+    const isUnread = !notification.read_at;
+    return (
+      <div key={notification.id} className={cn("flex items-start gap-3 p-4", isUnread && "bg-primary/5")}>
+        <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", className)}>
+          <Icon className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              {isUnread ? <span className="size-2 shrink-0 rounded-full bg-primary" aria-label="Unread" /> : null}
+              <span className={cn("truncate text-sm", isUnread ? "font-semibold" : "font-medium")}>{notification.title}</span>
+            </div>
+            <span className="shrink-0 text-xs text-muted-foreground" title={formatDateTime(notification.created_at)}>
+              {formatRelativeTime(notification.created_at)}
+            </span>
+          </div>
+          <p className="mt-0.5 text-sm break-words text-muted-foreground">{notification.message}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant="secondary" className="font-normal">
+              {notification.type}
+            </Badge>
+            {isUnread && (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="ml-auto"
+                onClick={() => markReadM.mutate(notification.id)}
+                disabled={markReadM.isPending}
+              >
+                <Check />
+                Mark read
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderGroup = (title: string, items: NotificationRecord[]) =>
+    items.length ? (
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium text-muted-foreground">
+          {title} <span className="tabular-nums">({items.length})</span>
+        </h2>
+        <Card className="gap-0 divide-y overflow-hidden py-0">{items.map(renderItem)}</Card>
+      </section>
+    ) : null;
 
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">Notifications</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Notifications"
+        description="Updates about orders, drivers and markets. New items appear automatically."
+        actions={
+          <Button variant="outline" onClick={() => markAllM.mutate()} disabled={markAllM.isPending}>
+            <CheckCheck />
+            Mark all as read
+          </Button>
+        }
+      >
+        <div className="overflow-x-auto">
+          <Tabs value={filter || "all"} onValueChange={(value) => setFilter(value === "all" ? "" : value)}>
+            <TabsList>
+              {filters.map((item) => (
+                <TabsTrigger key={item.value || "all"} value={item.value || "all"}>
+                  {item.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      </PageHeader>
 
-      <Card className="rounded-[30px]">
-        <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-2xl">Notification center</CardTitle>
-            <Button onClick={() => markAllM.mutate()} disabled={markAllM.isPending}>
-              <CheckCheck className="h-4 w-4" />
-              Mark all read
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-5">
-          <div className="flex flex-wrap gap-2">
-            {filters.map((item) => (
-              <Button key={item.value || "all"} variant={filter === item.value ? "default" : "secondary"} onClick={() => setFilter(item.value)}>
-                <Filter className="h-4 w-4" />
-                {item.label}
-              </Button>
-            ))}
-          </div>
-
-          <div className="grid gap-3">
-            {notificationsQ.isLoading ? (
-              <div className="p-5 text-sm theme-copy">Loading notifications...</div>
-            ) : notifications.length === 0 ? (
-              <div className="rounded-[22px] border border-slate-200 p-5 text-sm theme-copy dark:border-slate-800">No notifications for this filter.</div>
-            ) : notifications.map((notification) => (
-              <div key={notification.id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-slate-950 text-white dark:bg-cyan-500/15 dark:text-cyan-100">
-                      <Bell className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="font-semibold">{notification.title}</div>
-                      <div className="mt-1 text-sm theme-copy">{notification.message}</div>
-                      <div className="mt-2 text-xs theme-copy">{notification.type} - {formatDateTime(notification.created_at)}</div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge className={`status-chip ${notification.read_at ? "status-neutral" : "status-good"}`}>{notification.read_at ? "Read" : "Unread"}</Badge>
-                    {!notification.read_at && (
-                      <Button size="sm" variant="secondary" onClick={() => markReadM.mutate(notification.id)} disabled={markReadM.isPending}>
-                        Mark read
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {notificationsQ.isLoading ? (
+        <LoadingState rows={4} />
+      ) : notifications.length === 0 ? (
+        <EmptyState
+          icon={BellOff}
+          title="You're all caught up"
+          description={filter ? "No notifications for this filter. Try another tab." : "There are no notifications right now."}
+        />
+      ) : (
+        <div className="space-y-6">
+          {renderGroup("Unread", unread)}
+          {renderGroup("Earlier", earlier)}
+        </div>
+      )}
     </div>
   );
 }

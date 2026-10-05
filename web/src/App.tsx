@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import AppLayout from "@/components/AppLayout";
 import RequireAuth from "@/components/RequireAuth";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
 const ApprovalInboxPage = lazy(() => import("@/pages/ApprovalInboxPage"));
@@ -55,10 +56,15 @@ function AuthedLayout() {
 
 function PageLoader() {
   return (
-    <div className="app-shell">
-      <div className="mx-auto max-w-7xl">
-        <div className="intro-panel p-8 text-sm text-white/80">Loading page...</div>
+    <div className="mx-auto grid w-full max-w-7xl gap-4 p-4 md:p-6" aria-busy="true">
+      <Skeleton className="h-8 w-56" />
+      <Skeleton className="h-4 w-80 max-w-full" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <Skeleton key={i} className="h-20 rounded-xl" />
+        ))}
       </div>
+      <Skeleton className="h-72 rounded-xl" />
     </div>
   );
 }

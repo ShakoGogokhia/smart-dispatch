@@ -1,4 +1,4 @@
-import { ArrowRight, Megaphone, Package, Settings, TicketPercent } from "lucide-react";
+import { ExternalLink, LayoutDashboard, Megaphone, Package, Settings, Sparkles, Store, TicketPercent } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
@@ -6,8 +6,17 @@ import { api } from "@/lib/api";
 import { setActiveMarketId } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
 import type { StorefrontMarket } from "@/lib/storefront";
+
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { StatusBadge } from "@/components/app/status-badge";
+import { MarketBanner, MarketLogo } from "@/components/markets/market-media";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardFooter } from "@/components/ui/card";
 
 type Market = StorefrontMarket;
 
@@ -22,137 +31,130 @@ export default function MyMarketsPage() {
   const promoCount = markets.filter((market) => market.active_promo).length;
 
   return (
-    <div className="grid gap-6">
-      <section className="intro-panel">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="section-kicker text-white/70">Owner Workspace</div>
-            <h1 className="intro-title">My markets</h1>
-            <p className="intro-copy">
-              Use the same control surface for visibility, catalog, and promotions across every assigned market.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="status-chip">{markets.length} markets</span>
-            <span className="status-chip">{featuredCount} promoted</span>
-            <span className="status-chip">{promoCount} live offers</span>
-            <Button asChild variant="secondary" className="rounded-2xl">
-              <Link to="/badge-pricing">
-                <Megaphone className="mr-2 h-4 w-4" />
-                Promotion studio
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
+    <div className="space-y-6">
+      <PageHeader
+        title="My markets"
+        description="Every market you own or work in. Jump to the dashboard, products, promotions or settings for each one."
+        actions={
+          <Button asChild variant="outline">
+            <Link to="/badge-pricing">
+              <Megaphone />
+              Promotion studio
+            </Link>
+          </Button>
+        }
+      />
 
-      <section className="data-grid">
-        <div className="dashboard-card">
-          <div className="section-kicker">Assigned</div>
-          <div className="theme-ink mt-3 text-3xl font-semibold">{markets.length}</div>
-          <div className="theme-muted mt-2 text-sm">Markets connected to your owner account.</div>
-        </div>
-        <div className="dashboard-card">
-          <div className="section-kicker">Promoted</div>
-          <div className="theme-ink mt-3 text-3xl font-semibold">{featuredCount}</div>
-          <div className="theme-muted mt-2 text-sm">Storefronts currently using featured visibility.</div>
-        </div>
-        <div className="dashboard-card">
-          <div className="section-kicker">Live offers</div>
-          <div className="theme-ink mt-3 text-3xl font-semibold">{promoCount}</div>
-          <div className="theme-muted mt-2 text-sm">Markets with an active promotion running now.</div>
-        </div>
-      </section>
+      <StatGrid className="md:grid-cols-3 xl:grid-cols-3">
+        <StatCard label="Assigned markets" value={markets.length} icon={Store} tone="primary" hint="Connected to your account" />
+        <StatCard label="Promoted" value={featuredCount} icon={Sparkles} tone="warning" hint="Using featured visibility" />
+        <StatCard label="Live offers" value={promoCount} icon={TicketPercent} tone="success" hint="Promotion running now" />
+      </StatGrid>
 
       {marketsQ.isLoading ? (
-        <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">Loading markets...</CardContent>
-        </Card>
+        <LoadingState rows={3} />
       ) : marketsQ.isError ? (
-        <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm text-red-700 dark:text-red-300">Failed to load markets.</CardContent>
-        </Card>
+        <Alert variant="destructive">
+          <AlertDescription>Failed to load markets.</AlertDescription>
+        </Alert>
+      ) : markets.length === 0 ? (
+        <EmptyState
+          icon={Store}
+          title="No markets yet"
+          description="No markets are assigned to your account yet. Ask an admin to add you as an owner or staff member."
+        />
       ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
-          {markets.map((market) => (
-            <Card key={market.id} className={market.is_featured ? "market-card-featured rounded-[30px]" : "rounded-[30px]"}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-xs uppercase tracking-[0.24em] text-slate-500">{market.code}</div>
-                  {market.is_featured && <span className="status-chip status-good">{market.featured_badge || "Promoted"}</span>}
-                  {market.active_promo && <span className="status-chip status-warn">{market.active_promo.code}</span>}
-                </div>
-                <CardTitle className="font-display text-3xl">{market.name}</CardTitle>
-                <p className="text-sm text-slate-600">{market.featured_headline || market.address || "No address added yet."}</p>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="subpanel p-4">
-                    <div className="section-kicker">Visibility</div>
-                    <div className="theme-ink mt-2 font-semibold">{market.is_active ? "Live storefront" : "Hidden storefront"}</div>
-                  </div>
-                  <div className="subpanel p-4">
-                    <div className="section-kicker">Catalog</div>
-                    <div className="theme-ink mt-2 font-semibold">{market.active_items_count ?? 0} visible items</div>
-                  </div>
-                  <div className="subpanel p-4">
-                    <div className="section-kicker">Offer</div>
-                    <div className="theme-ink mt-2 font-semibold">
-                      {market.active_promo
-                        ? market.active_promo.type === "percent"
-                          ? `${toNumber(market.active_promo.value)}% off`
-                          : `${formatMoney(market.active_promo.value)} off`
-                        : "No live promo"}
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {markets.map((market) => {
+            const select = () => setActiveMarketId(String(market.id));
+            const isOpen = market.operating_status?.is_open;
+
+            return (
+              <Card key={market.id} className="gap-0 overflow-hidden py-0">
+                <MarketBanner src={market.banner_url} name={market.name}>
+                  {market.is_featured ? (
+                    <StatusBadge tone="warning" className="bg-warning text-warning-foreground">
+                      <Sparkles className="size-3" />
+                      {market.featured_badge || "Promoted"}
+                    </StatusBadge>
+                  ) : null}
+                </MarketBanner>
+
+                <div className="flex flex-1 flex-col gap-4 p-4">
+                  <div className="flex items-start gap-3">
+                    <MarketLogo src={market.logo_url ?? market.image_url} name={market.name} className="-mt-10 size-14 border-2 border-card bg-card shadow-sm" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-base font-semibold">{market.name}</h3>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline" className="font-mono">
+                          {market.code}
+                        </Badge>
+                        <StatusBadge tone={market.is_active ? "success" : "neutral"} dot>
+                          {market.is_active ? "Live storefront" : "Hidden storefront"}
+                        </StatusBadge>
+                        {market.operating_status ? (
+                          <StatusBadge tone={isOpen ? "info" : "destructive"}>{isOpen ? "Open" : "Closed"}</StatusBadge>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
+
+                  <p className="line-clamp-2 text-sm text-muted-foreground">{market.featured_headline || market.address || "No address added yet."}</p>
+
+                  <dl className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">Catalog</dt>
+                      <dd className="font-medium tabular-nums">{market.active_items_count ?? 0} visible items</dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="text-xs text-muted-foreground">Offer</dt>
+                      <dd className="truncate font-medium">
+                        {market.active_promo
+                          ? market.active_promo.type === "percent"
+                            ? `${toNumber(market.active_promo.value)}% off`
+                            : `${formatMoney(market.active_promo.value)} off`
+                          : "No live promo"}
+                      </dd>
+                      {market.active_promo ? <dd className="truncate text-xs text-muted-foreground">{market.active_promo.code}</dd> : null}
+                    </div>
+                  </dl>
                 </div>
 
-                <Button
-                  asChild
-                  className="justify-between rounded-2xl"
-                  onClick={() => setActiveMarketId(String(market.id))}
-                >
-                  <Link to={`/markets/${market.id}`}>
-                    <span className="inline-flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      Open settings
-                    </span>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Button
-                    asChild
-                    variant="secondary"
-                    className="justify-start rounded-2xl"
-                    onClick={() => setActiveMarketId(String(market.id))}
-                  >
+                <CardFooter className="grid grid-cols-2 gap-2 border-t bg-muted/20 px-4 py-3">
+                  <Button asChild className="col-span-2" onClick={select}>
+                    <Link to={`/markets/${market.id}/dashboard`}>
+                      <LayoutDashboard />
+                      Dashboard
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" onClick={select}>
                     <Link to={`/markets/${market.id}/items`}>
-                      <Package className="mr-2 h-4 w-4" />
-                      Manage items
+                      <Package />
+                      Products
                     </Link>
                   </Button>
-                  <Button
-                    asChild
-                    variant="secondary"
-                    className="justify-start rounded-2xl"
-                    onClick={() => setActiveMarketId(String(market.id))}
-                  >
+                  <Button asChild variant="outline" onClick={select}>
                     <Link to={`/markets/${market.id}/promo-codes`}>
-                      <TicketPercent className="mr-2 h-4 w-4" />
-                      Manage promos
+                      <TicketPercent />
+                      Promos
                     </Link>
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {markets.length === 0 && (
-            <Card className="rounded-[30px]">
-              <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">No markets are assigned to your account yet.</CardContent>
-            </Card>
-          )}
+                  <Button asChild variant="outline" onClick={select}>
+                    <Link to={`/markets/${market.id}`}>
+                      <Settings />
+                      Settings
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link to={`/m/${market.id}`} target="_blank" rel="noreferrer">
+                      <ExternalLink />
+                      Storefront
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

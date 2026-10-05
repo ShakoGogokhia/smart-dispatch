@@ -1,11 +1,16 @@
-import { CalendarDays, Route, Timer, Truck } from "lucide-react";
+import { AlertCircle, CalendarDays, ChevronDown, Clock, MapPin, Route, Timer, Truck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { PageHeader } from "@/components/app/page-header";
+import { OrderStatusBadge } from "@/components/app/status-badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type RouteStop = {
   id: number;
@@ -44,105 +49,128 @@ export default function RoutesPage() {
   });
 
   const routes = routesQ.data ?? [];
+  const totalStops = routes.reduce((sum, route) => sum + (route.stops?.length ?? 0), 0);
 
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">Routes</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Routes"
+        description={
+          routes.length > 0
+            ? `${routes.length} planned route${routes.length === 1 ? "" : "s"} with ${totalStops} stop${totalStops === 1 ? "" : "s"}. Expand a route to see its stops in delivery order.`
+            : "Planned driver routes and the order of their stops."
+        }
+      />
 
       {routesQ.isLoading ? (
-        <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm theme-copy">Loading routes...</CardContent>
-        </Card>
+        <LoadingState rows={3} />
       ) : routesQ.isError ? (
-        <Card className="rounded-[30px]">
-          <CardContent className="status-bad m-6 rounded-[20px] border p-8 text-sm">Failed to load routes.</CardContent>
-        </Card>
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Failed to load routes</AlertTitle>
+          <AlertDescription>Something went wrong while fetching route plans. Reload the page to try again.</AlertDescription>
+        </Alert>
       ) : routes.length === 0 ? (
-        <Card className="rounded-[30px]">
-          <CardContent className="p-8 text-sm theme-copy">No routes are planned yet.</CardContent>
-        </Card>
+        <EmptyState icon={Route} title="No routes are planned yet" description="Routes appear here once orders are dispatched and assigned to drivers." />
       ) : (
-        routes.map((route) => (
-          <Card key={route.id} className="rounded-[30px]">
-            <CardHeader className="border-b border-zinc-200/80 dark:border-zinc-800">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle className="font-display text-3xl">Route #{route.id}</CardTitle>
-                  <div className="theme-copy mt-3 flex flex-wrap gap-3 text-sm">
-                    <div className="status-chip status-neutral">
-                      <Truck className="h-4 w-4" />
-                      {route.driver?.user?.name || `Driver #${route.driver_id}`}
-                    </div>
-                    <div className="status-chip status-neutral">
-                      <CalendarDays className="h-4 w-4" />
-                      {route.route_date}
-                    </div>
-                    {route.planned_distance_km != null && (
-                      <div className="status-chip status-neutral">
-                        <Route className="h-4 w-4" />
-                        {route.planned_distance_km} km
-                      </div>
-                    )}
-                    {route.planned_duration_min != null && (
-                      <div className="status-chip status-neutral">
-                        <Timer className="h-4 w-4" />
-                        {route.planned_duration_min} min
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <Badge className="status-chip rounded-full border-0 bg-cyan-600 px-4 py-2 text-white shadow-[0_14px_30px_rgba(8,145,178,0.2)]">
-                  {route.status}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="table-shell">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Stop</TableHead>
-                      <TableHead>Order</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>ETA</TableHead>
-                      <TableHead>Score</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(route.stops ?? []).map((stop) => (
-                      <TableRow key={stop.id}>
-                        <TableCell className="font-semibold">{stop.sequence}</TableCell>
-                        <TableCell>{stop.order?.code || stop.order_id}</TableCell>
-                        <TableCell>{stop.order?.dropoff_address || "No address set"}</TableCell>
-                        <TableCell>{stop.status}</TableCell>
-                      <TableCell>{formatDateTime(stop.eta)}</TableCell>
-                        <TableCell>
-                          <div className="font-semibold">{stop.dispatch_score ?? "-"}</div>
-                          {stop.dispatch_reason ? (
-                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                              p{stop.dispatch_reason.priority ?? "-"} - {stop.dispatch_reason.leg_to_pickup_km ?? 0}km pickup - {stop.dispatch_reason.weather_condition ?? "clear"}
-                            </div>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {(route.stops ?? []).length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={6} className="py-8 text-center text-sm theme-copy">
-                          No stops on this route yet.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        ))
+        <div className="grid gap-4">
+          {routes.map((route, index) => (
+            <RouteCard key={route.id} route={route} defaultOpen={index === 0} />
+          ))}
+        </div>
       )}
     </div>
+  );
+}
+
+function RouteCard({ route, defaultOpen }: { route: RoutePlan; defaultOpen: boolean }) {
+  const stops = route.stops ?? [];
+
+  return (
+    <Collapsible defaultOpen={defaultOpen} asChild>
+      <Card className="gap-4">
+        <CardHeader>
+          <CardTitle className="text-base font-semibold">Route #{route.id}</CardTitle>
+          <CardDescription className="flex flex-wrap gap-x-4 gap-y-1.5">
+            <span className="inline-flex items-center gap-1.5">
+              <Truck className="size-4" />
+              {route.driver?.user?.name || `Driver #${route.driver_id}`}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <CalendarDays className="size-4" />
+              {route.route_date}
+            </span>
+            <span className="inline-flex items-center gap-1.5 tabular-nums">
+              <MapPin className="size-4" />
+              {stops.length} stop{stops.length === 1 ? "" : "s"}
+            </span>
+            {route.planned_distance_km != null && (
+              <span className="inline-flex items-center gap-1.5 tabular-nums">
+                <Route className="size-4" />
+                {route.planned_distance_km} km
+              </span>
+            )}
+            {route.planned_duration_min != null && (
+              <span className="inline-flex items-center gap-1.5 tabular-nums">
+                <Timer className="size-4" />
+                {route.planned_duration_min} min
+              </span>
+            )}
+          </CardDescription>
+          <CardAction>
+            <OrderStatusBadge status={route.status} />
+          </CardAction>
+        </CardHeader>
+
+        <CardContent className="grid gap-3">
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm" className="group w-fit">
+              <ChevronDown className="transition-transform group-data-[state=open]:rotate-180" />
+              <span className="group-data-[state=open]:hidden">Show stops</span>
+              <span className="hidden group-data-[state=open]:inline">Hide stops</span>
+            </Button>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            {stops.length === 0 ? (
+              <EmptyState compact icon={MapPin} title="No stops on this route yet" />
+            ) : (
+              <ol className="grid gap-2">
+                {stops.map((stop) => (
+                  <li key={stop.id} className="flex gap-3 rounded-lg border bg-muted/30 p-3">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground tabular-nums">
+                      {stop.sequence}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold">{stop.order?.code || `Order #${stop.order_id}`}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{stop.order?.dropoff_address || "No address set"}</div>
+                        </div>
+                        <OrderStatusBadge status={stop.status} />
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="size-3.5" />
+                          ETA {formatDateTime(stop.eta)}
+                        </span>
+                        <span className="tabular-nums">
+                          Score <span className="font-semibold text-foreground">{stop.dispatch_score ?? "-"}</span>
+                        </span>
+                        {stop.dispatch_reason ? (
+                          <span className="tabular-nums">
+                            Priority {stop.dispatch_reason.priority ?? "-"} · {stop.dispatch_reason.leg_to_pickup_km ?? 0} km to pickup · {stop.dispatch_reason.weather_condition ?? "clear"}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </CollapsibleContent>
+        </CardContent>
+      </Card>
+    </Collapsible>
   );
 }

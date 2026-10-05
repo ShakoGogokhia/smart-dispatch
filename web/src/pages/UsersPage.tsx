@@ -1,17 +1,26 @@
 import { useMemo, useState } from "react";
-import { KeyRound, Mail, Shield, UserPlus, Users } from "lucide-react";
+import { Car, Crown, Search, Shield, ShieldCheck, Store, UserPlus, Users } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 type UserRecord = {
   id: number;
@@ -30,6 +39,15 @@ const ROLE_LABELS: Record<(typeof ROLE_OPTIONS)[number], string> = {
   driver: "Driver",
 };
 
+function roleLabel(role: string) {
+  return ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role;
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
 function getErrorMessage(error: unknown) {
   if (!error || typeof error !== "object") {
     return null;
@@ -47,27 +65,85 @@ function RolePicker({
   onChange: (roles: string[]) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {ROLE_OPTIONS.map((role) => {
-        const active = value.includes(role);
-        return (
-          <button
-            key={role}
-            type="button"
-            onClick={() =>
-              onChange(active ? value.filter((entry) => entry !== role) : [...value, role])
-            }
-            className={[
-              "rounded-full border px-4 py-2 text-sm font-medium transition",
-              active
-                ? "border-cyan-500 bg-cyan-600 text-white shadow-sm dark:border-cyan-400 dark:bg-cyan-500 dark:text-slate-950"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/6 dark:text-slate-200 dark:hover:bg-white/10",
-            ].join(" ")}
-          >
-            {ROLE_LABELS[role]}
-          </button>
-        );
-      })}
+    <ToggleGroup
+      type="multiple"
+      variant="outline"
+      spacing={2}
+      value={value}
+      onValueChange={onChange}
+      className="flex w-full flex-wrap"
+    >
+      {ROLE_OPTIONS.map((role) => (
+        <ToggleGroupItem key={role} value={role} size="sm" className="data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+          {ROLE_LABELS[role]}
+        </ToggleGroupItem>
+      ))}
+    </ToggleGroup>
+  );
+}
+
+function RoleBadges({ roles }: { roles: string[] }) {
+  if (!roles.length) return <span className="text-xs text-muted-foreground">No roles</span>;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {roles.map((role) => (
+        <Badge key={role} variant={role === "admin" ? "default" : "secondary"}>
+          {roleLabel(role)}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function UserFormFields({
+  idPrefix,
+  name,
+  onName,
+  email,
+  onEmail,
+  password,
+  onPassword,
+  passwordLabel,
+  passwordHint,
+  roles,
+  onRoles,
+}: {
+  idPrefix: string;
+  name: string;
+  onName: (value: string) => void;
+  email: string;
+  onEmail: (value: string) => void;
+  password: string;
+  onPassword: (value: string) => void;
+  passwordLabel: string;
+  passwordHint?: string;
+  roles: string[];
+  onRoles: (value: string[]) => void;
+}) {
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}-name`}>Name</Label>
+          <Input id={`${idPrefix}-name`} value={name} onChange={(event) => onName(event.target.value)} />
+        </div>
+        <div className="grid gap-2">
+          <Label htmlFor={`${idPrefix}-email`}>Email</Label>
+          <Input id={`${idPrefix}-email`} type="email" value={email} onChange={(event) => onEmail(event.target.value)} placeholder="user@workspace.com" />
+        </div>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor={`${idPrefix}-password`}>{passwordLabel}</Label>
+        <Input id={`${idPrefix}-password`} type="password" value={password} onChange={(event) => onPassword(event.target.value)} />
+        {passwordHint ? <p className="text-xs text-muted-foreground">{passwordHint}</p> : null}
+      </div>
+      <div className="grid gap-2">
+        <Label>Roles</Label>
+        <RolePicker value={roles} onChange={onRoles} />
+        <p className="text-xs text-muted-foreground">
+          {roles.length} role{roles.length === 1 ? "" : "s"} selected. At least one role is required.
+        </p>
+      </div>
     </div>
   );
 }
@@ -102,6 +178,7 @@ export default function UsersPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       setCreateOpen(false);
+      toast.success("User created");
       setName("");
       setEmail("");
       setPassword("");
@@ -131,6 +208,7 @@ export default function UsersPage() {
       await queryClient.invalidateQueries({ queryKey: ["users"] });
       setEditingUser(null);
       setEditPassword("");
+      toast.success("User updated");
     },
   });
 
@@ -139,117 +217,83 @@ export default function UsersPage() {
     [usersQ.data],
   );
 
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+
+  const roleCount = (role: string) => sortedUsers.filter((user) => user.roles.includes(role)).length;
+
+  const visibleUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return sortedUsers.filter((user) => {
+      if (roleFilter !== "all" && !user.roles.includes(roleFilter)) return false;
+      if (!term) return true;
+      return user.name.toLowerCase().includes(term) || user.email.toLowerCase().includes(term);
+    });
+  }, [sortedUsers, search, roleFilter]);
+
+  const openEdit = (user: UserRecord) => {
+    setEditingUser(user);
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditRoles(user.roles);
+    setEditPassword("");
+  };
+
   if (!isAdmin) {
     return (
-      <Card className="rounded-[30px]">
-        <CardContent className="p-8 text-sm text-slate-600">
-          Only admins can manage users.
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <PageHeader title="Users" />
+        <EmptyState icon={Shield} title="Admins only" description="Only admins can manage users." />
+      </div>
     );
   }
 
-  return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="section-kicker text-white/70">Administration</div>
-            <h1 className="intro-title">Users</h1>
-            <p className="intro-copy">
-              Manage accounts, roles, and workspace access from the same admin-style layout used across the app.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="status-chip">{sortedUsers.length} users</span>
-            <span className="status-chip">
-              {sortedUsers.filter((user) => user.roles.includes("admin")).length} admins
-            </span>
-            <span className="status-chip">
-              {sortedUsers.filter((user) => user.roles.includes("owner")).length} owners
-            </span>
-          </div>
-        </div>
-      </div>
+  const createError = getErrorMessage(createUserM.error);
+  const updateError = getErrorMessage(updateUserM.error);
 
-      <section className="dashboard-card">
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div>
-            <div className="section-kicker">Workspace Access</div>
-            <CardTitle className="panel-title mt-2">User directory</CardTitle>
-          </div>
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Users"
+        description="Manage accounts, roles, and workspace access."
+        actions={
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="rounded-2xl">
-                <UserPlus className="mr-2 h-4 w-4" />
+              <Button>
+                <UserPlus />
                 Add user
               </Button>
             </DialogTrigger>
-            <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader>
-                <div className="app-modal-header">
-                  <div className="section-kicker">Create account</div>
-                  <DialogTitle className="panel-title mt-2">Create user</DialogTitle>
-                </div>
+                <DialogTitle>Create user</DialogTitle>
+                <DialogDescription>
+                  {name.trim() || email.trim()
+                    ? `${name.trim() || "New user"} · ${email.trim() || "user@workspace.com"} · ${password ? "Password ready" : "Set password"}`
+                    : "Create an account and choose what the person can access."}
+                </DialogDescription>
               </DialogHeader>
-              <div className="app-modal-body">
-                <div className="app-modal-layout">
-                  <aside className="app-modal-sidebar">
-                    <div className="app-modal-sidebar-sticky">
-                      <div className="app-modal-preview">
-                        <div className="section-kicker">Preview</div>
-                        <div className="theme-ink mt-3 text-3xl font-semibold">
-                          {name.trim() || "New user"}
-                        </div>
-                        <div className="theme-copy mt-2 text-sm leading-6">
-                          {email.trim() || "user@workspace.com"}
-                        </div>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <span className="status-chip status-neutral">
-                            {roles.length} role{roles.length === 1 ? "" : "s"}
-                          </span>
-                          <span className="status-chip status-neutral">
-                            {password ? "Password ready" : "Set password"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </aside>
-                  <div className="app-modal-main">
-                    <div className="app-modal-card">
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                        <Label className="field-label">Name</Label>
-                      </div>
-                      <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell mt-3" />
-                    </div>
-                    <div className="app-modal-card">
-                      <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                        <Label className="field-label">Email</Label>
-                      </div>
-                      <Input value={email} onChange={(event) => setEmail(event.target.value)} className="input-shell mt-3" />
-                    </div>
-                    <div className="app-modal-card">
-                      <div className="flex items-center gap-2">
-                        <KeyRound className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                        <Label className="field-label">Password</Label>
-                      </div>
-                      <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="input-shell mt-3" />
-                    </div>
-                    <div className="app-modal-card">
-                      <Label className="field-label">Roles</Label>
-                      <div className="mt-3">
-                        <RolePicker value={roles} onChange={setRoles} />
-                      </div>
-                    </div>
-                  </div>
-                  {getErrorMessage(createUserM.error) && (
-                    <div className="text-sm text-red-700">{getErrorMessage(createUserM.error)}</div>
-                  )}
-                </div>
-              </div>
-              <DialogFooter className="app-modal-footer">
+              <UserFormFields
+                idPrefix="new-user"
+                name={name}
+                onName={setName}
+                email={email}
+                onEmail={setEmail}
+                password={password}
+                onPassword={setPassword}
+                passwordLabel="Password"
+                roles={roles}
+                onRoles={setRoles}
+              />
+              {createError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{createError}</AlertDescription>
+                </Alert>
+              )}
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                  Cancel
+                </Button>
                 <Button
                   onClick={() => createUserM.mutate()}
                   disabled={createUserM.isPending || !name.trim() || !email.trim() || !password || roles.length === 0}
@@ -259,79 +303,113 @@ export default function UsersPage() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </CardHeader>
-        <CardContent className="grid gap-5">
-          <div className="data-grid">
-            <div className="paper-panel-muted p-5">
-              <div className="section-kicker">Total</div>
-              <div className="theme-ink mt-3 text-3xl font-semibold">{sortedUsers.length}</div>
-              <div className="theme-muted mt-2 text-sm">All registered users in the workspace.</div>
-            </div>
-            <div className="paper-panel-muted p-5">
-              <div className="section-kicker">Admins</div>
-              <div className="theme-ink mt-3 text-3xl font-semibold">
-                {sortedUsers.filter((user) => user.roles.includes("admin")).length}
-              </div>
-              <div className="theme-muted mt-2 text-sm">Users with full platform access.</div>
-            </div>
-            <div className="paper-panel-muted p-5">
-              <div className="section-kicker">Owners</div>
-              <div className="theme-ink mt-3 text-3xl font-semibold">
-                {sortedUsers.filter((user) => user.roles.includes("owner")).length}
-              </div>
-              <div className="theme-muted mt-2 text-sm">Accounts managing storefronts.</div>
-            </div>
-            <div className="paper-panel-muted p-5">
-              <div className="section-kicker">Drivers</div>
-              <div className="theme-ink mt-3 text-3xl font-semibold">
-                {sortedUsers.filter((user) => user.roles.includes("driver")).length}
-              </div>
-              <div className="theme-muted mt-2 text-sm">Delivery accounts active in dispatch.</div>
-            </div>
-          </div>
+        }
+      />
 
-          {usersQ.isLoading ? (
-            <div className="paper-panel-muted p-6 text-sm text-slate-600 dark:text-slate-300">Loading users...</div>
-          ) : usersQ.isError ? (
-            <div className="paper-panel-muted p-6 text-sm text-red-700 dark:text-red-300">Failed to load users.</div>
-          ) : (
-            <div className="table-shell">
+      <StatGrid>
+        <StatCard
+          label="Total users"
+          value={sortedUsers.length}
+          icon={Users}
+          hint="All registered users"
+          onClick={() => setRoleFilter("all")}
+          active={roleFilter === "all"}
+        />
+        <StatCard
+          label="Admins"
+          value={roleCount("admin")}
+          icon={ShieldCheck}
+          tone="primary"
+          hint="Full platform access"
+          onClick={() => setRoleFilter("admin")}
+          active={roleFilter === "admin"}
+        />
+        <StatCard
+          label="Owners"
+          value={roleCount("owner")}
+          icon={Crown}
+          tone="warning"
+          hint="Manage storefronts"
+          onClick={() => setRoleFilter("owner")}
+          active={roleFilter === "owner"}
+        />
+        <StatCard
+          label="Drivers"
+          value={roleCount("driver")}
+          icon={Car}
+          tone="info"
+          hint="Delivery accounts"
+          onClick={() => setRoleFilter("driver")}
+          active={roleFilter === "driver"}
+        />
+      </StatGrid>
+
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="flex flex-col gap-3 border-b p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by name or email"
+              className="pl-8"
+              aria-label="Search users"
+            />
+          </div>
+          <Tabs value={roleFilter} onValueChange={setRoleFilter} className="min-w-0">
+            <div className="overflow-x-auto">
+              <TabsList>
+                <TabsTrigger value="all">All</TabsTrigger>
+                {ROLE_OPTIONS.map((role) => (
+                  <TabsTrigger key={role} value={role}>
+                    {ROLE_LABELS[role]}
+                    <span className="text-xs text-muted-foreground tabular-nums">{roleCount(role)}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+          </Tabs>
+        </div>
+
+        {usersQ.isLoading ? (
+          <LoadingState rows={4} className="p-4" />
+        ) : usersQ.isError ? (
+          <div className="p-4">
+            <Alert variant="destructive">
+              <AlertDescription>Failed to load users.</AlertDescription>
+            </Alert>
+          </div>
+        ) : visibleUsers.length === 0 ? (
+          <EmptyState
+            compact
+            icon={Store}
+            title={sortedUsers.length ? "No matching users" : "No users yet"}
+            description={sortedUsers.length ? "Try a different search or role filter." : "Add the first user to get started."}
+            className="py-10"
+          />
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto md:block">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
+                    <TableHead className="pl-4">User</TableHead>
                     <TableHead>Roles</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead className="pr-4 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedUsers.map((user) => (
+                  {visibleUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-semibold">{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-2">
-                          {user.roles.map((role) => (
-                            <Badge key={role} variant="secondary" className="rounded-full">
-                              {ROLE_LABELS[role as keyof typeof ROLE_LABELS] ?? role}
-                            </Badge>
-                          ))}
-                        </div>
+                      <TableCell className="pl-4">
+                        <UserIdentity user={user} />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="secondary"
-                          className="rounded-2xl"
-                          onClick={() => {
-                            setEditingUser(user);
-                            setEditName(user.name);
-                            setEditEmail(user.email);
-                            setEditRoles(user.roles);
-                            setEditPassword("");
-                          }}
-                        >
-                          <Shield className="mr-2 h-4 w-4" />
+                      <TableCell>
+                        <RoleBadges roles={user.roles} />
+                      </TableCell>
+                      <TableCell className="pr-4 text-right">
+                        <Button variant="outline" size="sm" onClick={() => openEdit(user)}>
+                          <Shield />
                           Edit
                         </Button>
                       </TableCell>
@@ -340,76 +418,61 @@ export default function UsersPage() {
                 </TableBody>
               </Table>
             </div>
-          )}
-        </CardContent>
-      </section>
+
+            <div className="divide-y md:hidden">
+              {visibleUsers.map((user) => (
+                <div key={user.id} className="grid gap-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <UserIdentity user={user} />
+                    <Button variant="outline" size="sm" onClick={() => openEdit(user)}>
+                      <Shield />
+                      Edit
+                    </Button>
+                  </div>
+                  <RoleBadges roles={user.roles} />
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!usersQ.isLoading && !usersQ.isError && sortedUsers.length > 0 ? (
+          <div className="border-t px-4 py-3 text-xs text-muted-foreground tabular-nums">
+            Showing {visibleUsers.length} of {sortedUsers.length} users
+          </div>
+        ) : null}
+      </Card>
 
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <div className="app-modal-header">
-              <div className="section-kicker">Update account</div>
-              <DialogTitle className="panel-title mt-2">Edit user</DialogTitle>
-            </div>
+            <DialogTitle>Edit user</DialogTitle>
+            <DialogDescription>
+              {(editName.trim() || editingUser?.name || "User") + " · " + (editPassword ? "Password will update" : "Keep current password")}
+            </DialogDescription>
           </DialogHeader>
-          <div className="app-modal-body">
-            <div className="app-modal-layout">
-              <aside className="app-modal-sidebar">
-                <div className="app-modal-sidebar-sticky">
-                  <div className="app-modal-preview">
-                    <div className="section-kicker">Preview</div>
-                    <div className="theme-ink mt-3 text-3xl font-semibold">
-                      {editName.trim() || editingUser?.name || "User"}
-                    </div>
-                    <div className="theme-copy mt-2 text-sm leading-6">
-                      {editEmail.trim() || editingUser?.email || "user@workspace.com"}
-                    </div>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <span className="status-chip status-neutral">
-                        {editRoles.length} role{editRoles.length === 1 ? "" : "s"}
-                      </span>
-                      <span className="status-chip status-neutral">
-                        {editPassword ? "Password will update" : "Keep current password"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </aside>
-              <div className="app-modal-main">
-                <div className="app-modal-card">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                    <Label className="field-label">Name</Label>
-                  </div>
-                  <Input value={editName} onChange={(event) => setEditName(event.target.value)} className="input-shell mt-3" />
-                </div>
-                <div className="app-modal-card">
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                    <Label className="field-label">Email</Label>
-                  </div>
-                  <Input value={editEmail} onChange={(event) => setEditEmail(event.target.value)} className="input-shell mt-3" />
-                </div>
-                <div className="app-modal-card">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="h-4 w-4 text-cyan-700 dark:text-cyan-200" />
-                    <Label className="field-label">New password (optional)</Label>
-                  </div>
-                  <Input type="password" value={editPassword} onChange={(event) => setEditPassword(event.target.value)} className="input-shell mt-3" />
-                </div>
-                <div className="app-modal-card">
-                  <Label className="field-label">Roles</Label>
-                  <div className="mt-3">
-                    <RolePicker value={editRoles} onChange={setEditRoles} />
-                  </div>
-                </div>
-              </div>
-              {getErrorMessage(updateUserM.error) && (
-                <div className="text-sm text-red-700">{getErrorMessage(updateUserM.error)}</div>
-              )}
-            </div>
-          </div>
-          <DialogFooter className="app-modal-footer">
+          <UserFormFields
+            idPrefix="edit-user"
+            name={editName}
+            onName={setEditName}
+            email={editEmail}
+            onEmail={setEditEmail}
+            password={editPassword}
+            onPassword={setEditPassword}
+            passwordLabel="New password (optional)"
+            passwordHint="Leave empty to keep the current password."
+            roles={editRoles}
+            onRoles={setEditRoles}
+          />
+          {updateError && (
+            <Alert variant="destructive">
+              <AlertDescription>{updateError}</AlertDescription>
+            </Alert>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>
+              Cancel
+            </Button>
             <Button
               onClick={() => updateUserM.mutate()}
               disabled={!editingUser || updateUserM.isPending || !editName.trim() || !editEmail.trim() || editRoles.length === 0}
@@ -419,6 +482,20 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function UserIdentity({ user }: { user: UserRecord }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <Avatar>
+        <AvatarFallback className="text-xs font-medium">{initials(user.name)}</AvatarFallback>
+      </Avatar>
+      <div className="min-w-0">
+        <div className="truncate font-medium">{user.name}</div>
+        <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+      </div>
     </div>
   );
 }

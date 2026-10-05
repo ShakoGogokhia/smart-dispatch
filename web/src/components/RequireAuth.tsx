@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
+import { Spinner } from "@/components/ui/spinner";
 import { auth } from "@/lib/auth";
 import { useMe } from "@/lib/useMe";
 
@@ -16,9 +17,10 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
 
   if (meQ.isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <div className="glass-panel w-full max-w-md p-8 text-center">
-          <div className="text-sm font-medium text-muted-foreground">Checking access...</div>
+      <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="flex items-center gap-3 rounded-xl border bg-card px-5 py-4 text-sm text-muted-foreground shadow-sm">
+          <Spinner />
+          Checking access...
         </div>
       </div>
     );

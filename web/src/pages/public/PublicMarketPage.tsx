@@ -1,26 +1,30 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import {
-  ArrowLeft,
-  Heart,
-  Minus,
-  Plus,
-  Search,
-  ShoppingCart,
-  Star,
-  Store,
-  X,
-  MessageSquare,
-  Sparkles,
-} from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, PackageSearch, Search, ShoppingBag, Store, X } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AxiosError } from "axios";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 
+import { EmptyState } from "@/components/app/empty-state";
+import { StorefrontHeader } from "@/components/app/storefront-header";
+import { CartEmpty, CartLines, CartSummary } from "@/components/storefront/market/cart-panel";
+import { MarketHero, MarketHeroSkeleton } from "@/components/storefront/market/market-hero";
+import {
+  getErrorMessage,
+  getItemImageUrls,
+  getRemovableIngredients,
+  itemNeedsCustomization,
+  type MarketItem,
+  type MarketReviewRecord,
+} from "@/components/storefront/market/market-utils";
+import { ProductCard, ProductCardSkeleton } from "@/components/storefront/market/product-card";
+import { ProductDialog } from "@/components/storefront/market/product-dialog";
+import { MarketReviewsSection } from "@/components/storefront/market/reviews-section";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import ThemeToggle from "@/components/ThemeToggle";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import {
@@ -31,7 +35,6 @@ import {
   setActiveMarketId,
   type CartItem,
   type ComboOffer,
-  type ItemIngredient,
 } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
 import {
@@ -41,215 +44,15 @@ import {
   type MarketPromo,
   type StorefrontMarket,
 } from "@/lib/storefront";
+import { cn } from "@/lib/utils";
 import type { FavoritePayload, ReviewRecord } from "@/types/api";
 
-type Item = {
-  id: number;
-  name: string;
-  sku: string;
-  item_kind?: "regular" | "combo";
-  category?: string | null;
-  image_url?: string | null;
-  image_urls?: string[] | null;
-  is_promoted?: boolean;
-  promotion_ends_at?: string | null;
-  variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
-  ingredients?: ItemIngredient[] | null;
-  combo_offers?: ComboOffer[] | null;
-  price: number | string;
-  discount_type?: "none" | "percent" | "fixed";
-  discount_value?: number | string;
-  is_active: boolean;
-  stock_qty: number;
-  show_stock_quantity?: boolean;
-  is_low_stock?: boolean;
-  review_summary?: {
-    count?: number;
-    average?: number | null;
-  };
-};
-
-type MarketReviewRecord = {
-  id: number;
-  rating: number;
-  comment?: string | null;
-  user?: {
-    id?: number;
-    name?: string | null;
-  } | null;
-};
-
-function getErrorMessage(error: unknown, fallback: string) {
-  if (!error || typeof error !== "object") {
-    return fallback;
-  }
-
-  const axiosError = error as AxiosError<{ message?: string }>;
-  return axiosError.response?.data?.message ?? fallback;
-}
-
-function getRemovableIngredients(item?: Item | null) {
-  if (item?.item_kind === "combo") {
-    return [];
-  }
-
-  return (item?.ingredients ?? []).filter((ingredient) => ingredient.removable);
-}
-
-function getComboIncludedItems(item?: Item | null) {
-  if (item?.item_kind !== "combo") {
-    return [];
-  }
-
-  return item.combo_offers?.[0]?.items ?? [];
-}
-
-function getComboRemovableCount(item?: Item | null) {
-  return getComboIncludedItems(item).reduce(
-    (sum, comboItem) => sum + (comboItem.ingredients ?? []).filter((ingredient) => ingredient.removable).length,
-    0,
-  );
-}
-
-function getItemImageUrls(item?: Item | null) {
-  const urls = [...(item?.image_urls ?? [])];
-
-  if (item?.image_url) {
-    urls.push(item.image_url);
-  }
-
-  return Array.from(
-    new Set(
-      urls
-        .map((url) => {
-          if (!url) {
-            return null;
-          }
-
-          try {
-            const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
-            const parsed = new URL(url, apiOrigin);
-
-            if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-              return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-            }
-
-            return parsed.toString();
-          } catch {
-            return url;
-          }
-        })
-        .filter((url): url is string => typeof url === "string" && url.length > 0),
-    ),
-  );
-}
-
-function resolveMarketMediaUrl(url?: string | null) {
-  if (!url) {
-    return null;
-  }
-
-  try {
-    const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
-    const parsed = new URL(url, apiOrigin);
-
-    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-    }
-
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
-function getMarketBannerUrl(market?: StorefrontMarket | null) {
-  if (!market) {
-    return null;
-  }
-
-  return (
-    resolveMarketMediaUrl(market.banner_url) ??
-    resolveMarketMediaUrl(market.image_url) ??
-    resolveMarketMediaUrl(market.logo_url)
-  );
-}
-
-function StarPicker({
-  value,
-  onChange,
-  size = "md",
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  size?: "sm" | "md" | "lg";
-}) {
-  const sizeClass =
-    size === "sm" ? "h-4 w-4" : size === "lg" ? "h-7 w-7" : "h-5 w-5";
-
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((star) => {
-        const active = star <= value;
-        return (
-          <button
-            key={star}
-            type="button"
-            onClick={() => onChange(star)}
-            className="transition-transform hover:scale-110"
-            aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
-          >
-            <Star
-              className={`${sizeClass} ${
-                active
-                  ? "fill-amber-400 text-amber-400"
-                  : "text-zinc-300 dark:text-zinc-600"
-              }`}
-            />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function RatingDisplay({
-  value,
-  count,
-  size = "sm",
-}: {
-  value?: number | null;
-  count?: number;
-  size?: "sm" | "md";
-}) {
-  const rounded = value ? Math.round(value) : 0;
-  const starClass = size === "md" ? "h-4 w-4" : "h-3.5 w-3.5";
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-0.5">
-        {[1, 2, 3, 4, 5].map((star) => (
-          <Star
-            key={star}
-            className={`${starClass} ${
-              star <= rounded
-                ? "fill-amber-400 text-amber-400"
-                : "text-zinc-300 dark:text-zinc-600"
-            }`}
-          />
-        ))}
-      </div>
-      <span className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-        {value ? value.toFixed(1) : "0.0"}
-        {typeof count === "number" ? ` (${count})` : ""}
-      </span>
-    </div>
-  );
-}
+const UNCATEGORIZED = "Other";
 
 function PublicMarketScreen({ marketId }: { marketId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const isLoggedIn = !!auth.getToken();
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -257,7 +60,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedRemovedIngredients, setSelectedRemovedIngredients] = useState<string[]>([]);
   const [selectedComboOfferName, setSelectedComboOfferName] = useState("");
+  const [selectedQty, setSelectedQty] = useState(1);
   const [isMarketReviewsOpen, setIsMarketReviewsOpen] = useState(false);
+  const [isCartSheetOpen, setIsCartSheetOpen] = useState(false);
 
   const [reviewComment, setReviewComment] = useState("");
   const [reviewRating, setReviewRating] = useState(5);
@@ -268,6 +73,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   const deferredQuery = useDeferredValue(query);
   const [cart, setCart] = useState<CartItem[]>(() => loadCart(marketId));
 
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const reviewsRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     setActiveMarketId(marketId);
     setCart(loadCart(marketId));
@@ -277,6 +85,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     setSelectedRemovedIngredients([]);
     setSelectedComboOfferName("");
     setSelectedImageIndex(0);
+    setSelectedQty(1);
   }, [selectedItemId]);
 
   const marketQ = useQuery({
@@ -287,7 +96,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 
   const itemsQ = useQuery({
     queryKey: ["public-market-items", marketId],
-    queryFn: async () => (await api.get(`/api/public/markets/${marketId}/items`)).data as Item[],
+    queryFn: async () => (await api.get(`/api/public/markets/${marketId}/items`)).data as MarketItem[],
     enabled: !!marketId,
   });
 
@@ -310,8 +119,8 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     enabled: selectedItemId != null,
   });
 
-  // Optional market reviews endpoints. If backend doesn't have them,
-  // UI still works and just shows no reviews / post failure gracefully.
+  // Optional market reviews endpoint. Loaded lazily once the reviews section is
+  // viewed; if the backend doesn't have it, the UI shows a graceful fallback.
   const marketReviewsQ = useQuery({
     queryKey: ["market-reviews", marketId],
     queryFn: async () =>
@@ -320,10 +129,27 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     retry: false,
   });
 
+  // Load market reviews when the reviews section scrolls into view.
+  useEffect(() => {
+    const node = reviewsRef.current;
+    if (!node || isMarketReviewsOpen || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setIsMarketReviewsOpen(true);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [isMarketReviewsOpen, marketQ.data]);
+
   const favoriteM = useMutation({
     mutationFn: async (payload: { market_id?: number; item_id?: number }) =>
       (await api.post("/api/favorites/toggle", payload)).data,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["favorites"] }),
+    onError: () => toast.error("Couldn't update favorites. Please try again."),
   });
 
   const reviewM = useMutation({
@@ -339,6 +165,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     onSuccess: async () => {
       setReviewComment("");
       setReviewRating(5);
+      toast.success("Thanks! Your review was posted.");
       await queryClient.invalidateQueries({ queryKey: ["item-reviews", selectedItemId] });
       await queryClient.invalidateQueries({ queryKey: ["public-market-items", marketId] });
     },
@@ -355,6 +182,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     onSuccess: async () => {
       setMarketReviewComment("");
       setMarketReviewRating(5);
+      toast.success("Thanks! Your market review was posted.");
       await queryClient.invalidateQueries({ queryKey: ["market-reviews", marketId] });
       await queryClient.invalidateQueries({ queryKey: ["public-market", marketId] });
     },
@@ -367,58 +195,64 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     const source = new Set(
       (itemsQ.data ?? [])
         .map((item) => item.category)
-        .filter((v): v is string => typeof v === "string" && v.length > 0)
+        .filter((v): v is string => typeof v === "string" && v.length > 0),
     );
     return ["All", ...Array.from(source)];
   }, [itemsQ.data]);
 
-  const favoriteItems = favoritesQ.data?.items ?? [];
-  const favoriteMarkets = favoritesQ.data?.markets ?? [];
+  const favoriteItems = favoritesQ.data?.items;
+  const favoriteMarkets = favoritesQ.data?.markets;
 
-  const favoriteItemIds = useMemo(() => new Set(favoriteItems.map((i) => i.id)), [favoriteItems]);
-  const favoriteMarketIds = useMemo(() => new Set(favoriteMarkets.map((m) => m.id)), [favoriteMarkets]);
+  const favoriteItemIds = useMemo(() => new Set((favoriteItems ?? []).map((i) => i.id)), [favoriteItems]);
+  const favoriteMarketIds = useMemo(() => new Set((favoriteMarkets ?? []).map((m) => m.id)), [favoriteMarkets]);
 
   const filteredItems = useMemo(() => {
     const term = deferredQuery.trim().toLowerCase();
 
     return (itemsQ.data ?? []).filter((item) => {
       const matchesSearch =
-        !term ||
-        `${item.name} ${item.sku} ${item.category ?? ""}`.toLowerCase().includes(term);
+        !term || `${item.name} ${item.sku} ${item.category ?? ""}`.toLowerCase().includes(term);
       const matchesCategory = category === "All" || item.category === category;
       return matchesSearch && matchesCategory;
     });
   }, [deferredQuery, category, itemsQ.data]);
+
+  const groupedItems = useMemo(() => {
+    const groups = new Map<string, MarketItem[]>();
+    for (const name of categories.slice(1)) groups.set(name, []);
+    for (const item of filteredItems) {
+      const key = item.category || UNCATEGORIZED;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)?.push(item);
+    }
+    return Array.from(groups.entries()).filter(([, items]) => items.length > 0);
+  }, [categories, filteredItems]);
 
   const totals = useMemo(
     () => ({
       quantity: cart.reduce((sum, i) => sum + i.qty, 0),
       subtotal: cart.reduce((sum, i) => sum + i.qty * i.price, 0),
     }),
-    [cart]
+    [cart],
   );
 
   const selectedItem = useMemo(
     () => (itemsQ.data ?? []).find((item) => item.id === selectedItemId) ?? null,
-    [itemsQ.data, selectedItemId]
+    [itemsQ.data, selectedItemId],
   );
 
   const selectedItemImageUrls = useMemo(() => getItemImageUrls(selectedItem), [selectedItem]);
 
-  const selectedItemRemovableIngredients = useMemo(
-    () => getRemovableIngredients(selectedItem),
-    [selectedItem]
-  );
+  const selectedItemRemovableIngredients = useMemo(() => getRemovableIngredients(selectedItem), [selectedItem]);
 
   const selectedComboOffer = useMemo(
     () =>
       selectedItem?.item_kind === "combo"
         ? null
-        :
-      (selectedItem?.combo_offers ?? []).find(
-        (comboOffer) => comboOffer.name.toLowerCase() === selectedComboOfferName.toLowerCase(),
-      ) ?? null,
-    [selectedComboOfferName, selectedItem?.combo_offers]
+        : (selectedItem?.combo_offers ?? []).find(
+            (comboOffer) => comboOffer.name.toLowerCase() === selectedComboOfferName.toLowerCase(),
+          ) ?? null,
+    [selectedComboOfferName, selectedItem],
   );
 
   const marketReviewSummary = useMemo(() => {
@@ -452,7 +286,12 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     saveCart(marketId, newCart);
   };
 
-  const addToCart = (item: Item, removedIngredients: string[] = [], comboOffer?: ComboOffer | null) => {
+  const addToCart = (
+    item: MarketItem,
+    removedIngredients: string[] = [],
+    comboOffer?: ComboOffer | null,
+    qty = 1,
+  ) => {
     if (!marketIsOpen) {
       return;
     }
@@ -463,28 +302,25 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     const existing = cart.find((entry) => entry.cart_id === cartId);
 
     if (existing) {
-      updateCart(
-        cart.map((entry) =>
-          entry.cart_id === cartId ? { ...entry, qty: entry.qty + 1 } : entry
-        )
-      );
-      return;
+      updateCart(cart.map((entry) => (entry.cart_id === cartId ? { ...entry, qty: entry.qty + qty } : entry)));
+    } else {
+      updateCart([
+        ...cart,
+        {
+          cart_id: cartId,
+          item_id: item.id,
+          name: item.name,
+          price,
+          qty,
+          image_url: item.image_url ?? null,
+          ingredients: item.ingredients ?? [],
+          removed_ingredients: normalizedRemovedIngredients,
+          combo_offer: comboOffer ?? null,
+        },
+      ]);
     }
 
-    updateCart([
-      ...cart,
-      {
-        cart_id: cartId,
-        item_id: item.id,
-        name: item.name,
-        price,
-        qty: 1,
-        image_url: item.image_url ?? null,
-        ingredients: item.ingredients ?? [],
-        removed_ingredients: normalizedRemovedIngredients,
-        combo_offer: comboOffer ?? null,
-      },
-    ]);
+    toast.success(`Added ${qty > 1 ? `${qty} × ` : ""}${item.name} to your cart`);
   };
 
   const changeQty = (cartId: string, delta: number) => {
@@ -498,11 +334,12 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
       return;
     }
 
-    updateCart(
-      cart.map((item) =>
-        item.cart_id === cartId ? { ...item, qty: nextQty } : item
-      )
-    );
+    updateCart(cart.map((item) => (item.cart_id === cartId ? { ...item, qty: nextQty } : item)));
+  };
+
+  const handleClearCart = () => {
+    clearCart(marketId);
+    setCart([]);
   };
 
   const startCheckout = () => {
@@ -513,1076 +350,331 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     navigate("/checkout");
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-zinc-50 to-white dark:from-zinc-950 dark:to-zinc-950">
-      {/* Navbar */}
-      <nav className="sticky top-0 z-50 border-b border-zinc-200/80 dark:border-zinc-800 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
-          <Link
-            to="/"
-            className="flex items-center gap-3 text-zinc-700 dark:text-zinc-300 hover:text-cyan-600 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            <span className="font-medium">Back to All Markets</span>
-          </Link>
+  const openItem = (itemId: number) => {
+    setSelectedItemId(itemId);
+    setReviewComment("");
+    setReviewRating(5);
+  };
 
-          <div className="flex items-center gap-3">
-            {auth.getToken() && market?.id && (
-              <Button
-                variant="outline"
-                onClick={() => favoriteM.mutate({ market_id: Number(market.id) })}
-                className="rounded-2xl"
-              >
-                <Heart
-                  className={`h-4 w-4 mr-2 ${
-                    favoriteMarketIds.has(Number(market.id))
-                      ? "fill-red-500 text-red-500"
-                      : ""
-                  }`}
-                />
-                Favorite Market
+  const showMarketReviews = () => {
+    setIsMarketReviewsOpen(true);
+    reviewsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const selectCategory = (cat: string) => {
+    setCategory(cat);
+    const node = catalogRef.current;
+    if (node && node.getBoundingClientRect().top < 0) {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const cartButton = (
+    <Button variant="outline" className="relative gap-2" onClick={() => setIsCartSheetOpen(true)} aria-label="Open cart">
+      <ShoppingBag />
+      <span className="hidden tabular-nums sm:inline">{formatMoney(totals.subtotal)}</span>
+      {totals.quantity > 0 ? (
+        <Badge className="h-5 min-w-5 rounded-full px-1.5 tabular-nums">{totals.quantity}</Badge>
+      ) : null}
+    </Button>
+  );
+
+  if (marketQ.isError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <StorefrontHeader actions={cartButton} />
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8">
+          <EmptyState
+            icon={Store}
+            title="Market not found"
+            description="This market may have been removed or is temporarily unavailable."
+            action={
+              <Button asChild variant="outline">
+                <Link to="/">
+                  <ArrowLeft />
+                  Back to markets
+                </Link>
               </Button>
-            )}
-            <ThemeToggle />
-          </div>
-        </div>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 pb-24">
-        {/* Hero */}
-        <div className="relative overflow-hidden rounded-[2rem] shadow-2xl mb-10 sm:mb-12 border border-zinc-200/60 dark:border-zinc-800">
-          <div className="relative min-h-[620px] sm:min-h-[560px] lg:min-h-[520px]">
-            {getMarketBannerUrl(market) ? (
-              <img
-                src={getMarketBannerUrl(market) ?? undefined}
-                alt={market?.name ?? "Market"}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black" />
-            )}
-
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/15" />
-
-            {promo && (
-              <div className="absolute top-5 right-5 sm:top-6 sm:right-6 rounded-2xl bg-white/95 dark:bg-zinc-900/95 px-4 py-3 sm:px-6 shadow-xl border border-zinc-200 dark:border-zinc-800">
-                <div className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Active Promo
-                </div>
-                <div className="font-bold text-sm sm:text-base">
-                  {promo.code} —{" "}
-                  {promo.type === "percent"
-                    ? `${toNumber(promo.value)}% OFF`
-                    : `${formatMoney(promo.value)} OFF`}
-                </div>
-              </div>
-            )}
-
-            <div className="relative z-10 flex min-h-[620px] flex-col justify-end p-6 pt-24 text-white sm:min-h-[560px] sm:p-10 sm:pt-28 lg:min-h-[520px]">
-              <div className="flex flex-wrap items-center gap-3 mb-4">
-                {resolveMarketMediaUrl(market?.logo_url) ? (
-                  <img src={resolveMarketMediaUrl(market?.logo_url) ?? undefined} alt={`${market?.name ?? "Market"} logo`} className="h-16 w-16 shrink-0 rounded-2xl border border-white/30 object-cover shadow-lg" />
-                ) : null}
-                <span className="font-mono text-xs sm:text-sm tracking-widest text-white/75">
-                  {market?.code}
-                </span>
-
-                {market?.featured_badge?.toLowerCase().includes("vip") ? (
-                  <span className="px-5 py-2 bg-amber-300 text-black font-bold rounded-2xl shadow-lg text-xs sm:text-sm">
-                    ✨ VIP EXCLUSIVE
-                  </span>
-                ) : market?.featured_badge ? (
-                  <span
-                    className={`px-4 py-2 backdrop-blur text-white text-xs font-medium border border-white/20 ${
-                      market.featured_theme?.shape === "soft" ? "rounded-2xl" : "rounded-full"
-                    } ${
-                      market.featured_theme?.tone === "amber"
-                        ? "bg-amber-300 text-black border-amber-200"
-                        : market.featured_theme?.tone === "cyan"
-                          ? "bg-cyan-500/90 text-white border-cyan-400/60"
-                          : market.featured_theme?.tone === "emerald"
-                            ? "bg-emerald-500/90 text-white border-emerald-400/60"
-                            : market.featured_theme?.tone === "rose"
-                              ? "bg-rose-500/90 text-white border-rose-400/60"
-                              : market.featured_theme?.tone === "slate"
-                                ? "bg-slate-900/90 text-white border-slate-700"
-                                : "bg-white/15 text-white border-white/20"
-                    }`}
-                  >
-                    {market.featured_badge}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-                <div>
-                  <h1 className="max-w-4xl break-words text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-                    {market?.name}
-                  </h1>
-                  <p className="mt-4 text-sm sm:text-base lg:text-lg text-white/80 max-w-2xl">
-                    {market?.address || "Premium marketplace experience"}
-                  </p>
-
-                  <div className={`mt-5 w-fit rounded-2xl border px-4 py-3 text-sm ${
-                    marketIsOpen
-                      ? "border-emerald-300/30 bg-emerald-400/15 text-emerald-100"
-                      : "border-rose-300/30 bg-rose-400/15 text-rose-100"
-                  }`}>
-                    <div className="font-semibold">{market?.operating_status?.label ?? (marketIsOpen ? "Open now" : "Closed now")}</div>
-                    {marketHoursLabel ? <div className="mt-1 text-xs opacity-85">{marketHoursLabel}</div> : null}
-                  </div>
-
-                  <div className="mt-3 flex max-w-4xl flex-wrap gap-2">
-                    {operatingHoursList.map((entry) => (
-                      <span key={entry} className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white/80 backdrop-blur">
-                        {entry}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    <div className="rounded-2xl bg-white/10 backdrop-blur px-4 py-2 border border-white/10">
-                      <div className="text-xs text-white/70 mb-1">Products</div>
-                      <div className="font-semibold">{itemsQ.data?.length ?? 0}</div>
-                    </div>
-
-                    <div className="rounded-2xl bg-white/10 backdrop-blur px-4 py-2 border border-white/10">
-                      <div className="text-xs text-white/70 mb-1">Market Rating</div>
-                      <div className="flex items-center gap-2">
-                        <RatingDisplay value={marketReviewSummary.average} count={marketReviewSummary.count} size="md" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => setIsMarketReviewsOpen(true)}
-                    className="rounded-2xl h-12 px-5 text-sm sm:text-base font-medium"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Market Reviews
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Top filters/info */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 lg:gap-10">
-          <div>
-            <div className="rounded-[2rem] border border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur p-4 sm:p-5 mb-8 shadow-sm">
-              <div className="flex flex-col xl:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search products, SKU, category..."
-                    className="h-14 pl-14 rounded-2xl text-base border-zinc-300 dark:border-zinc-700"
-                  />
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => setCategory(cat)}
-                      className={`px-5 py-3 rounded-2xl text-sm font-medium transition-all whitespace-nowrap border ${
-                        category === cat
-                          ? "bg-cyan-600 text-white border-cyan-600 shadow-lg"
-                          : "bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  <span>{filteredItems.length} visible items</span>
-                </div>
-                <div>•</div>
-                <span>{category === "All" ? "All categories" : category}</span>
-              </div>
-            </div>
-
-            {/* Products Grid */}
-            {itemsQ.isLoading ? (
-              <div className="text-center py-20 text-lg text-zinc-500 dark:text-zinc-400">
-                Loading products...
-              </div>
-            ) : itemsQ.isError ? (
-              <div className="text-center py-20 text-rose-500">
-                Failed to load products
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-3 gap-6">
-                {filteredItems.map((item) => {
-                  const finalPrice = calcStorefrontPrice(item);
-                  const isDiscounted = Math.abs(toNumber(item.price) - finalPrice) > 0.01;
-                  const outOfStock = item.stock_qty <= 0;
-                  const ingredientCount = item.ingredients?.length ?? 0;
-                  const removableCount = getRemovableIngredients(item).length;
-                  const comboIncludedItems = getComboIncludedItems(item);
-                  const comboIncludedCount = comboIncludedItems.length;
-                  const comboRemovableCount = getComboRemovableCount(item);
-                  const comboCount = item.combo_offers?.length ?? 0;
-                  const needsCustomization = ingredientCount > 0 || comboCount > 0 || item.item_kind === "combo";
-
-                  return (
-                    <Card
-                      key={item.id}
-                      className="group relative overflow-hidden rounded-[2rem] border border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/60 hover:shadow-2xl transition-all duration-300 bg-white dark:bg-zinc-900 flex flex-col h-full"
-                    >
-                      <div className="relative h-56 sm:h-64 bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                        {getItemImageUrls(item)[0] ? (
-                          <img
-                            src={getItemImageUrls(item)[0]}
-                            alt={item.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          />
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-zinc-300 dark:text-zinc-700">
-                            <Store className="h-16 w-16" />
-                          </div>
-                        )}
-
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/45 to-transparent">
-                          <div className="flex items-center justify-between gap-2">
-                            {item.category ? (
-                              <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-zinc-900 dark:bg-zinc-900/90 dark:text-zinc-100">
-                                {item.category}
-                              </span>
-                            ) : (
-                              <span />
-                            )}
-
-                          {isDiscounted && (
-                              <span className="bg-rose-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                                SALE
-                              </span>
-                            )}
-                            {item.is_promoted ? (
-                              <span className="bg-cyan-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                                PROMOTED
-                              </span>
-                            ) : null}
-                          </div>
-                          {getItemImageUrls(item).length > 1 ? (
-                            <div className="mt-2 text-right">
-                              <span className="inline-flex rounded-full bg-black/55 px-3 py-1 text-xs font-medium text-white">
-                                {getItemImageUrls(item).length} photos
-                              </span>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-
-                      <CardContent className="p-5 sm:p-6 flex flex-col flex-1">
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="min-w-0">
-                            <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                              {item.sku}
-                            </div>
-                            <h3 className="font-semibold text-lg sm:text-xl leading-tight mt-2 line-clamp-2">
-                              {item.name}
-                            </h3>
-                          </div>
-
-                          {auth.getToken() && (
-                            <button
-                              type="button"
-                              onClick={() => favoriteM.mutate({ item_id: item.id })}
-                              className="shrink-0 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                            >
-                              <Heart
-                                className={`h-4 w-4 ${
-                                  favoriteItemIds.has(item.id)
-                                    ? "fill-red-500 text-red-500"
-                                    : "text-zinc-500"
-                                }`}
-                              />
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="mb-4">
-                          <RatingDisplay
-                            value={item.review_summary?.average ?? null}
-                            count={item.review_summary?.count ?? 0}
-                            size="md"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-2 mb-4 flex-wrap">
-                          <span className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                            {formatMoney(finalPrice)}
-                          </span>
-                          {isDiscounted && (
-                            <span className="text-sm sm:text-base line-through text-zinc-400">
-                              {formatMoney(item.price)}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mb-5 flex flex-wrap gap-2">
-                          {!item.is_active && (
-                            <span className="text-xs px-3 py-1 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                              Inactive
-                            </span>
-                          )}
-                          {outOfStock ? (
-                            <span className="text-xs px-3 py-1 rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300">
-                              Out of stock
-                            </span>
-                          ) : item.is_low_stock ? (
-                            <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                              Low stock
-                            </span>
-                          ) : (
-                            <span className="text-xs px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-                              In stock
-                            </span>
-                          )}
-
-                          {item.show_stock_quantity ?? true ? (
-                            <span className="text-xs px-3 py-1 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                              Qty: {item.stock_qty}
-                            </span>
-                          ) : null}
-
-                          {ingredientCount > 0 && (
-                            <span className="text-xs px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300">
-                              {ingredientCount} ingredients
-                            </span>
-                          )}
-
-                          {removableCount > 0 && (
-                            <span className="text-xs px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                              {removableCount} removable
-                            </span>
-                          )}
-
-                          {comboCount > 0 && (
-                            <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                              {item.item_kind === "combo" ? "Combo item" : `${comboCount} combos`}
-                            </span>
-                          )}
-
-                          {item.item_kind === "combo" && comboIncludedCount > 0 ? (
-                            <span className="text-xs px-3 py-1 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300">
-                              Includes {comboIncludedCount} items
-                            </span>
-                          ) : null}
-
-                          {item.item_kind === "combo" && comboRemovableCount > 0 ? (
-                            <span className="text-xs px-3 py-1 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                              {comboRemovableCount} removable in combo
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {item.item_kind === "combo" && comboIncludedItems.length > 0 ? (
-                          <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-                            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-300">
-                              Inside this combo
-                            </div>
-                            <div className="mt-3 grid gap-2">
-                              {comboIncludedItems.slice(0, 3).map((comboItem) => {
-                                const removableIngredients = (comboItem.ingredients ?? []).filter((ingredient) => ingredient.removable);
-
-                                return (
-                                  <div key={`combo-card-${item.id}-${comboItem.id}`} className="rounded-xl bg-white/80 p-3 dark:bg-zinc-900/70">
-                                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{comboItem.name}</div>
-                                    {removableIngredients.length > 0 ? (
-                                      <div className="mt-1 text-xs text-violet-700 dark:text-violet-300">
-                                        Removable: {removableIngredients.map((ingredient) => ingredient.name).join(", ")}
-                                      </div>
-                                    ) : (
-                                      <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">No removable ingredients</div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                              {comboIncludedItems.length > 3 ? (
-                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  +{comboIncludedItems.length - 3} more item{comboIncludedItems.length - 3 === 1 ? "" : "s"} in this combo
-                                </div>
-                              ) : null}
-                            </div>
-                          </div>
-                        ) : null}
-
-                        <div className="mt-auto grid grid-cols-2 gap-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setSelectedItemId(item.id);
-                              setReviewComment("");
-                              setReviewRating(5);
-                            }}
-                            className="rounded-2xl h-11"
-                          >
-                            Details
-                          </Button>
-
-                          <Button
-                            onClick={() => {
-                              if (needsCustomization) {
-                                setSelectedItemId(item.id);
-                                setReviewComment("");
-                                setReviewRating(5);
-                                return;
-                              }
-
-                              addToCart(item);
-                            }}
-                            disabled={outOfStock || !item.is_active || !marketIsOpen}
-                            className="rounded-2xl h-11 font-medium"
-                          >
-                            {!marketIsOpen ? "Market Closed" : outOfStock ? "Out of Stock" : needsCustomization ? "View Details" : "Add to Cart"}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-
-                {filteredItems.length === 0 && (
-                  <div className="col-span-full">
-                    <div className="rounded-[2rem] border border-dashed border-zinc-300 dark:border-zinc-700 p-12 text-center text-zinc-500 dark:text-zinc-400 bg-white dark:bg-zinc-900">
-                      No products found.
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Cart Sidebar */}
-          <div className="lg:w-[360px]">
-            <div className="sticky top-24 rounded-[2rem] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-6 sm:p-7 shadow-xl">
-              <div className="flex items-center justify-between gap-3 mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="h-14 w-14 rounded-2xl bg-cyan-50 dark:bg-cyan-950/40 flex items-center justify-center">
-                    <ShoppingCart className="h-7 w-7 text-cyan-600 dark:text-cyan-400" />
-                  </div>
-                  <div>
-                    <div className="text-sm text-zinc-500 dark:text-zinc-400">
-                      Your Cart
-                    </div>
-                    <div className="text-3xl font-bold text-zinc-900 dark:text-white">
-                      {totals.quantity}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-3xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 p-5 mb-6">
-                <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
-                  Subtotal
-                </div>
-                <div className="text-3xl font-semibold">{formatMoney(totals.subtotal)}</div>
-              </div>
-
-              <div className="space-y-3">
-                <Button
-                  onClick={startCheckout}
-                  disabled={totals.quantity === 0}
-                  className="w-full h-14 text-base rounded-2xl font-semibold"
-                >
-                  Proceed to Checkout
-                </Button>
-
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    clearCart(marketId);
-                    setCart([]);
-                  }}
-                  disabled={totals.quantity === 0}
-                  className="w-full h-14 rounded-2xl"
-                >
-                  Clear Cart
-                </Button>
-              </div>
-
-              {cart.length > 0 ? (
-                <div className="mt-8 space-y-3 max-h-[26rem] overflow-y-auto pr-1">
-                  {cart.map((item) => (
-                    <div
-                      key={item.cart_id}
-                      className="rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/60 dark:bg-zinc-950/60"
-                    >
-                      <div className="flex justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-medium line-clamp-1">{item.name}</div>
-                          <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                            {formatMoney(item.price)} each
-                          </div>
-                          {item.combo_offer ? (
-                            <div className="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                              Combo: {item.combo_offer.name}
-                            </div>
-                          ) : null}
-                          {(item.removed_ingredients ?? []).length > 0 ? (
-                            <div className="mt-2 text-xs text-violet-600 dark:text-violet-300">
-                              Without: {item.removed_ingredients?.join(", ")}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="text-right font-semibold whitespace-nowrap">
-                          {formatMoney(item.price * item.qty)}
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 rounded-xl"
-                          onClick={() => changeQty(item.cart_id, -1)}
-                        >
-                          <Minus className="h-3.5 w-3.5" />
-                        </Button>
-                        <span className="w-8 text-center font-medium">{item.qty}</span>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-9 w-9 rounded-xl"
-                          onClick={() => changeQty(item.cart_id, 1)}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-8 rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-700 p-8 text-center text-zinc-500 dark:text-zinc-400">
-                  Cart is empty.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+            }
+          />
+        </main>
       </div>
+    );
+  }
 
-{/* Item Details Modal */}
-{selectedItemId !== null && (
-  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-    <div className="bg-white dark:bg-zinc-900 rounded-[2rem] w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800">
-      <div className="p-6 sm:p-8 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-start gap-4">
-        <div>
-          <h3 className="text-xl sm:text-2xl font-semibold">Customize Item</h3>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            {selectedItem?.name || "Selected item"}
-          </p>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => setSelectedItemId(null)}>
-          <X className="h-5 w-5 sm:h-6 sm:w-6" />
+  return (
+    <div className="min-h-screen bg-background">
+      <StorefrontHeader actions={cartButton} />
+
+      <main className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8", cart.length > 0 && "pb-28 lg:pb-8")}>
+        <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3 text-muted-foreground">
+          <Link to="/">
+            <ArrowLeft />
+            All markets
+          </Link>
         </Button>
-      </div>
 
-      <div className="flex-1 p-6 sm:p-8 overflow-y-auto space-y-5">
-        {selectedItem ? (
-          <div className="rounded-[1.75rem] border border-zinc-200 dark:border-zinc-800 p-5 sm:p-6">
-            <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
-              <div className="overflow-hidden rounded-[1.5rem] border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-800 relative min-h-[220px]">
-                {selectedItemImageUrls[0] ? (
-                  <>
-                    <div className="flex h-full w-full items-center justify-center p-3">
-                      <img
-                        src={selectedItemImageUrls[selectedImageIndex] ?? selectedItemImageUrls[0]}
-                        alt={selectedItem.name}
-                        className="h-full w-full object-contain"
-                      />
-                    </div>
+        {marketQ.isLoading ? (
+          <MarketHeroSkeleton />
+        ) : (
+          <MarketHero
+            market={market}
+            isOpen={marketIsOpen}
+            hoursLabel={marketHoursLabel}
+            operatingHoursList={operatingHoursList}
+            promo={promo}
+            itemCount={itemsQ.data?.length ?? 0}
+            reviewSummary={marketReviewSummary}
+            onShowReviews={showMarketReviews}
+            canFavorite={isLoggedIn && !!market?.id}
+            isFavorite={!!market?.id && favoriteMarketIds.has(Number(market.id))}
+            favoritePending={favoriteM.isPending}
+            onToggleFavorite={() => market?.id && favoriteM.mutate({ market_id: Number(market.id) })}
+          />
+        )}
 
-                    {selectedItemImageUrls.length > 1 ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedImageIndex((prev) =>
-                              prev === 0 ? selectedItemImageUrls.length - 1 : prev - 1
-                            )
-                          }
-                          className="absolute left-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/75 transition-colors"
-                        >
-                          <ChevronLeft className="h-5 w-5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedImageIndex((prev) =>
-                              prev === selectedItemImageUrls.length - 1 ? 0 : prev + 1
-                            )
-                          }
-                          className="absolute right-3 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/75 transition-colors"
-                        >
-                          <ChevronRight className="h-5 w-5" />
-                        </button>
-                      </>
-                    ) : null}
-                  </>
-                ) : (
-                  <div className="flex min-h-[220px] items-center justify-center text-zinc-400 dark:text-zinc-600">
-                    <Store className="h-16 w-16" />
-                  </div>
-                )}
-              </div>
-
-              <div className="grid gap-4">
-                <div>
-                  <div className="font-mono text-xs text-zinc-500 dark:text-zinc-400">{selectedItem.sku}</div>
-                  <div className="mt-2 text-3xl font-semibold">
-                    {formatMoney(selectedComboOffer ? selectedComboOffer.combo_price : calcStorefrontPrice(selectedItem))}
-                  </div>
-                  {selectedComboOffer ? (
-                    <div className="mt-2 text-sm text-amber-700 dark:text-amber-300">
-                      Combo selected: {selectedComboOffer.name}
-                    </div>
-                  ) : null}
-                  <div className="mt-3">
-                    <RatingDisplay
-                      value={selectedItem.review_summary?.average ?? null}
-                      count={selectedItem.review_summary?.count ?? 0}
-                      size="md"
-                    />
-                  </div>
-                </div>
-
-                {selectedItemImageUrls.length > 1 ? (
-                  <div className="grid gap-2">
-                    <div className="text-sm font-medium">Gallery</div>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedItemImageUrls.map((url, index) => {
-                        const active = index === selectedImageIndex;
-                        return (
-                          <button
-                            key={`${url}-${index}`}
-                            type="button"
-                            onClick={() => setSelectedImageIndex(index)}
-                            className={`overflow-hidden rounded-2xl border ${
-                              active ? "border-cyan-500 ring-2 ring-cyan-300/60" : "border-zinc-200 dark:border-zinc-800"
-                            }`}
-                          >
-                            <div className="h-16 w-16 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center p-1">
-                              <img
-                                src={url}
-                                alt={`${selectedItem.name} ${index + 1}`}
-                                className="h-full w-full object-contain"
-                              />
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          {/* Catalog */}
+          <div ref={catalogRef} className="min-w-0 scroll-mt-16 space-y-6">
+            <div className="sticky top-16 z-30 -mx-4 space-y-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
+              <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search ${market?.name ?? "this market"} by name, SKU or category`}
+                  className="pr-9 pl-9"
+                  aria-label="Search products"
+                />
+                {query ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="absolute top-1/2 right-2 -translate-y-1/2"
+                    onClick={() => setQuery("")}
+                    aria-label="Clear search"
+                  >
+                    <X />
+                  </Button>
                 ) : null}
-
-                {(selectedItem.ingredients ?? []).length > 0 ? (
-                  <div className="grid gap-3">
-                    <div>
-                      <div className="text-sm font-medium">Ingredients</div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Required ingredients stay on the item. Optional ones can be removed individually or all at once.
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {(selectedItem.ingredients ?? []).map((ingredient) => (
-                        <span
-                          key={ingredient.name}
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${
-                            ingredient.removable
-                              ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                              : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                          }`}
-                        >
-                          {ingredient.name}
-                          {ingredient.removable ? " · removable" : ""}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 p-4 text-sm text-zinc-500 dark:text-zinc-400">
-                    No ingredients listed for this item yet.
-                  </div>
-                )}
-
-                {selectedItemRemovableIngredients.length > 0 ? (
-                  <div className="grid gap-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium">Choose removable ingredients</div>
-                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                          Keep everything or remove only the optional ingredients you do not want.
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={() => setSelectedRemovedIngredients([])}
-                        >
-                          Keep all
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={() =>
-                            setSelectedRemovedIngredients(
-                              selectedItemRemovableIngredients.map((ingredient) => ingredient.name),
-                            )
-                          }
-                        >
-                          Remove all optional
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {selectedItemRemovableIngredients.map((ingredient) => {
-                        const removed = selectedRemovedIngredients.some(
-                          (entry) => entry.toLowerCase() === ingredient.name.toLowerCase(),
-                        );
-
-                        return (
-                          <button
-                            key={ingredient.name}
-                            type="button"
-                            onClick={() =>
-                              setSelectedRemovedIngredients((current) =>
-                                removed
-                                  ? current.filter((entry) => entry.toLowerCase() !== ingredient.name.toLowerCase())
-                                  : [...current, ingredient.name],
-                              )
-                            }
-                            className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                              removed
-                                ? "border-violet-600 bg-violet-600 text-white"
-                                : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                            }`}
-                          >
-                            {removed ? `Removed: ${ingredient.name}` : `Keep: ${ingredient.name}`}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedItem.item_kind === "combo" && (selectedItem.combo_offers?.[0]?.items ?? []).length > 0 ? (
-                  <div className="grid gap-3">
-                    <div>
-                      <div className="text-sm font-medium">Included in this combo</div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        This combo item already uses the combo price shown above.
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {(selectedItem.combo_offers?.[0]?.items ?? []).map((item) => (
-                        <div
-                          key={item.id}
-                          className="min-w-[220px] rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/20"
-                        >
-                          <div className="font-medium text-amber-900 dark:text-amber-100">{item.name}</div>
-                          {(item.ingredients ?? []).length > 0 ? (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {(item.ingredients ?? []).map((ingredient) => (
-                                <span
-                                  key={`${item.id}-${ingredient.name}`}
-                                  className={`rounded-full px-2 py-1 text-[11px] ${
-                                    ingredient.removable
-                                      ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                                      : "bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                                  }`}
-                                >
-                                  {ingredient.name}
-                                  {ingredient.removable ? " removable" : ""}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">No ingredients listed</div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {selectedItem.item_kind !== "combo" && (selectedItem.combo_offers ?? []).length > 0 ? (
-                  <div className="grid gap-3">
-                    <div>
-                      <div className="text-sm font-medium">Combo deals</div>
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Choose the standard item or a discounted combo prepared by the market.
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedComboOfferName("")}
-                        className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
-                          !selectedComboOfferName
-                            ? "border-cyan-600 bg-cyan-50 text-cyan-900 dark:border-cyan-400 dark:bg-cyan-950/30 dark:text-cyan-100"
-                            : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="font-medium">Standard item</span>
-                          <span>{formatMoney(calcStorefrontPrice(selectedItem))}</span>
-                        </div>
-                      </button>
-
-                      {(selectedItem.combo_offers ?? []).map((comboOffer) => {
-                        const active = selectedComboOfferName.toLowerCase() === comboOffer.name.toLowerCase();
-
-                        return (
-                          <button
-                            key={comboOffer.name}
-                            type="button"
-                            onClick={() => setSelectedComboOfferName(comboOffer.name)}
-                            className={`rounded-2xl border px-4 py-3 text-left transition-colors ${
-                              active
-                                ? "border-amber-500 bg-amber-50 text-amber-900 dark:border-amber-400 dark:bg-amber-950/30 dark:text-amber-100"
-                                : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-medium">{comboOffer.name}</span>
-                              <span>{formatMoney(comboOffer.combo_price)}</span>
-                            </div>
-                            {(comboOffer.items ?? []).length > 0 ? (
-                              <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                                Includes: {(comboOffer.items ?? []).map((item) => item.name).join(", ")}
-                              </div>
-                            ) : null}
-                            {comboOffer.description ? (
-                              <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                                {comboOffer.description}
-                              </div>
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
-                <Button
-                  onClick={() => {
-                    addToCart(selectedItem, selectedRemovedIngredients, selectedComboOffer);
-                    setSelectedItemId(null);
-                  }}
-                  disabled={selectedItem.stock_qty <= 0 || !selectedItem.is_active || !marketIsOpen}
-                  className="h-12 rounded-2xl text-base"
-                >
-                  {!marketIsOpen ? "Market Closed" : selectedItem.stock_qty <= 0 ? "Out of Stock" : "Add Customized Item"}
-                </Button>
               </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-lg font-semibold">Reviews</div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {selectedComboOffer ? (
-              <div className="text-xs text-amber-700 dark:text-amber-300">
-                Combo: {selectedComboOffer.name}
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {categories.map((cat) => (
+                  <Button
+                    key={cat}
+                    size="sm"
+                    variant={category === cat ? "default" : "outline"}
+                    className="shrink-0 rounded-full"
+                    onClick={() => selectCategory(cat)}
+                    aria-pressed={category === cat}
+                  >
+                    {cat === "All" ? "All items" : cat}
+                  </Button>
+                ))}
               </div>
-            ) : null}
-            {(selectedRemovedIngredients ?? []).length > 0 ? (
-              <div className="text-xs text-violet-600 dark:text-violet-300">
-                Without: {selectedRemovedIngredients.join(", ")}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {reviewsQ.isLoading ? (
-          <p className="py-10 text-center text-zinc-500 dark:text-zinc-400">Loading reviews...</p>
-        ) : (reviewsQ.data ?? []).length > 0 ? (
-          reviewsQ.data?.map((review) => (
-            <div
-              key={review.id}
-              className="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 sm:p-6"
-            >
-              <div className="flex justify-between items-center gap-4">
-                <div className="font-medium">
-                  {review.user?.name || "Anonymous"}
-                </div>
-                <div className="flex items-center gap-2">
-                  <RatingDisplay value={Number(review.rating)} count={undefined} />
-                </div>
-              </div>
-              <p className="mt-3 text-zinc-600 dark:text-zinc-400 text-sm sm:text-base leading-relaxed">
-                {review.comment || "No comment provided."}
+              <p className="text-xs text-muted-foreground">
+                <span className="tabular-nums">{filteredItems.length}</span> item{filteredItems.length === 1 ? "" : "s"}
+                {" · "}
+                {category === "All" ? "All categories" : category}
+                {deferredQuery.trim() ? ` · matching “${deferredQuery.trim()}”` : ""}
               </p>
             </div>
-          ))
-        ) : (
-          <p className="py-12 text-center text-zinc-500 dark:text-zinc-400">
-            No reviews yet. Be the first to review!
-          </p>
-        )}
-      </div>
 
-      {auth.getToken() && (
-        <div className="p-6 sm:p-8 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
-          <div className="mb-4">
-            <div className="text-sm font-medium mb-2">Your Rating</div>
-            <StarPicker value={reviewRating} onChange={setReviewRating} size="lg" />
+            {itemsQ.isLoading ? (
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <ProductCardSkeleton key={index} />
+                ))}
+              </div>
+            ) : itemsQ.isError ? (
+              <Alert variant="destructive">
+                <AlertDescription>Failed to load products. Please refresh the page and try again.</AlertDescription>
+              </Alert>
+            ) : filteredItems.length === 0 ? (
+              <EmptyState
+                icon={PackageSearch}
+                title="No products found"
+                description={
+                  (itemsQ.data ?? []).length === 0
+                    ? "This market hasn't added any products yet."
+                    : "Try a different search term or category."
+                }
+                action={
+                  query || category !== "All" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setQuery("");
+                        setCategory("All");
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ) : (
+              groupedItems.map(([groupName, items]) => (
+                <section key={groupName} className="space-y-3" aria-label={groupName}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h2 className="text-lg font-semibold tracking-tight">{groupName}</h2>
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {items.length} item{items.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+                    {items.map((item) => (
+                      <ProductCard
+                        key={item.id}
+                        item={item}
+                        marketIsOpen={marketIsOpen}
+                        canFavorite={isLoggedIn}
+                        isFavorite={favoriteItemIds.has(item.id)}
+                        onToggleFavorite={() => favoriteM.mutate({ item_id: item.id })}
+                        onOpen={() => openItem(item.id)}
+                        onAdd={() => {
+                          if (itemNeedsCustomization(item)) {
+                            openItem(item.id);
+                            return;
+                          }
+                          addToCart(item);
+                        }}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
+            )}
+
+            {!marketQ.isLoading ? (
+              <MarketReviewsSection
+                ref={reviewsRef}
+                marketName={market?.name}
+                summary={marketReviewSummary}
+                reviews={marketReviewsQ.data}
+                isLoading={marketReviewsQ.isLoading}
+                isError={marketReviewsQ.isError}
+                isLoggedIn={isLoggedIn}
+                rating={marketReviewRating}
+                onRatingChange={setMarketReviewRating}
+                comment={marketReviewComment}
+                onCommentChange={setMarketReviewComment}
+                error={marketReviewError}
+                isPending={marketReviewM.isPending}
+                onSubmit={() => marketReviewM.mutate()}
+              />
+            ) : null}
           </div>
 
-          <Input
-            value={reviewComment}
-            onChange={(e) => setReviewComment(e.target.value)}
-            placeholder="Add an optional comment..."
-            className="rounded-2xl h-12"
-          />
+          {/* Cart sidebar (lg+) */}
+          <aside className="hidden lg:block">
+            <Card className="sticky top-20 gap-4">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ShoppingBag className="size-4" />
+                  Your cart
+                </CardTitle>
+                <CardDescription>
+                  {totals.quantity > 0
+                    ? `${totals.quantity} item${totals.quantity === 1 ? "" : "s"} from ${market?.name ?? "this market"}`
+                    : "Items you add will appear here."}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {cart.length > 0 ? (
+                  <CartLines cart={cart} onChangeQty={changeQty} className="max-h-[calc(100svh-26rem)] overflow-y-auto pr-1" />
+                ) : (
+                  <CartEmpty />
+                )}
+              </CardContent>
+              <CardFooter className="block border-t pt-4">
+                <CartSummary totals={totals} promo={promo} onCheckout={startCheckout} onClear={handleClearCart} />
+              </CardFooter>
+            </Card>
+          </aside>
+        </div>
+      </main>
 
-          {itemReviewError ? (
-            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
-              {itemReviewError}
-            </div>
-          ) : null}
-
-          <Button
-            onClick={() => reviewM.mutate()}
-            disabled={reviewM.isPending}
-            className="mt-4 w-full h-12 rounded-2xl text-base"
-          >
-            {reviewM.isPending ? "Posting Review..." : `Post ${reviewRating}-Star Review`}
+      {/* Mobile "view cart" bar */}
+      {cart.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
+          <Button size="lg" className="w-full justify-between" onClick={() => setIsCartSheetOpen(true)}>
+            <span className="flex items-center gap-2">
+              <ShoppingBag />
+              View cart
+            </span>
+            <span className="tabular-nums">
+              {totals.quantity} item{totals.quantity === 1 ? "" : "s"} · {formatMoney(totals.subtotal)}
+            </span>
           </Button>
         </div>
-      )}
-    </div>
-  </div>
-)}
+      ) : null}
 
-      {/* Market Reviews Modal */}
-      {isMarketReviewsOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-[2rem] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-zinc-200 dark:border-zinc-800">
-            <div className="p-6 sm:p-8 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-start gap-4">
-              <div>
-                <h3 className="text-xl sm:text-2xl font-semibold">Market Reviews</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                  {market?.name || "Market"}
-                </p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setIsMarketReviewsOpen(false)}>
-                <X className="h-5 w-5 sm:h-6 sm:w-6" />
-              </Button>
-            </div>
-
-            <div className="flex-1 p-6 sm:p-8 overflow-y-auto">
-              <div className="mb-6 rounded-3xl border border-zinc-200 dark:border-zinc-800 p-5 bg-zinc-50 dark:bg-zinc-950">
-                <div className="text-sm text-zinc-500 dark:text-zinc-400 mb-2">
-                  Overall Rating
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl font-bold">
-                    {marketReviewSummary.average
-                      ? marketReviewSummary.average.toFixed(1)
-                      : "0.0"}
-                  </div>
-                  <RatingDisplay
-                    value={marketReviewSummary.average}
-                    count={marketReviewSummary.count}
-                    size="md"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-5">
-                {marketReviewsQ.isLoading ? (
-                  <p className="py-10 text-center text-zinc-500 dark:text-zinc-400">Loading reviews...</p>
-                ) : marketReviewsQ.isError ? (
-                  <p className="py-10 text-center text-zinc-500 dark:text-zinc-400">
-                    Market reviews are not available yet.
-                  </p>
-                ) : (marketReviewsQ.data ?? []).length > 0 ? (
-                  marketReviewsQ.data?.map((review) => (
-                    <div
-                      key={review.id}
-                      className="border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 sm:p-6"
-                    >
-                      <div className="flex justify-between items-center gap-4">
-                        <div className="font-medium">
-                          {review.user?.name || "Anonymous"}
-                        </div>
-                        <RatingDisplay value={Number(review.rating)} count={undefined} />
-                      </div>
-                      <p className="mt-3 text-zinc-600 dark:text-zinc-400 text-sm sm:text-base leading-relaxed">
-                        {review.comment || "No comment provided."}
-                      </p>
-                    </div>
-                  ))
-                ) : (
-                  <p className="py-12 text-center text-zinc-500 dark:text-zinc-400">
-                    No market reviews yet. Be the first to review!
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {auth.getToken() && (
-              <div className="p-6 sm:p-8 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950">
-                <div className="mb-4">
-                  <div className="text-sm font-medium mb-2">Your Market Rating</div>
-                  <StarPicker
-                    value={marketReviewRating}
-                    onChange={setMarketReviewRating}
-                    size="lg"
-                  />
-                </div>
-
-                <Input
-                  value={marketReviewComment}
-                  onChange={(e) => setMarketReviewComment(e.target.value)}
-                  placeholder="Add an optional market comment..."
-                  className="rounded-2xl h-12"
-                />
-
-                {marketReviewError ? (
-                  <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
-                    {marketReviewError}
-                  </div>
-                ) : null}
-
-                <Button
-                  onClick={() => marketReviewM.mutate()}
-                  disabled={marketReviewM.isPending}
-                  className="mt-4 w-full h-12 rounded-2xl text-base"
-                >
-                  {marketReviewM.isPending
-                    ? "Posting Review..."
-                    : `Post ${marketReviewRating}-Star Market Review`}
-                </Button>
-              </div>
-            )}
+      {/* Cart sheet */}
+      <Sheet open={isCartSheetOpen} onOpenChange={setIsCartSheetOpen}>
+        <SheetContent side="right" className="w-full gap-0 sm:max-w-md">
+          <SheetHeader className="border-b">
+            <SheetTitle className="flex items-center gap-2">
+              <ShoppingBag className="size-4" />
+              Your cart
+            </SheetTitle>
+            <SheetDescription>
+              {totals.quantity > 0
+                ? `${totals.quantity} item${totals.quantity === 1 ? "" : "s"} from ${market?.name ?? "this market"}`
+                : "Items you add will appear here."}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            {cart.length > 0 ? <CartLines cart={cart} onChangeQty={changeQty} /> : <CartEmpty />}
           </div>
-        </div>
-      )}
+          <SheetFooter className="border-t">
+            <CartSummary
+              totals={totals}
+              promo={promo}
+              onCheckout={() => {
+                setIsCartSheetOpen(false);
+                startCheckout();
+              }}
+              onClear={handleClearCart}
+            />
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      <ProductDialog
+        open={selectedItemId !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedItemId(null);
+        }}
+        item={selectedItem}
+        imageUrls={selectedItemImageUrls}
+        imageIndex={selectedImageIndex}
+        onImageIndexChange={setSelectedImageIndex}
+        removableIngredients={selectedItemRemovableIngredients}
+        removedIngredients={selectedRemovedIngredients}
+        onRemovedIngredientsChange={setSelectedRemovedIngredients}
+        comboOfferName={selectedComboOfferName}
+        onComboOfferNameChange={setSelectedComboOfferName}
+        selectedComboOffer={selectedComboOffer}
+        quantity={selectedQty}
+        onQuantityChange={setSelectedQty}
+        marketIsOpen={marketIsOpen}
+        onAddToCart={() => {
+          if (!selectedItem) return;
+          addToCart(selectedItem, selectedRemovedIngredients, selectedComboOffer, selectedQty);
+          setSelectedItemId(null);
+        }}
+        reviews={reviewsQ.data}
+        reviewsLoading={reviewsQ.isLoading}
+        isLoggedIn={isLoggedIn}
+        reviewRating={reviewRating}
+        onReviewRatingChange={setReviewRating}
+        reviewComment={reviewComment}
+        onReviewCommentChange={setReviewComment}
+        reviewError={itemReviewError}
+        reviewPending={reviewM.isPending}
+        onSubmitReview={() => reviewM.mutate()}
+      />
     </div>
   );
 }
@@ -1591,7 +683,26 @@ export default function PublicMarketPage() {
   const { marketId = "" } = useParams();
 
   if (!marketId) {
-    return <div className="p-10 text-red-500">Market ID is missing.</div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <StorefrontHeader />
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8">
+          <EmptyState
+            icon={Store}
+            title="Market ID is missing"
+            description="Pick a market from the list to start ordering."
+            action={
+              <Button asChild variant="outline">
+                <Link to="/">
+                  <ArrowLeft />
+                  Back to markets
+                </Link>
+              </Button>
+            }
+          />
+        </main>
+      </div>
+    );
   }
 
   return <PublicMarketScreen key={marketId} marketId={marketId} />;

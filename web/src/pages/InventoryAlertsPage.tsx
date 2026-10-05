@@ -1,11 +1,21 @@
-import { EyeOff, PackageX } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { CheckCircle2, EyeOff, Package, PackageX, TriangleAlert } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { StatusBadge } from "@/components/app/status-badge";
+import { marketErrorMessage } from "@/components/markets/market-utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type InventoryAlertPayload = {
   market_id: number;
@@ -25,47 +35,119 @@ export default function InventoryAlertsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inventory-alerts", marketId] }),
   });
   const alerts = alertsQ.data?.alerts ?? [];
+  const outCount = alerts.filter((item) => item.severity === "out").length;
+  const lowCount = alerts.length - outCount;
 
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">Inventory alerts</h1>
-      </div>
-
-      <Card className="rounded-[30px]">
-        <CardHeader>
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="text-2xl">Low stock and out-of-stock items</CardTitle>
-            <Button onClick={() => hideM.mutate()} disabled={hideM.isPending}>
-              <EyeOff className="h-4 w-4" />
+    <div className="space-y-6">
+      <PageHeader
+        title="Inventory alerts"
+        description="Products that are running low or have sold out. Restock them or hide sold-out items from customers."
+        breadcrumbs={marketId ? [{ label: "Dashboard", to: `/markets/${marketId}/dashboard` }, { label: "Inventory alerts" }] : undefined}
+        actions={
+          <>
+            {marketId ? (
+              <Button asChild variant="outline">
+                <Link to={`/markets/${marketId}/items`}>
+                  <Package />
+                  Manage products
+                </Link>
+              </Button>
+            ) : null}
+            <Button
+              onClick={() =>
+                hideM.mutate(undefined, {
+                  onSuccess: () => toast.success("Out-of-stock items hidden"),
+                  onError: (error) => toast.error(marketErrorMessage(error) ?? "Could not hide items"),
+                })
+              }
+              disabled={hideM.isPending}
+            >
+              {hideM.isPending ? <Spinner /> : <EyeOff />}
               Hide out of stock
             </Button>
-          </div>
+          </>
+        }
+      />
+
+      <StatGrid className="md:grid-cols-3 xl:grid-cols-3">
+        <StatCard label="Total alerts" value={alerts.length} icon={TriangleAlert} tone="primary" />
+        <StatCard label="Out of stock" value={outCount} icon={PackageX} tone="destructive" />
+        <StatCard label="Low stock" value={lowCount} icon={TriangleAlert} tone="warning" />
+      </StatGrid>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Low stock and out-of-stock items</CardTitle>
+          <CardDescription>The bar shows current stock compared to each item's low-stock threshold.</CardDescription>
+          {alerts.length ? (
+            <CardAction>
+              <StatusBadge tone={outCount ? "destructive" : "warning"}>{alerts.length} items</StatusBadge>
+            </CardAction>
+          ) : null}
         </CardHeader>
         <CardContent className="grid gap-3">
           {alertsQ.isLoading ? (
-            <div className="p-5 text-sm theme-copy">Loading alerts...</div>
+            <LoadingState rows={3} />
+          ) : alertsQ.isError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{marketErrorMessage(alertsQ.error)}</AlertDescription>
+            </Alert>
           ) : alerts.length === 0 ? (
-            <div className="rounded-[22px] border border-slate-200 p-5 text-sm theme-copy dark:border-slate-800">Inventory looks healthy.</div>
-          ) : alerts.map((item) => (
-            <div key={item.id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-slate-950 text-white dark:bg-cyan-500/15 dark:text-cyan-100">
-                    <PackageX className="h-4 w-4" />
+            <EmptyState icon={CheckCircle2} title="All products are well stocked" description="Inventory looks healthy. Items will appear here when they drop below their threshold." />
+          ) : (
+            alerts.map((item) => {
+              const out = item.severity === "out";
+              const pct = item.low_stock_threshold > 0 ? Math.min(100, (item.stock_qty / item.low_stock_threshold) * 100) : 0;
+
+              return (
+                <div key={item.id} className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 md:flex-row md:items-center">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <div
+                      className={cn(
+                        "flex size-10 shrink-0 items-center justify-center rounded-lg",
+                        out ? "bg-destructive/10 text-destructive" : "bg-warning/20 text-warning",
+                      )}
+                    >
+                      {out ? <PackageX className="size-5" /> : <TriangleAlert className="size-5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium">{item.name}</span>
+                        <StatusBadge tone={out ? "destructive" : "warning"} dot>
+                          {out ? "Out of stock" : "Low stock"}
+                        </StatusBadge>
+                        <StatusBadge tone="neutral">{item.is_active ? "Visible" : "Hidden"}</StatusBadge>
+                      </div>
+                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                        SKU {item.sku} - threshold {item.low_stock_threshold}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="font-semibold">{item.name}</div>
-                    <div className="mt-1 text-sm theme-copy">{item.sku} - threshold {item.low_stock_threshold}</div>
+
+                  <div className="grid gap-1.5 md:w-56">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">In stock</span>
+                      <span className={cn("font-semibold tabular-nums", out ? "text-destructive" : "text-foreground")}>
+                        {item.stock_qty} left
+                      </span>
+                    </div>
+                    <Progress
+                      value={pct}
+                      aria-label={`${item.stock_qty} of ${item.low_stock_threshold}`}
+                      className={out ? "bg-destructive/15 [&>[data-slot=progress-indicator]]:bg-destructive" : "bg-warning/20 [&>[data-slot=progress-indicator]]:bg-warning"}
+                    />
                   </div>
+
+                  {marketId ? (
+                    <Button asChild variant="outline" size="sm" className="md:ml-2">
+                      <Link to={`/markets/${marketId}/items`}>Restock</Link>
+                    </Button>
+                  ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={`status-chip ${item.severity === "out" ? "status-bad" : "status-warn"}`}>{item.stock_qty} left</Badge>
-                  <Badge className="status-chip status-neutral">{item.is_active ? "Visible" : "Hidden"}</Badge>
-                </div>
-              </div>
-            </div>
-          ))}
+              );
+            })
+          )}
         </CardContent>
       </Card>
     </div>

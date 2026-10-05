@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertCircle, Check, KeyRound, Upload, UserRound } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
+import { toast } from "sonner";
 
+import { PageHeader } from "@/components/app/page-header";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
 import { resolveApiMediaUrl } from "@/lib/media";
 import { useMe } from "@/lib/useMe";
@@ -55,11 +62,13 @@ export default function ProfilePage() {
       ).data,
     onSuccess: async () => {
       setSuccessMessage("Profile updated.");
+      toast.success("Profile updated");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
       await queryClient.invalidateQueries({ queryKey: ["me"] });
     },
+    onError: (error) => toast.error(getErrorMessage(error)),
   });
 
   const uploadPhotoM = useMutation({
@@ -74,128 +83,207 @@ export default function ProfilePage() {
     },
     onSuccess: async () => {
       setSuccessMessage("Profile photo updated.");
+      toast.success("Profile photo updated");
       setPhotoFile(null);
       await queryClient.invalidateQueries({ queryKey: ["me"] });
     },
+    onError: (error) => toast.error(getErrorMessage(error)),
   });
 
   const profilePhotoUrl = resolveApiMediaUrl(meQ.data?.profile_photo_url);
+  const previewUrl = useMemo(() => (photoFile ? URL.createObjectURL(photoFile) : null), [photoFile]);
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  const initials =
+    (meQ.data?.name ?? "User")
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part: string) => part[0]?.toUpperCase())
+      .join("") || "U";
+
+  const passwordTouched = Boolean(currentPassword || newPassword || confirmPassword);
+  const passwordMismatch = Boolean(newPassword && confirmPassword && newPassword !== confirmPassword);
+  const canSave = !saveProfileM.isPending && name.trim().length >= 2;
+
+  const saveButton = (label: string) => (
+    <Button onClick={() => saveProfileM.mutate()} disabled={!canSave}>
+      {saveProfileM.isPending ? <Spinner /> : null}
+      {saveProfileM.isPending ? "Saving..." : label}
+    </Button>
+  );
 
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">Profile settings</h1>
-        <p className="theme-copy mt-2 text-sm leading-6">
-          Update your saved customer details here so checkout can autofill them automatically.
-        </p>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <Card className="rounded-[30px]">
-          <CardHeader>
-            <CardTitle className="font-display text-2xl">Profile details</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <div className="grid gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
-              <Label>Profile picture</Label>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cyan-600 text-xl font-semibold text-white">
-                  {profilePhotoUrl ? (
-                    <img src={profilePhotoUrl} alt={meQ.data?.name ?? "Profile"} className="h-full w-full object-cover" />
-                  ) : (
-                    (meQ.data?.name ?? "User")
-                      .split(" ")
-                      .filter(Boolean)
-                      .slice(0, 2)
-                      .map((part: string) => part[0]?.toUpperCase())
-                      .join("") || "U"
-                  )}
-                </div>
-                <div className="grid flex-1 gap-3">
-                  <Input type="file" accept="image/*" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} className="rounded-2xl" />
-                  <div className="flex justify-start">
-                    <Button variant="secondary" onClick={() => uploadPhotoM.mutate()} disabled={!photoFile || uploadPhotoM.isPending}>
-                      {uploadPhotoM.isPending ? "Uploading..." : "Upload profile picture"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Name</Label>
-              <Input value={name} onChange={(event) => setName(event.target.value)} className="rounded-2xl" />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Email</Label>
-              <Input value={meQ.data?.email ?? ""} readOnly className="rounded-2xl bg-slate-50 text-slate-500 dark:bg-slate-800/60 dark:text-slate-300" />
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <div className="grid gap-2">
-                <Label>Phone</Label>
-                <Input value={phone} onChange={(event) => setPhone(event.target.value)} className="rounded-2xl" placeholder="Optional phone number" />
-              </div>
-
-              <div className="grid gap-2">
-                <Label>Address</Label>
-                <Input value={address} onChange={(event) => setAddress(event.target.value)} className="rounded-2xl" placeholder="Optional saved address" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[30px]">
-          <CardHeader>
-            <CardTitle className="font-display text-2xl">Password</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-5">
-            <div className="grid gap-2">
-              <Label>Current password</Label>
-              <Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="rounded-2xl" />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>New password</Label>
-              <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="rounded-2xl" />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Confirm new password</Label>
-              <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="rounded-2xl" />
-            </div>
-
-            <div className="theme-copy text-sm leading-6">
-              Leave the password fields empty if you only want to update your saved contact details.
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {saveProfileM.error ? (
-        <div className="status-bad rounded-[20px] border px-4 py-3 text-sm">
-          {getErrorMessage(saveProfileM.error)}
-        </div>
-      ) : null}
-
-      {uploadPhotoM.error ? (
-        <div className="status-bad rounded-[20px] border px-4 py-3 text-sm">
-          {getErrorMessage(uploadPhotoM.error)}
-        </div>
-      ) : null}
+    <div className="space-y-6">
+      <PageHeader
+        title="Profile settings"
+        description="Update your saved details so checkout can fill them in automatically."
+        breadcrumbs={[{ label: "Account" }, { label: "Profile" }]}
+      />
 
       {successMessage ? (
-        <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-300/15 dark:bg-emerald-300/10 dark:text-emerald-100">
-          {successMessage}
-        </div>
+        <Alert>
+          <Check />
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <div className="flex justify-end">
-        <Button onClick={() => saveProfileM.mutate()} disabled={saveProfileM.isPending || name.trim().length < 2}>
-          {saveProfileM.isPending ? "Saving..." : "Save profile"}
-        </Button>
-      </div>
+      {meQ.isLoading ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Skeleton className="h-96 rounded-xl" />
+          <Skeleton className="h-96 rounded-xl" />
+        </div>
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          <div className="grid gap-6">
+            {/* Photo */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Profile picture</CardTitle>
+                <CardDescription>Shown to markets and drivers on your orders.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <Avatar className="size-20 text-xl">
+                    {previewUrl || profilePhotoUrl ? (
+                      <AvatarImage src={previewUrl ?? profilePhotoUrl ?? undefined} alt={meQ.data?.name ?? "Profile"} className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="bg-primary text-xl font-semibold text-primary-foreground">{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid min-w-0 flex-1 gap-2">
+                    <Label htmlFor="profile-photo">Choose an image</Label>
+                    <Input id="profile-photo" type="file" accept="image/*" onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)} />
+                    <p className="text-xs text-muted-foreground">
+                      {photoFile ? `Preview of ${photoFile.name}. Upload to save it.` : "JPG or PNG work best. Square images look best."}
+                    </p>
+                  </div>
+                </div>
+                {uploadPhotoM.error ? (
+                  <Alert variant="destructive">
+                    <AlertCircle />
+                    <AlertDescription>{getErrorMessage(uploadPhotoM.error)}</AlertDescription>
+                  </Alert>
+                ) : null}
+              </CardContent>
+              <CardFooter className="justify-end gap-2 border-t">
+                {photoFile ? (
+                  <Button variant="ghost" onClick={() => setPhotoFile(null)} disabled={uploadPhotoM.isPending}>
+                    Cancel
+                  </Button>
+                ) : null}
+                <Button variant="outline" onClick={() => uploadPhotoM.mutate()} disabled={!photoFile || uploadPhotoM.isPending}>
+                  {uploadPhotoM.isPending ? <Spinner /> : <Upload />}
+                  {uploadPhotoM.isPending ? "Uploading..." : "Upload picture"}
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Personal + contact */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserRound className="size-4 text-muted-foreground" />
+                  Personal & contact info
+                </CardTitle>
+                <CardDescription>Used to autofill your name, phone and address at checkout.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="profile-name">Full name</Label>
+                    <Input
+                      id="profile-name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      aria-invalid={name.length > 0 && name.trim().length < 2}
+                    />
+                    {name.trim().length < 2 ? <p className="text-xs text-destructive">Name must be at least 2 characters.</p> : null}
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="profile-email">Email</Label>
+                    <Input id="profile-email" value={meQ.data?.email ?? ""} readOnly disabled />
+                    <p className="text-xs text-muted-foreground">Email cannot be changed here.</p>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="profile-phone">Phone</Label>
+                    <Input id="profile-phone" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Optional phone number" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="profile-address">Address</Label>
+                    <Input id="profile-address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Optional saved address" />
+                  </div>
+                </div>
+                {saveProfileM.error ? (
+                  <Alert variant="destructive">
+                    <AlertCircle />
+                    <AlertDescription>{getErrorMessage(saveProfileM.error)}</AlertDescription>
+                  </Alert>
+                ) : null}
+              </CardContent>
+              <CardFooter className="justify-end border-t">{saveButton("Save profile")}</CardFooter>
+            </Card>
+          </div>
+
+          {/* Password */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <KeyRound className="size-4 text-muted-foreground" />
+                Password & security
+              </CardTitle>
+              <CardDescription>Leave these fields empty if you only want to update your contact details.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="profile-current-password">Current password</Label>
+                <Input
+                  id="profile-current-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="profile-new-password">New password</Label>
+                  <Input
+                    id="profile-new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="profile-confirm-password">Confirm new password</Label>
+                  <Input
+                    id="profile-confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    aria-invalid={passwordMismatch}
+                  />
+                </div>
+              </div>
+              {passwordMismatch ? <p className="text-xs text-destructive">The new passwords do not match.</p> : null}
+              <p className="text-xs text-muted-foreground">
+                Saving here also saves your personal and contact info.
+              </p>
+            </CardContent>
+            <CardFooter className="justify-end border-t">
+              {passwordTouched ? saveButton("Update password") : saveButton("Save changes")}
+            </CardFooter>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

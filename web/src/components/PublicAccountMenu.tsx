@@ -68,10 +68,10 @@ export default function PublicAccountMenu() {
 
   if (!token) {
     return (
-      <Button asChild variant="outline" className="h-11 rounded-full border-zinc-300 bg-white/90 px-4 dark:border-zinc-700 dark:bg-zinc-900/90">
+      <Button asChild size="sm">
         <Link to="/login">
-          <LogIn className="mr-2 h-4 w-4" />
-          Login
+          <LogIn />
+          Sign in
         </Link>
       </Button>
     );
@@ -80,29 +80,29 @@ export default function PublicAccountMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="h-12 rounded-full border-zinc-300 bg-white/90 px-2 pr-4 dark:border-zinc-700 dark:bg-zinc-900/90">
-          <Avatar className="h-9 w-9 border border-zinc-200 dark:border-zinc-700">
+        <Button variant="ghost" className="h-9 gap-2 rounded-full px-1 pr-2.5">
+          <Avatar className="size-7">
             {profilePhotoUrl ? <AvatarImage src={profilePhotoUrl} alt={user?.name ?? "Profile"} /> : null}
-            <AvatarFallback className="bg-cyan-600 text-sm font-semibold text-white">{initials(user?.name)}</AvatarFallback>
+            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials(user?.name)}</AvatarFallback>
           </Avatar>
           <span className="hidden max-w-[130px] truncate text-sm font-medium sm:inline">{user?.name ?? "Account"}</span>
-          <ChevronDown className="h-4 w-4 text-zinc-500" />
+          <ChevronDown className="size-4 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-80 rounded-2xl border-zinc-200 p-2 shadow-2xl dark:border-zinc-800">
-        <DropdownMenuLabel className="px-3 py-3">
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuLabel className="p-2 font-normal">
           <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12 border border-zinc-200 dark:border-zinc-700">
+            <Avatar className="size-10">
               {profilePhotoUrl ? <AvatarImage src={profilePhotoUrl} alt={user?.name ?? "Profile"} /> : null}
-              <AvatarFallback className="bg-cyan-600 text-base font-semibold text-white">{initials(user?.name)}</AvatarFallback>
+              <AvatarFallback className="bg-primary text-sm font-semibold text-primary-foreground">{initials(user?.name)}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-zinc-950 dark:text-white">{user?.name ?? "Loading user..."}</div>
-              <div className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user?.email ?? ""}</div>
+              <div className="truncate text-sm font-semibold">{user?.name ?? "Loading user..."}</div>
+              <div className="truncate text-xs text-muted-foreground">{user?.email ?? ""}</div>
               <div className="mt-1 flex flex-wrap gap-1">
                 {roles.slice(0, 3).map((role: string) => (
-                  <span key={role} className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-medium text-cyan-700 dark:bg-cyan-950/50 dark:text-cyan-200">
+                  <span key={role} className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">
                     {roleLabels[role] ?? role}
                   </span>
                 ))}
@@ -113,17 +113,17 @@ export default function PublicAccountMenu() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem asChild className="rounded-xl px-3 py-2.5">
+        <DropdownMenuItem asChild>
           <Link to={authedPath}>
-            <ShieldCheck className="h-4 w-4" />
+            <ShieldCheck />
             Open panel
           </Link>
         </DropdownMenuItem>
 
         {links.map((entry) => (
-          <DropdownMenuItem key={entry.to} asChild className="rounded-xl px-3 py-2.5">
+          <DropdownMenuItem key={entry.to} asChild>
             <Link to={entry.to}>
-              <entry.icon className="h-4 w-4" />
+              <entry.icon />
               {entry.label}
             </Link>
           </DropdownMenuItem>
@@ -131,16 +131,16 @@ export default function PublicAccountMenu() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem asChild className="rounded-xl px-3 py-2.5">
+        <DropdownMenuItem asChild>
           <Link to="/profile">
-            <UserRound className="h-4 w-4" />
+            <UserRound />
             Account information
           </Link>
         </DropdownMenuItem>
 
-        <DropdownMenuItem className="rounded-xl px-3 py-2.5 text-rose-600 focus:text-rose-600 dark:text-rose-300 dark:focus:text-rose-300" onClick={logout}>
-          <LogOut className="h-4 w-4" />
-          Logout
+        <DropdownMenuItem variant="destructive" onClick={logout}>
+          <LogOut />
+          Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

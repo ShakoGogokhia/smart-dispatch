@@ -1,11 +1,28 @@
-import { Banknote, CalendarDays, PackageCheck, Wallet } from "lucide-react";
+import { AlertCircle, Banknote, CalendarDays, PackageCheck, Receipt, Wallet } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { StatusBadge, humanizeStatus, toneForStatus } from "@/components/app/status-badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, toNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { DriverEarningsSummary } from "@/types/api";
+
+function AmountText({ amount }: { amount: number | string }) {
+  const value = toNumber(amount);
+  return (
+    <span className={cn("font-semibold tabular-nums", value >= 0 ? "text-success" : "text-destructive")}>
+      {value > 0 ? "+" : ""}
+      {formatMoney(amount)}
+    </span>
+  );
+}
 
 export default function DriverEarningsPage() {
   const earningsQ = useQuery({
@@ -13,76 +30,139 @@ export default function DriverEarningsPage() {
     queryFn: async () => (await api.get("/api/driver/earnings")).data as DriverEarningsSummary,
   });
   const data = earningsQ.data;
+  const maxDaily = Math.max(1, ...(data?.daily ?? []).map((day) => toNumber(day.earnings)));
 
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">Driver earnings</h1>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Driver earnings"
+        description={
+          data?.range
+            ? `What you've earned between ${data.range.from} and ${data.range.to}, and your available balance.`
+            : "What you've earned recently and your available balance."
+        }
+      />
 
       {earningsQ.isLoading ? (
-        <Card className="rounded-[30px]"><CardContent className="p-8 text-sm theme-copy">Loading earnings...</CardContent></Card>
+        <LoadingState rows={4} />
       ) : !data ? (
-        <Card className="rounded-[30px]"><CardContent className="p-8 text-sm status-bad">Unable to load earnings.</CardContent></Card>
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertTitle>Unable to load earnings.</AlertTitle>
+          <AlertDescription>Please refresh the page or try again in a moment.</AlertDescription>
+        </Alert>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-4">
-            <EarningMetric icon={Wallet} label="Balance" value={formatMoney(data.totals.balance)} />
-            <EarningMetric icon={Banknote} label="Period earnings" value={formatMoney(data.totals.period_earnings)} />
-            <EarningMetric icon={PackageCheck} label="Deliveries" value={String(data.totals.period_deliveries)} />
-            <EarningMetric icon={CalendarDays} label="Average drop" value={formatMoney(data.totals.average_delivery_earning)} />
-          </div>
+          <StatGrid>
+            <StatCard icon={Wallet} tone="success" label="Balance" value={formatMoney(data.totals.balance)} hint={`Total earned ${formatMoney(data.totals.total_earned)}`} />
+            <StatCard icon={Banknote} tone="primary" label="Period earnings" value={formatMoney(data.totals.period_earnings)} />
+            <StatCard icon={PackageCheck} tone="info" label="Deliveries" value={String(data.totals.period_deliveries)} hint="In this period" />
+            <StatCard icon={CalendarDays} label="Average drop" value={formatMoney(data.totals.average_delivery_earning)} hint="Per delivery" />
+          </StatGrid>
 
-          <Card className="rounded-[30px]">
-            <CardHeader><CardTitle className="text-2xl">Daily trend</CardTitle></CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-7">
-              {data.daily.map((day) => (
-                <div key={day.date} className="rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="text-xs theme-copy">{day.date.slice(5)}</div>
-                  <div className="mt-3 text-xl font-semibold">{formatMoney(day.earnings)}</div>
-                  <div className="mt-1 text-xs theme-copy">{day.deliveries} drops</div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Daily trend</CardTitle>
+              <CardDescription>Earnings and number of drops per day.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {data.daily.length === 0 ? (
+                <EmptyState compact icon={CalendarDays} title="No daily data yet" />
+              ) : (
+                <div className="flex h-48 items-end gap-2 overflow-x-auto pb-1">
+                  {data.daily.map((day) => {
+                    const height = Math.max(4, (toNumber(day.earnings) / maxDaily) * 100);
+                    return (
+                      <div key={day.date} className="flex h-full min-w-10 flex-1 flex-col items-center gap-1.5">
+                        <div className="text-[11px] font-medium tabular-nums">{formatMoney(day.earnings)}</div>
+                        <div className="flex w-full flex-1 items-end rounded-md bg-muted">
+                          <div
+                            className="w-full rounded-md"
+                            style={{ height: `${height}%`, background: "var(--chart-1)" }}
+                            title={`${day.date}: ${formatMoney(day.earnings)} · ${day.deliveries} drops`}
+                          />
+                        </div>
+                        <div className="text-[11px] text-muted-foreground tabular-nums">{day.date.slice(5)}</div>
+                        <div className="text-[11px] text-muted-foreground tabular-nums">{day.deliveries} drops</div>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
             </CardContent>
           </Card>
 
-          <Card className="rounded-[30px]">
-            <CardHeader><CardTitle className="text-2xl">Transactions</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
-              {data.transactions.length === 0 ? (
-                <div className="rounded-[22px] border border-slate-200 p-5 text-sm theme-copy dark:border-slate-800">No transactions in this range.</div>
-              ) : data.transactions.map((transaction) => (
-                <div key={transaction.id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="font-semibold">{transaction.description ?? "Driver transaction"}</div>
-                      <div className="mt-1 text-sm theme-copy">{transaction.order?.code ?? "No order"} - {formatDateTime(transaction.created_at)}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className="status-chip status-good">{formatMoney(transaction.amount)}</Badge>
-                      <Badge className="status-chip status-neutral">{transaction.payout_status ?? "available"}</Badge>
-                    </div>
-                  </div>
+          <Card className="gap-0 overflow-hidden py-0">
+            <CardHeader className="border-b py-4">
+              <CardTitle>Transactions</CardTitle>
+              <CardDescription>Every credit and payout in this range.</CardDescription>
+            </CardHeader>
+            {data.transactions.length === 0 ? (
+              <CardContent className="py-6">
+                <EmptyState compact icon={Receipt} title="No transactions in this range." description="Completed deliveries will appear here." />
+              </CardContent>
+            ) : (
+              <>
+                <div className="hidden overflow-x-auto md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="pl-6">Description</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Order</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Payout</TableHead>
+                        <TableHead className="pr-6 text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.transactions.map((transaction) => (
+                        <TableRow key={transaction.id}>
+                          <TableCell className="pl-6 font-medium">{transaction.description ?? "Driver transaction"}</TableCell>
+                          <TableCell>
+                            <StatusBadge tone="neutral">{humanizeStatus(transaction.type)}</StatusBadge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">{transaction.order?.code ?? "No order"}</TableCell>
+                          <TableCell className="text-muted-foreground">{formatDateTime(transaction.created_at)}</TableCell>
+                          <TableCell>
+                            <StatusBadge tone={toneForStatus(transaction.payout_status ?? "available")}>
+                              {humanizeStatus(transaction.payout_status ?? "available")}
+                            </StatusBadge>
+                          </TableCell>
+                          <TableCell className="pr-6 text-right">
+                            <AmountText amount={transaction.amount} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              ))}
-            </CardContent>
+                <div className="divide-y md:hidden">
+                  {data.transactions.map((transaction) => (
+                    <div key={transaction.id} className="grid gap-2 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium">{transaction.description ?? "Driver transaction"}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {transaction.order?.code ?? "No order"} · {formatDateTime(transaction.created_at)}
+                          </div>
+                        </div>
+                        <AmountText amount={transaction.amount} />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <StatusBadge tone="neutral">{humanizeStatus(transaction.type)}</StatusBadge>
+                        <StatusBadge tone={toneForStatus(transaction.payout_status ?? "available")}>
+                          {humanizeStatus(transaction.payout_status ?? "available")}
+                        </StatusBadge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </Card>
         </>
       )}
     </div>
-  );
-}
-
-function EarningMetric({ icon: Icon, label, value }: { icon: typeof Wallet; label: string; value: string }) {
-  return (
-    <Card className="rounded-[28px]">
-      <CardContent className="p-5">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-          <Icon className="h-4 w-4" />
-          {label}
-        </div>
-        <div className="mt-4 text-3xl font-semibold tracking-[-0.05em]">{value}</div>
-      </CardContent>
-    </Card>
   );
 }

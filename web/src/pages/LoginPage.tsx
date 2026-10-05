@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, LockKeyhole, ShieldCheck, Store, Truck, UserRoundPlus } from "lucide-react";
+import { AlertCircle, ArrowRight, Check, ShieldCheck, Store, Truck, UserRound } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { AxiosError } from "axios";
 
+import { Brand } from "@/components/app/brand";
+import ThemeToggle from "@/components/ThemeToggle";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import ThemeToggle from "@/components/ThemeToggle";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import { getDefaultAuthedPath, normalizeRoles } from "@/lib/session";
@@ -83,183 +87,185 @@ export default function LoginPage() {
   }
 
   const highlights = [
-    { icon: Store, title: "Customer", text: "Browse markets and place orders." },
-    { icon: Truck, title: "Owner", text: "Manage your market and catalog." },
-    { icon: ShieldCheck, title: "Admin", text: "Manage users, roles, and markets." },
+    { icon: UserRound, title: "Customers", text: "Browse markets, place orders and track deliveries live." },
+    { icon: Store, title: "Market owners", text: "Manage your market, catalog, promo codes and incoming orders." },
+    { icon: Truck, title: "Drivers & admins", text: "Pick up deliveries, oversee users, roles and operations." },
   ];
 
   return (
-    <div className="app-shell">
-      <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[minmax(0,1.12fr)_420px]">
-        <section className="hero-panel page-enter overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="command-chip">Smart Dispatch</div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <ThemeToggle />
-            </div>
+    <div className="grid min-h-screen bg-background lg:grid-cols-2">
+      {/* Brand panel */}
+      <aside className="hidden flex-col justify-between bg-primary p-10 text-primary-foreground lg:flex">
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary-foreground/15">
+            <Truck className="size-4" />
+          </span>
+          <span className="text-[15px] font-semibold tracking-tight">Smart Dispatch</span>
+        </div>
+
+        <div className="max-w-md space-y-8">
+          <div className="space-y-3">
+            <h1 className="text-3xl font-semibold tracking-tight">Order, deliver and manage, all in one place.</h1>
+            <p className="text-primary-foreground/80">
+              Customers place orders, owners run their markets, drivers deliver and admins keep everything moving, from one app.
+            </p>
           </div>
+          <ul className="space-y-5">
+            {highlights.map((item) => {
+              const Icon = item.icon;
+              return (
+                <li key={item.title} className="flex items-start gap-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/15">
+                    <Icon className="size-4" />
+                  </span>
+                  <div>
+                    <div className="font-medium">{item.title}</div>
+                    <div className="text-sm text-primary-foreground/75">{item.text}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
 
-          <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <div>
-              <div className="section-kicker">Commerce, routes, and live operations</div>
-              <h1 className="font-display mt-4 max-w-4xl text-5xl font-semibold tracking-[-0.06em] text-white md:text-7xl">
-                Order like a customer, work like staff, manage like an admin.
-              </h1>
-              <p className="mt-5 max-w-3xl text-base leading-8 text-white/78 md:text-lg">
-                Customers place orders, owners manage their market, and admins oversee users, roles, and operations from one app.
-              </p>
+        <div className="flex items-center gap-2 text-sm text-primary-foreground/75">
+          <ShieldCheck className="size-4" />
+          Secure sign-in for every role
+        </div>
+      </aside>
 
-              <div className="mt-8 flex flex-wrap gap-2">
-                <span className="data-pill">Unified orders</span>
-                <span className="data-pill">Clear handoffs</span>
-                <span className="data-pill">Mobile-friendly</span>
-              </div>
-            </div>
-
-            <div className="hero-mesh flex h-full flex-col justify-center">
-              <div className="section-kicker text-white/70">Why it stays simple</div>
-              <div className="mt-4 grid gap-3">
-                {highlights.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <div key={item.title} className="rounded-[20px] border border-white/10 bg-white/6 p-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/12 bg-white/10 text-amber-200">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div className="mt-4 font-display text-xl font-semibold tracking-[-0.04em] text-white">
-                        {item.title}
-                      </div>
-                      <div className="mt-2 text-sm leading-7 text-slate-300">{item.text}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+      {/* Form */}
+      <div className="flex flex-col">
+        <div className="flex items-center justify-between gap-3 p-4 sm:p-6">
+          <div className="lg:hidden">
+            <Brand />
           </div>
-        </section>
+          <div className="ml-auto">
+            <ThemeToggle compact />
+          </div>
+        </div>
 
-        <Card className="page-enter page-enter-delay-2">
-          <CardHeader className="pb-0">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="section-kicker">Access</div>
-                <CardTitle className="font-display mt-2 text-4xl font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
-                  {mode === "login" ? "Sign in" : "Create account"}
-                </CardTitle>
-              </div>
-              <div className="rounded-[16px] border border-border bg-secondary p-1">
-                <button
-                  type="button"
-                  className={[
-                    "rounded-[12px] px-4 py-2 text-sm font-semibold transition",
-                    mode === "login"
-                      ? "bg-background/95 text-foreground shadow-sm"
-                      : "text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white",
-                  ].join(" ")}
-                  onClick={() => setMode("login")}
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  className={[
-                    "rounded-[12px] px-4 py-2 text-sm font-semibold transition",
-                    mode === "register"
-                      ? "bg-background/95 text-foreground shadow-sm"
-                      : "text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white",
-                  ].join(" ")}
-                  onClick={() => setMode("register")}
-                >
-                  Register
-                </button>
-              </div>
-            </div>
-          </CardHeader>
+        <div className="flex flex-1 items-center justify-center px-4 pb-10 sm:px-6">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle className="text-xl">{mode === "login" ? "Welcome back" : "Create your account"}</CardTitle>
+              <CardDescription>
+                {mode === "login"
+                  ? "Sign in with your email and password to continue."
+                  : "New accounts are created as customer accounts by default."}
+              </CardDescription>
+            </CardHeader>
 
-          <CardContent className="grid gap-6">
-            <div className="frost-panel">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-[16px] border border-border bg-secondary">
-                  {mode === "login" ? <LockKeyhole className="h-5 w-5" /> : <UserRoundPlus className="h-5 w-5" />}
-                </div>
-                <div className="text-sm leading-6 text-slate-600 dark:text-slate-300">
-                  {mode === "login"
-                    ? "Use your existing account to continue."
-                    : "New accounts are created as customer accounts by default."}
-                </div>
-              </div>
-            </div>
+            <CardContent className="grid gap-6">
+              <Tabs value={mode} onValueChange={(value) => setMode(value as AuthMode)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="login">Sign in</TabsTrigger>
+                  <TabsTrigger value="register">Register</TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-            <form onSubmit={mode === "login" ? onLogin : onRegister} className="grid gap-4">
-              {mode === "register" && (
-                <div className="field-group">
-                  <Label className="field-label">Name</Label>
-                  <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
-                </div>
-              )}
+              <form onSubmit={mode === "login" ? onLogin : onRegister} className="grid gap-4">
+                {mode === "register" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-name">Full name</Label>
+                    <Input id="auth-name" value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" placeholder="Your name" />
+                  </div>
+                )}
 
-              {mode === "register" && (
-                <div className="field-group">
-                  <Label className="field-label">Phone</Label>
-                  <Input value={phone} onChange={(event) => setPhone(event.target.value)} className="input-shell" placeholder="Optional phone number" />
-                </div>
-              )}
-
-              {mode === "register" && (
-                <div className="field-group">
-                  <Label className="field-label">Address</Label>
-                  <Input value={address} onChange={(event) => setAddress(event.target.value)} className="input-shell" placeholder="Optional default address" />
-                </div>
-              )}
-
-              <div className="field-group">
-                <Label className="field-label">Email</Label>
-                <Input
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  className="input-shell"
-                />
-              </div>
-
-              <div className="field-group">
-                <Label className="field-label">Password</Label>
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Enter your password"
-                  className="input-shell"
-                />
-              </div>
-
-              {mode === "register" && (
-                <div className="field-group">
-                  <Label className="field-label">Confirm password</Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="auth-email">Email</Label>
                   <Input
-                    type="password"
-                    value={passwordConfirmation}
-                    onChange={(event) => setPasswordConfirmation(event.target.value)}
-                    className="input-shell"
+                    id="auth-email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
                   />
                 </div>
-              )}
 
-              {error && <div className="status-bad rounded-[18px] border px-4 py-3 text-sm">{error}</div>}
+                {mode === "register" && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="auth-phone">Phone</Label>
+                      <Input id="auth-phone" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Optional" autoComplete="tel" />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="auth-address">Address</Label>
+                      <Input id="auth-address" value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Optional" autoComplete="street-address" />
+                    </div>
+                    <p className="-mt-2 text-xs text-muted-foreground sm:col-span-2">Saved to speed up checkout. You can change them later.</p>
+                  </div>
+                )}
 
-              <Button className="h-12 text-base" disabled={loading}>
-                {loading
-                  ? mode === "login"
-                    ? "Signing in..."
-                    : "Creating account..."
-                  : mode === "login"
-                    ? "Continue"
-                    : "Create account"}
-                {!loading && <ArrowRight className="h-4 w-4" />}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                <div className="grid gap-2">
+                  <Label htmlFor="auth-password">Password</Label>
+                  <Input
+                    id="auth-password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Enter your password"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  />
+                </div>
+
+                {mode === "register" && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="auth-password-confirm">Confirm password</Label>
+                    <Input
+                      id="auth-password-confirm"
+                      type="password"
+                      value={passwordConfirmation}
+                      onChange={(event) => setPasswordConfirmation(event.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                )}
+
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <Button className="w-full" disabled={loading}>
+                  {loading ? <Spinner /> : null}
+                  {loading
+                    ? mode === "login"
+                      ? "Signing in..."
+                      : "Creating account..."
+                    : mode === "login"
+                      ? "Continue"
+                      : "Create account"}
+                  {!loading && <ArrowRight />}
+                </Button>
+              </form>
+
+              <p className="text-center text-sm text-muted-foreground">
+                {mode === "login" ? "New to Smart Dispatch? " : "Already have an account? "}
+                <button
+                  type="button"
+                  className="font-medium text-primary underline-offset-4 hover:underline"
+                  onClick={() => setMode(mode === "login" ? "register" : "login")}
+                >
+                  {mode === "login" ? "Create an account" : "Sign in"}
+                </button>
+              </p>
+
+              <ul className="grid gap-1.5 text-xs text-muted-foreground lg:hidden">
+                {highlights.map((item) => (
+                  <li key={item.title} className="flex items-start gap-2">
+                    <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                    <span>
+                      <span className="font-medium text-foreground">{item.title}:</span> {item.text}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

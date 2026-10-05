@@ -3,8 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Smart Dispatch</title>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem("theme");
+          var legacy = localStorage.getItem("smart-dispatch-theme");
+          var prefers = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var mode = saved || legacy || "system";
+          if (!saved && legacy) localStorage.setItem("theme", legacy);
+          if (mode === "dark" || (mode === "system" && prefers)) document.documentElement.classList.add("dark");
+          var palette = localStorage.getItem("palette");
+          if (palette && palette !== "blue") document.documentElement.setAttribute("data-palette", palette);
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.bunny.net" />
+    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800&display=swap" rel="stylesheet" />
   </head>
   <body>
     <div id="root"></div>

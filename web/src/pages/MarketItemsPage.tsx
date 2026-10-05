@@ -1,812 +1,281 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import {
+  AlertCircle,
+  AlertTriangle,
+  BadgePercent,
+  CheckCircle2,
+  Download,
+  ImageIcon,
+  Images,
+  LayoutGrid,
+  List,
+  MoreHorizontal,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Tag,
+  Upload,
+  Warehouse,
+  X,
+} from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
+import { formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-type Item = {
-  id: number;
-  market_id: number;
-  name: string;
-  sku: string;
-  item_kind?: "regular" | "combo";
-  category?: string | null;
-  image_url?: string | null;
-  image_urls?: string[] | null;
-  variants?: Array<{ name: string; value: string; price_delta?: number | string }> | null;
-  availability_schedule?: Array<{ day: string; from: string; to: string }> | null;
-  ingredients?: ItemIngredient[] | null;
-  combo_offers?: ComboOffer[] | null;
-  price: string | number;
-  discount_type: "none" | "percent" | "fixed";
-  discount_value: string | number;
-  stock_qty: number;
-  show_stock_quantity?: boolean;
-  low_stock_threshold?: number;
-  is_low_stock?: boolean;
-  is_active: boolean;
-  review_summary?: {
-    count?: number;
-    average?: number | null;
-  };
-};
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { StatusBadge } from "@/components/app/status-badge";
 
-type ItemVariant = {
-  name: string;
-  value: string;
-  price_delta?: number | string;
-};
+import { ItemExtrasSummary, ReviewSummaryBadge } from "@/components/market-items/market-item-editors";
+import { MarketItemFormDialog, type ItemFormTab, type ItemFormValues } from "@/components/market-items/market-item-form";
+import {
+  buildComboPayload,
+  computeFinalPrice,
+  describeDiscount,
+  getComboSelectableItems,
+  getItemImageUrls,
+  getItemIngredientsPayload,
+  getStockState,
+  hasDiscount,
+  hydrateComboOffers,
+  normalizeAvailabilitySchedule,
+  normalizeVariants,
+  type AvailabilitySlot,
+  type Item,
+  type ItemVariant,
+  type StockState,
+} from "@/components/market-items/market-item-helpers";
 
-type AvailabilitySlot = {
-  day: string;
-  from: string;
-  to: string;
-};
+type StatusFilter = "all" | "active" | "hidden";
+type StockFilter = "all" | "in" | "low" | "out" | "attention";
+type PriceFilter = "all" | "discounted";
+type SortKey = "default" | "name" | "price-asc" | "price-desc" | "stock-asc" | "newest";
+type ViewMode = "table" | "grid";
 
-type ComboSelectableItem = {
-  id: number;
-  name: string;
-  sku: string;
-  price: string | number;
-  ingredients: ItemIngredient[];
-};
-
-const SCHEDULE_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
-function emptyIngredient(): ItemIngredient {
-  return {
-    name: "",
-    removable: false,
-  };
-}
-
-function emptyComboOffer(): ComboOffer {
-  return {
-    name: "",
-    description: "",
-    combo_price: 0,
-    item_ids: [],
-    items: [],
-  };
-}
-
-function buildComboPayload(itemKind: "regular" | "combo", comboOffers: ComboOffer[], priceValue: string | number) {
-  const normalized = normalizeComboOffers(comboOffers);
-
-  if (itemKind === "combo") {
-    const primaryCombo = normalized[0];
-
-    if (!primaryCombo) {
-      return [];
-    }
-
-    return [
-      {
-        ...primaryCombo,
-        name: primaryCombo.name || "Combo bundle",
-        description: null,
-        combo_price: Number(priceValue || 0),
-      },
-    ];
-  }
-
-  return normalized;
-}
-
-function emptyVariant(): ItemVariant {
-  return {
-    name: "",
-    value: "",
-    price_delta: 0,
-  };
-}
-
-function emptyAvailabilitySlot(): AvailabilitySlot {
-  return {
-    day: "Mon",
-    from: "",
-    to: "",
-  };
-}
-
-function normalizeIngredients(ingredients: ItemIngredient[]) {
-  return ingredients
-    .map((ingredient) => ({
-      name: ingredient.name.trim(),
-      removable: Boolean(ingredient.removable),
-    }))
-    .filter((ingredient) => ingredient.name.length > 0);
-}
-
-function normalizeComboOffers(comboOffers: ComboOffer[]) {
-  return comboOffers
-    .map((comboOffer) => ({
-      name: comboOffer.name.trim(),
-      description: comboOffer.description?.trim() ? comboOffer.description.trim() : null,
-      combo_price: Number(comboOffer.combo_price || 0),
-      item_ids: Array.from(
-        new Set(
-          (comboOffer.item_ids ?? [])
-            .map((itemId) => Number(itemId))
-            .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
-        ),
-      ),
-    }))
-    .filter((comboOffer) => comboOffer.item_ids.length > 0);
-}
-
-function buildComboName(selectedItems: ComboSelectableItem[]) {
-  return selectedItems
-    .map((item) => item.name.trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(" + ");
-}
-
-function getComboSelectableItems(items: Item[], currentItemId?: number | null) {
-  return items
-    .filter((item) => item.id !== currentItemId)
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      sku: item.sku,
-      price: item.price,
-      ingredients: item.ingredients ?? [],
-    }));
-}
-
-function hydrateComboOffers(comboOffers: ComboOffer[] | null | undefined, items: ComboSelectableItem[]) {
-  return (comboOffers ?? []).map((comboOffer) => {
-    const selectedIds = Array.from(
-      new Set(
-        (comboOffer.item_ids ?? comboOffer.items?.map((item) => item.id) ?? [])
-          .map((itemId) => Number(itemId))
-          .filter((itemId) => Number.isInteger(itemId) && itemId > 0),
-      ),
-    );
-    const selectedItems = selectedIds
-      .map((itemId) => items.find((item) => item.id === itemId))
-      .filter((item): item is ComboSelectableItem => Boolean(item));
-
-    return {
-      ...comboOffer,
-      name: comboOffer.name?.trim() || buildComboName(selectedItems),
-      item_ids: selectedIds,
-      items: selectedItems.map((item) => ({
-        id: item.id,
-        name: item.name,
-        sku: item.sku,
-        ingredients: item.ingredients,
-      })),
-    };
-  });
-}
-
-function getItemIngredientsPayload(itemKind: "regular" | "combo", ingredients: ItemIngredient[]) {
-  if (itemKind === "combo") {
-    return null;
-  }
-
-  return normalizeIngredients(ingredients);
-}
-
-function normalizeVariants(variants: ItemVariant[]) {
-  const normalized = variants
-    .map((variant) => ({
-      name: variant.name.trim(),
-      value: variant.value.trim(),
-      price_delta: Number(variant.price_delta || 0),
-    }))
-    .filter((variant) => variant.name.length > 0 && variant.value.length > 0);
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function normalizeAvailabilitySchedule(schedule: AvailabilitySlot[]) {
-  const normalized = schedule
-    .map((slot) => ({
-      day: slot.day.trim(),
-      from: slot.from.trim(),
-      to: slot.to.trim(),
-    }))
-    .filter((slot) => slot.day && slot.from && slot.to);
-
-  return normalized.length > 0 ? normalized : null;
-}
-
-function resolveMediaUrl(url?: string | null) {
-  if (!url) {
-    return null;
-  }
-
-  try {
-    const apiOrigin = new URL(api.defaults.baseURL ?? window.location.origin).origin;
-    const parsed = new URL(url, apiOrigin);
-
-    if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
-      return `${apiOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
-    }
-
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
-function getItemImageUrls(item?: Item | null) {
-  const urls = [...(item?.image_urls ?? [])];
-
-  if (item?.image_url) {
-    urls.push(item.image_url);
-  }
-
-  return Array.from(
-    new Set(
-      urls
-        .map((url) => resolveMediaUrl(url))
-        .filter((url): url is string => typeof url === "string" && url.length > 0),
-    ),
+function errorMessage(error: unknown, fallback: string) {
+  return (
+    (error as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+    (error as { message?: string })?.message ??
+    fallback
   );
 }
 
-function IngredientEditor({
-  ingredients,
-  onChange,
-}: {
-  ingredients: ItemIngredient[];
-  onChange: (ingredients: ItemIngredient[]) => void;
-}) {
+function StockBadge({ state }: { state: StockState }) {
+  if (state === "out") return <StatusBadge tone="destructive" dot>Out of stock</StatusBadge>;
+  if (state === "low") return <StatusBadge tone="warning" dot>Low stock</StatusBadge>;
+  return <StatusBadge tone="success" dot>In stock</StatusBadge>;
+}
+
+function ActiveBadge({ active }: { active: boolean }) {
+  return active ? <StatusBadge tone="success">Active</StatusBadge> : <StatusBadge tone="neutral">Hidden</StatusBadge>;
+}
+
+function ItemThumb({ item, className }: { item: Item; className?: string }) {
+  const url = getItemImageUrls(item)[0];
   return (
-    <div className="grid gap-3">
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() =>
-            onChange(ingredients.map((ingredient) => ({ ...ingredient, removable: true })))
-          }
-          disabled={ingredients.length === 0}
-        >
-          Mark all removable
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() =>
-            onChange(ingredients.map((ingredient) => ({ ...ingredient, removable: false })))
-          }
-          disabled={ingredients.length === 0}
-        >
-          Mark all required
-        </Button>
+    <div className={cn("shrink-0 overflow-hidden rounded-md border bg-muted", className)}>
+      {url ? (
+        <img src={url} alt={item.name} className="size-full object-cover" />
+      ) : (
+        <div className="flex size-full items-center justify-center text-muted-foreground">
+          <ImageIcon className="size-4" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PriceCell({ item }: { item: Item }) {
+  const discounted = hasDiscount(item);
+  const finalPrice = computeFinalPrice(item.price, item.discount_type, item.discount_value);
+  return (
+    <div className="grid gap-0.5">
+      <div className="flex items-baseline gap-1.5 tabular-nums">
+        <span className="font-medium">{formatMoney(discounted ? finalPrice : item.price)}</span>
+        {discounted ? <span className="text-xs text-muted-foreground line-through">{formatMoney(item.price)}</span> : null}
       </div>
+      <span className={cn("text-xs", discounted ? "text-success" : "text-muted-foreground")}>{describeDiscount(item)}</span>
+    </div>
+  );
+}
 
-      {ingredients.map((ingredient, index) => (
-        <div key={`ingredient-${index}`} className="rounded-xl border p-3">
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
-            <div className="grid gap-2">
-              <Label className="field-label">Ingredient name</Label>
-              <Input
-                value={ingredient.name}
-                onChange={(event) => {
-                  const next = ingredients.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, name: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="Tomato"
-              />
-            </div>
+function StockCell({ item }: { item: Item }) {
+  return (
+    <div className="grid justify-items-start gap-1">
+      <div className="flex items-center gap-2">
+        <span className="font-medium tabular-nums">{item.stock_qty}</span>
+        <StockBadge state={getStockState(item)} />
+      </div>
+      <span className="text-xs text-muted-foreground">
+        {(item.show_stock_quantity ?? true) ? "Qty shown to customers" : "Qty hidden from customers"}
+      </span>
+    </div>
+  );
+}
 
-            <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2 md:min-w-[180px]">
-              <div>
-                <div className="text-sm font-medium">Removable</div>
-                <div className="text-xs text-muted-foreground">Customers can remove it</div>
-              </div>
-              <Switch
-                checked={ingredient.removable}
-                onCheckedChange={(checked) => {
-                  const next = ingredients.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, removable: checked } : entry,
-                  );
-                  onChange(next);
-                }}
-              />
-            </div>
-
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onChange(ingredients.filter((_, entryIndex) => entryIndex !== index))}
-            >
-              Remove
-            </Button>
-          </div>
-        </div>
-      ))}
-
-      <Button type="button" variant="secondary" onClick={() => onChange([...ingredients, emptyIngredient()])}>
-        Add ingredient
+function ItemActions({ item, onEdit }: { item: Item; onEdit: (item: Item, tab: ItemFormTab) => void }) {
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <Button variant="outline" size="sm" onClick={() => onEdit(item, "basics")}>
+        <Pencil />
+        Edit
       </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${item.name}`}>
+            <MoreHorizontal />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel className="truncate">{item.name}</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => onEdit(item, "basics")}>
+            <Pencil />
+            Edit details
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onEdit(item, "pricing")}>
+            <BadgePercent />
+            Price & discount
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onEdit(item, "inventory")}>
+            <Warehouse />
+            Update stock
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onEdit(item, "media")}>
+            <Images />
+            Manage images
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onEdit(item, "options")}>
+            <SlidersHorizontal />
+            Variants & schedule
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onEdit(item, "composition")}>
+            <Tag />
+            {item.item_kind === "combo" ? "Combo contents" : "Ingredients & combos"}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
 
-function IngredientSummary({ ingredients }: { ingredients?: ItemIngredient[] | null }) {
-  const normalized = normalizeIngredients(ingredients ?? []);
-
-  if (!normalized.length) {
-    return <span className="text-sm text-muted-foreground">No ingredients</span>;
-  }
-
-  const removableCount = normalized.filter((ingredient) => ingredient.removable).length;
-
-  return (
-    <div className="grid gap-1">
-      <span className="text-sm font-medium">{normalized.length} ingredients</span>
-      <span className="text-xs text-muted-foreground">
-        {removableCount > 0 ? `${removableCount} removable` : "All required"}
-      </span>
-    </div>
-  );
-}
-
-function ComboOfferEditor({
-  comboOffers,
-  availableItems,
-  itemKind,
-  onChange,
+function ProductCard({
+  item,
+  layout,
+  onEdit,
 }: {
-  comboOffers: ComboOffer[];
-  availableItems: ComboSelectableItem[];
-  itemKind: "regular" | "combo";
-  onChange: (comboOffers: ComboOffer[]) => void;
+  item: Item;
+  layout: "grid" | "row";
+  onEdit: (item: Item, tab: ItemFormTab) => void;
 }) {
-  const visibleComboOffers =
-    itemKind === "combo" ? (comboOffers.length > 0 ? [comboOffers[0]] : [emptyComboOffer()]) : comboOffers;
-
-  const toggleComboItem = (comboIndex: number, item: ComboSelectableItem) => {
-    const sourceOffers = itemKind === "combo" ? visibleComboOffers : comboOffers;
-    const next = sourceOffers.map((entry, entryIndex) => {
-      if (entryIndex !== comboIndex) {
-        return entry;
-      }
-
-      const currentIds = new Set(entry.item_ids ?? []);
-      if (currentIds.has(item.id)) {
-        currentIds.delete(item.id);
-      } else {
-        currentIds.add(item.id);
-      }
-
-      const selectedItems = availableItems.filter((candidate) => currentIds.has(candidate.id));
-
-      return {
-        ...entry,
-        name: entry.name?.trim() || buildComboName(selectedItems),
-        item_ids: selectedItems.map((candidate) => candidate.id),
-        items: selectedItems.map((candidate) => ({
-          id: candidate.id,
-          name: candidate.name,
-          sku: candidate.sku,
-          ingredients: candidate.ingredients,
-        })),
-      };
-    });
-
-    onChange(next);
-  };
-
-  return (
-    <div className="grid gap-3">
-      {availableItems.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-          Add other market items first, then you can build combos from those items here.
-        </div>
-      ) : null}
-
-      {visibleComboOffers.map((comboOffer, index) => (
-        <div key={`combo-offer-${index}`} className="rounded-xl border p-3">
-          {itemKind === "regular" ? (
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="grid gap-2">
-                <Label className="field-label">Combo label</Label>
-                <Input
-                  value={comboOffer.name}
-                  onChange={(event) => {
-                    const next = comboOffers.map((entry, entryIndex) =>
-                      entryIndex === index ? { ...entry, name: event.target.value } : entry,
-                    );
-                    onChange(next);
-                  }}
-                  className="input-shell"
-                  placeholder="Auto-filled from selected items"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="field-label">Combo price</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={String(comboOffer.combo_price ?? "")}
-                  onChange={(event) => {
-                    const next = comboOffers.map((entry, entryIndex) =>
-                      entryIndex === index ? { ...entry, combo_price: Number(event.target.value || 0) } : entry,
-                    );
-                    onChange(next);
-                  }}
-                  className="input-shell"
-                  placeholder="12.99"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="field-label">Description</Label>
-                <Input
-                  value={comboOffer.description ?? ""}
-                  onChange={(event) => {
-                    const next = comboOffers.map((entry, entryIndex) =>
-                      entryIndex === index ? { ...entry, description: event.target.value } : entry,
-                    );
-                    onChange(next);
-                  }}
-                  className="input-shell"
-                  placeholder="Optional short note"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
-              This combo item uses the main price above as the customer price. Here you only choose which market items are included.
-            </div>
-          )}
-
-          <div className="mt-4 grid gap-2">
-            <Label className="field-label">Select combo items from this market</Label>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {availableItems.map((item) => {
-                const active = (comboOffer.item_ids ?? []).includes(item.id);
-
-                return (
-                  <button
-                    key={`combo-item-${index}-${item.id}`}
-                    type="button"
-                    onClick={() => toggleComboItem(index, item)}
-                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                      active
-                        ? "border-cyan-600 bg-cyan-50 text-cyan-950 dark:border-cyan-400 dark:bg-cyan-950/30 dark:text-cyan-100"
-                        : "border-border bg-background text-foreground hover:bg-muted/60"
-                    }`}
-                  >
-                    <div className="font-medium">{item.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {item.sku} · {Number(item.price).toFixed(2)}
-                    </div>
-                    {item.ingredients.length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {item.ingredients.slice(0, 4).map((ingredient) => (
-                          <span
-                            key={`${item.id}-${ingredient.name}`}
-                            className={`rounded-full px-2 py-1 text-[11px] ${
-                              ingredient.removable
-                                ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-                            }`}
-                          >
-                            {ingredient.name}
-                            {ingredient.removable ? " removable" : ""}
-                          </span>
-                        ))}
-                        {item.ingredients.length > 4 ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                            +{item.ingredients.length - 4} more
-                          </span>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {(comboOffer.items ?? []).length > 0
-                ? `Selected: ${(comboOffer.items ?? []).map((item) => item.name).join(", ")}`
-                : "Choose at least one item for this combo."}
-            </div>
-            {(comboOffer.items ?? []).length > 0 ? (
-              <div className="grid gap-2">
-                {(comboOffer.items ?? []).map((item) => (
-                  <div key={`selected-combo-item-${item.id}`} className="rounded-xl border p-3">
-                    <div className="text-sm font-medium">{item.name}</div>
-                    {(item.ingredients ?? []).length > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {(item.ingredients ?? []).map((ingredient) => (
-                          <span
-                            key={`${item.id}-${ingredient.name}-selected`}
-                            className={`rounded-full px-2 py-1 text-[11px] ${
-                              ingredient.removable
-                                ? "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
-                                : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-                            }`}
-                          >
-                            {ingredient.name}
-                            {ingredient.removable ? " removable" : ""}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="mt-1 text-xs text-muted-foreground">No ingredients listed</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          {itemKind === "regular" ? (
-            <div className="mt-3 flex justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => onChange(comboOffers.filter((_, entryIndex) => entryIndex !== index))}
-              >
-                Remove combo
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      ))}
-
-      {itemKind === "regular" ? (
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => onChange([...comboOffers, emptyComboOffer()])}
-          disabled={availableItems.length === 0}
-        >
-          Add combo offer
-        </Button>
-      ) : null}
-    </div>
+  const extras = (
+    <ItemExtrasSummary
+      variants={item.variants as ItemVariant[] | null}
+      schedule={item.availability_schedule as AvailabilitySlot[] | null}
+      ingredients={item.ingredients}
+      comboOffers={item.combo_offers}
+    />
   );
-}
 
-function ComboSummary({ comboOffers }: { comboOffers?: ComboOffer[] | null }) {
-  const normalized = comboOffers ?? [];
-
-  if (!normalized.length) {
-    return <span className="text-sm text-muted-foreground">No combos</span>;
+  if (layout === "grid") {
+    return (
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="relative">
+          <ItemThumb item={item} className="aspect-[4/3] w-full rounded-none border-0 border-b" />
+          <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+            <ActiveBadge active={item.is_active} />
+            {hasDiscount(item) ? <StatusBadge tone="primary">{describeDiscount(item)}</StatusBadge> : null}
+          </div>
+        </div>
+        <div className="grid flex-1 gap-3 p-4">
+          <div className="min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="truncate font-medium">{item.name}</div>
+              {item.item_kind === "combo" ? <Badge variant="secondary">Combo</Badge> : null}
+            </div>
+            <div className="truncate text-xs text-muted-foreground">
+              {item.sku} · #{item.id} · {item.category || "No category"}
+            </div>
+          </div>
+          <div className="flex items-end justify-between gap-3">
+            <PriceCell item={item} />
+            <ReviewSummaryBadge average={item.review_summary?.average} count={item.review_summary?.count} />
+          </div>
+          <StockCell item={item} />
+          {extras}
+        </div>
+        <div className="border-t bg-muted/30 px-4 py-2">
+          <ItemActions item={item} onEdit={onEdit} />
+        </div>
+      </Card>
+    );
   }
 
   return (
-    <div className="grid gap-1">
-      <span className="text-sm font-medium">{normalized.length} combo offers</span>
-      <span className="text-xs text-muted-foreground">
-        {normalized.map((comboOffer) => comboOffer.name || buildComboName((comboOffer.items ?? []) as ComboSelectableItem[])).join(", ")}
-      </span>
-    </div>
-  );
-}
-
-function VariantEditor({
-  variants,
-  onChange,
-}: {
-  variants: ItemVariant[];
-  onChange: (variants: ItemVariant[]) => void;
-}) {
-  return (
-    <div className="grid gap-3">
-      {variants.map((variant, index) => (
-        <div key={`variant-${index}`} className="rounded-xl border p-3">
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="grid gap-2">
-              <Label className="field-label">Option group</Label>
-              <Input
-                value={variant.name}
-                onChange={(event) => {
-                  const next = variants.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, name: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="Size"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="field-label">Option value</Label>
-              <Input
-                value={variant.value}
-                onChange={(event) => {
-                  const next = variants.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, value: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="Large"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="field-label">Price delta</Label>
-              <Input
-                value={String(variant.price_delta ?? 0)}
-                onChange={(event) => {
-                  const next = variants.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, price_delta: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="0 or 1.50"
-              />
-            </div>
+    <Card className="gap-3 p-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <ItemThumb item={item} className="size-14" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="truncate font-medium">{item.name}</div>
+            <ActiveBadge active={item.is_active} />
           </div>
-
-          <div className="mt-3 flex justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onChange(variants.filter((_, entryIndex) => entryIndex !== index))}
-            >
-              Remove variant
-            </Button>
+          <div className="truncate text-xs text-muted-foreground">
+            {item.sku} · #{item.id} · {item.category || "No category"}
+            {item.item_kind === "combo" ? " · Combo" : ""}
+          </div>
+          <div className="mt-2">
+            <PriceCell item={item} />
           </div>
         </div>
-      ))}
-
-      <Button type="button" variant="secondary" onClick={() => onChange([...variants, emptyVariant()])}>
-        Add variant
-      </Button>
-    </div>
-  );
-}
-
-function VariantSummary({ variants }: { variants?: ItemVariant[] | null }) {
-  const normalized = normalizeVariants(variants ?? []);
-
-  if (!normalized?.length) {
-    return <span className="text-sm text-muted-foreground">No variants</span>;
-  }
-
-  return (
-    <div className="grid gap-1">
-      <span className="text-sm font-medium">{normalized.length} options</span>
-      <span className="text-xs text-muted-foreground">
-        {normalized.slice(0, 2).map((variant) => `${variant.name}: ${variant.value}`).join(", ")}
-      </span>
-    </div>
-  );
-}
-
-function ScheduleEditor({
-  schedule,
-  onChange,
-}: {
-  schedule: AvailabilitySlot[];
-  onChange: (schedule: AvailabilitySlot[]) => void;
-}) {
-  return (
-    <div className="grid gap-3">
-      {schedule.map((slot, index) => (
-        <div key={`schedule-${index}`} className="rounded-xl border p-3">
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="grid gap-2">
-              <Label className="field-label">Day</Label>
-              <Select
-                value={slot.day}
-                onValueChange={(value) => {
-                  const next = schedule.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, day: value } : entry,
-                  );
-                  onChange(next);
-                }}
-              >
-                <SelectTrigger className="input-shell w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SCHEDULE_DAYS.map((day) => (
-                    <SelectItem key={day} value={day}>
-                      {day}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="field-label">From</Label>
-              <Input
-                value={slot.from}
-                onChange={(event) => {
-                  const next = schedule.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, from: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="09:00"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="field-label">To</Label>
-              <Input
-                value={slot.to}
-                onChange={(event) => {
-                  const next = schedule.map((entry, entryIndex) =>
-                    entryIndex === index ? { ...entry, to: event.target.value } : entry,
-                  );
-                  onChange(next);
-                }}
-                className="input-shell"
-                placeholder="18:00"
-              />
-            </div>
-          </div>
-
-          <div className="mt-3 flex justify-end">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => onChange(schedule.filter((_, entryIndex) => entryIndex !== index))}
-            >
-              Remove slot
-            </Button>
-          </div>
+      </div>
+      <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+        <StockCell item={item} />
+        <div className="grid gap-1">
+          <ReviewSummaryBadge average={item.review_summary?.average} count={item.review_summary?.count} />
+          {extras}
         </div>
-      ))}
-
-      <Button type="button" variant="secondary" onClick={() => onChange([...schedule, emptyAvailabilitySlot()])}>
-        Add schedule row
-      </Button>
-    </div>
-  );
-}
-
-function ScheduleSummary({ schedule }: { schedule?: AvailabilitySlot[] | null }) {
-  const normalized = normalizeAvailabilitySchedule(schedule ?? []);
-
-  if (!normalized?.length) {
-    return <span className="text-sm text-muted-foreground">Always available</span>;
-  }
-
-  return (
-    <div className="grid gap-1">
-      <span className="text-sm font-medium">{normalized.length} slots</span>
-      <span className="text-xs text-muted-foreground">
-        {normalized.slice(0, 2).map((slot) => `${slot.day} ${slot.from}-${slot.to}`).join(", ")}
-      </span>
-    </div>
+      </div>
+      <ItemActions item={item} onEdit={onEdit} />
+    </Card>
   );
 }
 
@@ -821,9 +290,10 @@ export default function MarketItemsPage() {
     enabled: Number.isFinite(id),
   });
 
-  const items = itemsQ.data ?? [];
+  const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
   const createComboSelectableItems = getComboSelectableItems(items);
 
+  /* ---------------- create state (unchanged fields) ---------------- */
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -845,6 +315,16 @@ export default function MarketItemsPage() {
   const [csvDraft, setCsvDraft] = useState(
     "name,sku,category,price,discount_type,discount_value,stock_qty,show_stock_quantity,low_stock_threshold,is_active,image_url,variants,availability_schedule,ingredients,combo_offers",
   );
+  const [importOpen, setImportOpen] = useState(false);
+
+  /* ---------------- list presentation state ---------------- */
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [stockFilter, setStockFilter] = useState<StockFilter>("all");
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("default");
+  const [view, setView] = useState<ViewMode>("table");
 
   const createM = useMutation({
     mutationFn: async () => {
@@ -910,8 +390,8 @@ export default function MarketItemsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [editImageFiles, setEditImageFiles] = useState<File[]>([]);
+  const [editTab, setEditTab] = useState<ItemFormTab>("basics");
   const editComboSelectableItems = getComboSelectableItems(items, editItem?.id ?? null);
-  const editItemKind: "regular" | "combo" = editItem?.item_kind === "combo" ? "combo" : "regular";
 
   const updateM = useMutation({
     mutationFn: async () => {
@@ -1024,643 +504,601 @@ export default function MarketItemsPage() {
     Boolean(name.trim() && sku.trim() && price.trim()) &&
     (createItemKind === "regular" || buildComboPayload("combo", createComboOffers, price).length > 0);
 
+  const createMissing = [
+    !name.trim() ? "Name" : null,
+    !sku.trim() ? "SKU" : null,
+    !price.trim() ? "Price" : null,
+    createItemKind === "combo" && buildComboPayload("combo", createComboOffers, price).length === 0
+      ? "Combo products"
+      : null,
+  ].filter((entry): entry is string => Boolean(entry));
+
+  /* ---------------- form adapters (presentation only) ---------------- */
+  const createValues: ItemFormValues = {
+    itemKind: createItemKind,
+    name,
+    sku,
+    category,
+    price,
+    discountType,
+    discountValue,
+    stockQty,
+    showStockQuantity,
+    lowStockThreshold,
+    isActive,
+    imageUrl,
+    imageFiles: createImageFiles,
+    variants,
+    schedule: availabilitySchedule,
+    ingredients: createIngredients,
+    comboOffers: createComboOffers,
+  };
+
+  const patchCreate = (patch: Partial<ItemFormValues>) => {
+    if (patch.itemKind !== undefined) setCreateItemKind(patch.itemKind);
+    if (patch.name !== undefined) setName(patch.name);
+    if (patch.sku !== undefined) setSku(patch.sku);
+    if (patch.category !== undefined) setCategory(patch.category);
+    if (patch.price !== undefined) setPrice(patch.price);
+    if (patch.discountType !== undefined) setDiscountType(patch.discountType);
+    if (patch.discountValue !== undefined) setDiscountValue(patch.discountValue);
+    if (patch.stockQty !== undefined) setStockQty(patch.stockQty);
+    if (patch.showStockQuantity !== undefined) setShowStockQuantity(patch.showStockQuantity);
+    if (patch.lowStockThreshold !== undefined) setLowStockThreshold(patch.lowStockThreshold);
+    if (patch.isActive !== undefined) setIsActive(patch.isActive);
+    if (patch.imageUrl !== undefined) setImageUrl(patch.imageUrl);
+    if (patch.imageFiles !== undefined) setCreateImageFiles(patch.imageFiles);
+    if (patch.variants !== undefined) setVariants(patch.variants);
+    if (patch.schedule !== undefined) setAvailabilitySchedule(patch.schedule);
+    if (patch.ingredients !== undefined) setCreateIngredients(patch.ingredients);
+    if (patch.comboOffers !== undefined) setCreateComboOffers(patch.comboOffers);
+  };
+
+  const editValues: ItemFormValues | null = editItem
+    ? {
+        itemKind: editItem.item_kind === "combo" ? "combo" : "regular",
+        name: editItem.name,
+        sku: editItem.sku,
+        category: editItem.category ?? "",
+        price: String(editItem.price),
+        discountType: editItem.discount_type,
+        discountValue: String(editItem.discount_value),
+        stockQty: String(editItem.stock_qty),
+        showStockQuantity: editItem.show_stock_quantity ?? true,
+        lowStockThreshold: String(editItem.low_stock_threshold ?? 5),
+        isActive: !!editItem.is_active,
+        imageUrl: editItem.image_url ?? "",
+        imageFiles: editImageFiles,
+        variants: (editItem.variants as ItemVariant[] | null) ?? [],
+        schedule: (editItem.availability_schedule as AvailabilitySlot[] | null) ?? [],
+        ingredients: editItem.ingredients ?? [],
+        comboOffers: editItem.combo_offers ?? [],
+      }
+    : null;
+
+  const patchEdit = (patch: Partial<ItemFormValues>) => {
+    if (patch.imageFiles !== undefined) setEditImageFiles(patch.imageFiles);
+    if (!editItem) return;
+    const next: Item = { ...editItem };
+    if (patch.itemKind !== undefined) next.item_kind = patch.itemKind;
+    if (patch.name !== undefined) next.name = patch.name;
+    if (patch.sku !== undefined) next.sku = patch.sku;
+    if (patch.category !== undefined) next.category = patch.category;
+    if (patch.price !== undefined) next.price = patch.price;
+    if (patch.discountType !== undefined) next.discount_type = patch.discountType;
+    if (patch.discountValue !== undefined) next.discount_value = patch.discountValue;
+    if (patch.stockQty !== undefined) next.stock_qty = Number(patch.stockQty);
+    if (patch.showStockQuantity !== undefined) next.show_stock_quantity = patch.showStockQuantity;
+    if (patch.lowStockThreshold !== undefined) next.low_stock_threshold = Number(patch.lowStockThreshold);
+    if (patch.isActive !== undefined) next.is_active = patch.isActive;
+    if (patch.imageUrl !== undefined) next.image_url = patch.imageUrl;
+    if (patch.variants !== undefined) next.variants = patch.variants;
+    if (patch.schedule !== undefined) next.availability_schedule = patch.schedule;
+    if (patch.ingredients !== undefined) next.ingredients = patch.ingredients;
+    if (patch.comboOffers !== undefined) next.combo_offers = patch.comboOffers;
+    if (Object.keys(patch).some((key) => key !== "imageFiles")) setEditItem(next);
+  };
+
+  const openEdit = (item: Item, tab: ItemFormTab) => {
+    setEditItem({
+      ...item,
+      item_kind: item.item_kind ?? "regular",
+      variants: item.variants ?? [],
+      availability_schedule: item.availability_schedule ?? [],
+      ingredients: item.ingredients ?? [],
+      combo_offers: hydrateComboOffers(item.combo_offers, getComboSelectableItems(items, item.id)),
+    });
+    setEditImageFiles([]);
+    setEditTab(tab);
+    setEditOpen(true);
+  };
+
+  /* ---------------- derived list data ---------------- */
+  const categories = useMemo(
+    () =>
+      Array.from(new Set(items.map((item) => item.category?.trim()).filter((value): value is string => Boolean(value)))).sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [items],
+  );
+
+  const stats = useMemo(() => {
+    let active = 0;
+    let low = 0;
+    let out = 0;
+    let discounted = 0;
+    for (const item of items) {
+      if (item.is_active) active += 1;
+      const state = getStockState(item);
+      if (state === "low") low += 1;
+      if (state === "out") out += 1;
+      if (hasDiscount(item)) discounted += 1;
+    }
+    return { total: items.length, active, hidden: items.length - active, low, out, discounted };
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const result = items.filter((item) => {
+      if (query) {
+        const haystack = `${item.name} ${item.sku} ${item.category ?? ""} ${item.id}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      if (categoryFilter !== "all") {
+        if (categoryFilter === "__none__" ? Boolean(item.category?.trim()) : item.category?.trim() !== categoryFilter) return false;
+      }
+      if (statusFilter === "active" && !item.is_active) return false;
+      if (statusFilter === "hidden" && item.is_active) return false;
+      if (stockFilter !== "all") {
+        const state = getStockState(item);
+        if (stockFilter === "attention" ? state === "in" : state !== stockFilter) return false;
+      }
+      if (priceFilter === "discounted" && !hasDiscount(item)) return false;
+      return true;
+    });
+
+    const finalPrice = (item: Item) => computeFinalPrice(item.price, item.discount_type, item.discount_value);
+    switch (sortKey) {
+      case "name":
+        return [...result].sort((a, b) => a.name.localeCompare(b.name));
+      case "price-asc":
+        return [...result].sort((a, b) => finalPrice(a) - finalPrice(b));
+      case "price-desc":
+        return [...result].sort((a, b) => finalPrice(b) - finalPrice(a));
+      case "stock-asc":
+        return [...result].sort((a, b) => Number(a.stock_qty || 0) - Number(b.stock_qty || 0));
+      case "newest":
+        return [...result].sort((a, b) => b.id - a.id);
+      default:
+        return result;
+    }
+  }, [items, search, categoryFilter, statusFilter, stockFilter, priceFilter, sortKey]);
+
+  const filtersActive =
+    search.trim() !== "" || categoryFilter !== "all" || statusFilter !== "all" || stockFilter !== "all" || priceFilter !== "all";
+
+  const resetFilters = () => {
+    setSearch("");
+    setCategoryFilter("all");
+    setStatusFilter("all");
+    setStockFilter("all");
+    setPriceFilter("all");
+  };
+
+  /* ---------------- actions with feedback ---------------- */
+  const submitCreate = () =>
+    createM.mutate(undefined, {
+      onSuccess: () => toast.success("Product added"),
+      onError: (error) => toast.error(errorMessage(error, "Could not add the product")),
+    });
+
+  const submitUpdate = () =>
+    updateM.mutate(undefined, {
+      onSuccess: () => toast.success("Product saved"),
+      onError: (error) => toast.error(errorMessage(error, "Could not save the product")),
+    });
+
+  const submitImport = () =>
+    importM.mutate(undefined, {
+      onSuccess: () => {
+        toast.success("CSV imported");
+        setImportOpen(false);
+      },
+      onError: (error) => toast.error(errorMessage(error, "CSV import failed")),
+    });
+
+  const exportHref = `${api.defaults.baseURL}/api/markets/${id}/items/export-csv`;
+
   return (
-    <div className="grid gap-6">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle>Market Items (Market #{id})</CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" asChild>
-              <a href={`${api.defaults.baseURL}/api/markets/${id}/items/export-csv`} target="_blank" rel="noreferrer">
+    <div className="space-y-6">
+      <PageHeader
+        title="Products"
+        description="Manage what this market sells: prices and discounts, stock, images, ingredients and combo offers."
+        breadcrumbs={[
+          { label: "Markets", to: "/markets" },
+          { label: `Market #${id}`, to: `/markets/${id}` },
+          { label: "Products" },
+        ]}
+        className="mb-0"
+        actions={
+          <>
+            <Dialog open={importOpen} onOpenChange={setImportOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Upload />
+                  Import CSV
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Import products from CSV</DialogTitle>
+                  <DialogDescription>
+                    Paste CSV text below. The first line must be the header row with the column names shown.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                  <Label htmlFor="csv-draft">CSV content</Label>
+                  <Textarea
+                    id="csv-draft"
+                    value={csvDraft}
+                    onChange={(event) => setCsvDraft(event.target.value)}
+                    className="min-h-48 font-mono text-xs"
+                    spellCheck={false}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tip: use Export CSV first to get a file in the right format, edit it, then paste it here.
+                  </p>
+                </div>
+                {importM.isError ? (
+                  <Alert variant="destructive">
+                    <AlertCircle />
+                    <AlertTitle>Import failed</AlertTitle>
+                    <AlertDescription>{errorMessage(importM.error, "CSV import failed")}</AlertDescription>
+                  </Alert>
+                ) : null}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setImportOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={submitImport} disabled={importM.isPending}>
+                    {importM.isPending ? <Spinner /> : <Upload />}
+                    {importM.isPending ? "Importing..." : "Import CSV"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Button variant="outline" asChild>
+              <a href={exportHref} target="_blank" rel="noreferrer">
+                <Download />
                 Export CSV
               </a>
             </Button>
 
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button>Add Item</Button>
+                <Button>
+                  <Plus />
+                  Add product
+                </Button>
               </DialogTrigger>
-
-              <DialogContent className="app-modal-shell sm:max-w-[min(900px,calc(100%-2rem))]">
-                <DialogHeader>
-                  <div className="app-modal-header">
-                    <DialogTitle className="panel-title">Add item</DialogTitle>
-                  </div>
-                </DialogHeader>
-
-                <div className="app-modal-body">
-                  <div className="app-modal-main">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="md:col-span-2 rounded-xl border p-4">
-                        <div className="mb-3">
-                          <Label className="field-label">Item type</Label>
-                          <div className="text-sm text-muted-foreground">
-                            Pick this first so the form knows whether this new item is regular or combo-enabled.
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant={createItemKind === "regular" ? "default" : "secondary"}
-                            onClick={() => {
-                              setCreateItemKind("regular");
-                              setCreateComboOffers([]);
-                            }}
-                          >
-                            Regular item
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={createItemKind === "combo" ? "default" : "secondary"}
-                            onClick={() => {
-                              setCreateItemKind("combo");
-                              setCreateIngredients([]);
-                              setCreateComboOffers(createComboOffers.length > 0 ? [createComboOffers[0]] : [emptyComboOffer()]);
-                            }}
-                            disabled={createComboSelectableItems.length === 0}
-                          >
-                            Combo item
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Name</Label>
-                        <Input value={name} onChange={(event) => setName(event.target.value)} className="input-shell" />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">SKU</Label>
-                        <Input value={sku} onChange={(event) => setSku(event.target.value)} className="input-shell" />
-                        <div className="text-xs text-muted-foreground">Must be unique inside this market.</div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Category</Label>
-                        <Input value={category} onChange={(event) => setCategory(event.target.value)} className="input-shell" />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">{createItemKind === "combo" ? "Combo price" : "Price"}</Label>
-                        <Input
-                          value={price}
-                          onChange={(event) => setPrice(event.target.value)}
-                          placeholder={createItemKind === "combo" ? "e.g. 17.50" : "e.g. 10.50"}
-                          className="input-shell"
-                        />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Discount Type</Label>
-                        <Select value={discountType} onValueChange={(value) => setDiscountType(value as Item["discount_type"])}>
-                          <SelectTrigger className="input-shell w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">None</SelectItem>
-                            <SelectItem value="percent">Percent</SelectItem>
-                            <SelectItem value="fixed">Fixed</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Discount Value</Label>
-                        <Input
-                          value={discountValue}
-                          onChange={(event) => setDiscountValue(event.target.value)}
-                          placeholder={discountType === "percent" ? "e.g. 10" : "e.g. 2.00"}
-                          className="input-shell"
-                        />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Stock Qty</Label>
-                        <Input value={stockQty} onChange={(event) => setStockQty(event.target.value)} className="input-shell" />
-                      </div>
-
-                      <div className="rounded-xl border p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <Label className="field-label">Show quantity to customers</Label>
-                            <div className="text-sm text-muted-foreground">When off, customers only see stock status.</div>
-                          </div>
-                          <Switch checked={showStockQuantity} onCheckedChange={setShowStockQuantity} />
-                        </div>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Low Stock Threshold</Label>
-                        <Input
-                          value={lowStockThreshold}
-                          onChange={(event) => setLowStockThreshold(event.target.value)}
-                          className="input-shell"
-                        />
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">Upload Images</Label>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={(event) => setCreateImageFiles(Array.from(event.target.files ?? []))}
-                          className="input-shell"
-                        />
-                        {createImageFiles.length > 0 ? (
-                          <div className="text-xs text-muted-foreground">
-                            {createImageFiles.length} image{createImageFiles.length === 1 ? "" : "s"} selected
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label className="field-label">External Image URL</Label>
-                        <Input
-                          value={imageUrl}
-                          onChange={(event) => setImageUrl(event.target.value)}
-                          className="input-shell"
-                          placeholder="Optional fallback"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2 rounded-xl border p-4">
-                        <div className="mb-3">
-                          <Label className="field-label">Variants</Label>
-                          <div className="text-sm text-muted-foreground">
-                            Add customer choices like size, color, or pack type without writing JSON.
-                          </div>
-                        </div>
-
-                        <VariantEditor variants={variants} onChange={setVariants} />
-                      </div>
-
-                      <div className="md:col-span-2 rounded-xl border p-4">
-                        <div className="mb-3">
-                          <Label className="field-label">Availability schedule</Label>
-                          <div className="text-sm text-muted-foreground">
-                            Leave this empty if the item is always available, or add day and time rows below.
-                          </div>
-                        </div>
-
-                        <ScheduleEditor schedule={availabilitySchedule} onChange={setAvailabilitySchedule} />
-                      </div>
-
-                      {createItemKind === "regular" ? (
-                        <div className="md:col-span-2 rounded-xl border p-4">
-                          <div className="mb-3">
-                            <Label className="field-label">Ingredients</Label>
-                            <div className="text-sm text-muted-foreground">
-                              Add every ingredient the market uses in this item and mark the ones customers can remove.
-                            </div>
-                          </div>
-
-                          <IngredientEditor ingredients={createIngredients} onChange={setCreateIngredients} />
-                        </div>
-                      ) : null}
-
-                      {createItemKind === "combo" ? (
-                        <div className="md:col-span-2 rounded-xl border p-4">
-                          <div className="mb-3">
-                            <Label className="field-label">Combo offers</Label>
-                            <div className="text-sm text-muted-foreground">
-                              Build combo deals by selecting other items from this market and setting the combo price.
-                            </div>
-                          </div>
-
-                          <ComboOfferEditor
-                            comboOffers={createComboOffers}
-                            availableItems={createComboSelectableItems}
-                            itemKind={createItemKind}
-                            onChange={setCreateComboOffers}
-                          />
-                        </div>
-                      ) : null}
-
-                      <div className="md:col-span-2 flex items-center justify-between rounded-xl border p-4">
-                        <div>
-                          <Label className="field-label">Active</Label>
-                          <div className="text-sm text-muted-foreground">Visible on the public storefront.</div>
-                        </div>
-                        <Switch checked={isActive} onCheckedChange={setIsActive} />
-                      </div>
-                    </div>
-
-                    {createError ? <div className="text-sm text-red-600">{createError}</div> : null}
-                  </div>
-                </div>
-
-                <DialogFooter className="app-modal-footer">
-                  <Button onClick={() => createM.mutate()} disabled={!canCreate || createM.isPending}>
-                    {createM.isPending ? "Saving..." : "Save"}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
+              <MarketItemFormDialog
+                mode="create"
+                values={createValues}
+                onChange={patchCreate}
+                comboItems={createComboSelectableItems}
+                categories={categories}
+                error={createError}
+                missing={createMissing}
+                canSubmit={canCreate}
+                submitting={createM.isPending}
+                onSubmit={submitCreate}
+              />
             </Dialog>
-          </div>
-        </CardHeader>
+          </>
+        }
+      />
 
-        <CardContent className="grid gap-4">
-          <div className="grid gap-2">
-            <Label className="field-label">Bulk CSV import</Label>
-            <Input value={csvDraft} onChange={(event) => setCsvDraft(event.target.value)} className="input-shell" />
-            <Button variant="secondary" onClick={() => importM.mutate()} disabled={importM.isPending}>
-              {importM.isPending ? "Importing..." : "Import CSV"}
-            </Button>
+      <StatGrid>
+        <StatCard
+          label="Total products"
+          value={stats.total}
+          icon={Package}
+          tone="primary"
+          hint={`${categories.length} categor${categories.length === 1 ? "y" : "ies"}`}
+          onClick={resetFilters}
+          active={!filtersActive && stats.total > 0}
+        />
+        <StatCard
+          label="Active"
+          value={stats.active}
+          icon={CheckCircle2}
+          tone="success"
+          hint={stats.hidden > 0 ? `${stats.hidden} hidden` : "All visible in store"}
+          onClick={() => setStatusFilter(statusFilter === "active" ? "all" : "active")}
+          active={statusFilter === "active"}
+        />
+        <StatCard
+          label="Low / out of stock"
+          value={`${stats.low} / ${stats.out}`}
+          icon={AlertTriangle}
+          tone={stats.out > 0 ? "destructive" : stats.low > 0 ? "warning" : "default"}
+          hint={stats.low + stats.out > 0 ? "Needs restocking" : "Stock looks healthy"}
+          onClick={() => setStockFilter(stockFilter === "attention" ? "all" : "attention")}
+          active={stockFilter === "attention"}
+        />
+        <StatCard
+          label="Discounted"
+          value={stats.discounted}
+          icon={BadgePercent}
+          tone="info"
+          hint="Products with an active discount"
+          onClick={() => setPriceFilter(priceFilter === "discounted" ? "all" : "discounted")}
+          active={priceFilter === "discounted"}
+        />
+      </StatGrid>
+
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="flex flex-col gap-3 border-b p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search by name, SKU or category"
+                className="pl-8"
+                aria-label="Search products"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={sortKey} onValueChange={(value) => setSortKey(value as SortKey)}>
+                <SelectTrigger className="w-full sm:w-44" aria-label="Sort products">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default order</SelectItem>
+                  <SelectItem value="name">Name A-Z</SelectItem>
+                  <SelectItem value="price-asc">Price: low to high</SelectItem>
+                  <SelectItem value="price-desc">Price: high to low</SelectItem>
+                  <SelectItem value="stock-asc">Stock: lowest first</SelectItem>
+                  <SelectItem value="newest">Newest first</SelectItem>
+                </SelectContent>
+              </Select>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                value={view}
+                onValueChange={(value) => value && setView(value as ViewMode)}
+                aria-label="View mode"
+                className="shrink-0"
+              >
+                <ToggleGroupItem value="table" aria-label="Table view">
+                  <List />
+                </ToggleGroupItem>
+                <ToggleGroupItem value="grid" aria-label="Grid view">
+                  <LayoutGrid />
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
           </div>
 
-          {itemsQ.isLoading ? (
-            <div className="text-sm text-muted-foreground">Loading...</div>
-          ) : itemsQ.isError ? (
-            <div className="text-sm text-red-600">Failed to load items</div>
-          ) : (
-            <div className="rounded-md border">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-full sm:w-44" aria-label="Filter by category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map((entry) => (
+                  <SelectItem key={entry} value={entry}>
+                    {entry}
+                  </SelectItem>
+                ))}
+                <SelectItem value="__none__">No category</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+              <SelectTrigger className="w-full sm:w-36" aria-label="Filter by status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="hidden">Hidden</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={stockFilter} onValueChange={(value) => setStockFilter(value as StockFilter)}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter by stock">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any stock</SelectItem>
+                <SelectItem value="in">In stock</SelectItem>
+                <SelectItem value="attention">Low or out</SelectItem>
+                <SelectItem value="low">Low stock</SelectItem>
+                <SelectItem value="out">Out of stock</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={priceFilter} onValueChange={(value) => setPriceFilter(value as PriceFilter)}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter by discount">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any price</SelectItem>
+                <SelectItem value="discounted">Discounted only</SelectItem>
+              </SelectContent>
+            </Select>
+            {filtersActive ? (
+              <Button variant="ghost" size="sm" onClick={resetFilters} className="col-span-2 justify-self-start">
+                <X />
+                Clear filters
+              </Button>
+            ) : null}
+            <span className="col-span-2 text-xs text-muted-foreground tabular-nums sm:ml-auto">
+              Showing {filteredItems.length} of {items.length}
+            </span>
+          </div>
+        </div>
+
+        {itemsQ.isLoading ? (
+          <div className="p-4">
+            <LoadingState rows={4} />
+          </div>
+        ) : itemsQ.isError ? (
+          <div className="p-4">
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertTitle>Failed to load products</AlertTitle>
+              <AlertDescription>
+                <span>{errorMessage(itemsQ.error, "Something went wrong while loading this market's products.")}</span>
+                <Button variant="outline" size="sm" className="mt-2" onClick={() => void itemsQ.refetch()}>
+                  Try again
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : items.length === 0 ? (
+          <CardContent className="py-6">
+            <EmptyState
+              icon={Package}
+              title="No products yet"
+              description="Add your first product, or import a CSV to bring in your whole catalog at once."
+              action={
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button onClick={() => setCreateOpen(true)}>
+                    <Plus />
+                    Add product
+                  </Button>
+                  <Button variant="outline" onClick={() => setImportOpen(true)}>
+                    <Upload />
+                    Import CSV
+                  </Button>
+                </div>
+              }
+            />
+          </CardContent>
+        ) : filteredItems.length === 0 ? (
+          <CardContent className="py-6">
+            <EmptyState
+              icon={Search}
+              title="No products match your filters"
+              description="Try a different search term or clear the filters to see all products."
+              action={
+                <Button variant="outline" onClick={resetFilters}>
+                  <X />
+                  Clear filters
+                </Button>
+              }
+            />
+          </CardContent>
+        ) : view === "grid" ? (
+          <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {filteredItems.map((item) => (
+              <ProductCard key={item.id} item={item} layout="grid" onEdit={openEdit} />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto lg:block">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Item</TableHead>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="pl-4">Product</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Price</TableHead>
-                    <TableHead>Variants</TableHead>
-                    <TableHead>Schedule</TableHead>
-                    <TableHead>Ingredients</TableHead>
-                    <TableHead>Combos</TableHead>
                     <TableHead>Stock</TableHead>
+                    <TableHead>Details</TableHead>
                     <TableHead>Reviews</TableHead>
-                    <TableHead>Active</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="pr-4 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {items.map((item) => (
+                  {filteredItems.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell>{item.id}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-12 w-12 overflow-hidden rounded-xl border bg-muted">
-                            {getItemImageUrls(item)[0] ? (
-                              <img src={getItemImageUrls(item)[0]} alt={item.name} className="h-full w-full object-cover" />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                No image
-                              </div>
-                            )}
-                          </div>
-                          <div className="grid gap-1">
-                            <div className="font-medium">{item.name}</div>
-                            <div className="text-xs text-muted-foreground">{item.sku}</div>
+                      <TableCell className="pl-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <ItemThumb item={item} className="size-10" />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="max-w-[220px] truncate font-medium">{item.name}</span>
+                              {item.item_kind === "combo" ? <Badge variant="secondary">Combo</Badge> : null}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.sku} · #{item.id}
+                            </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{item.category || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{item.category || "-"}</TableCell>
                       <TableCell>
-                        <div className="grid gap-1">
-                          <span>{item.price}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {item.discount_type === "none" ? "No discount" : `${item.discount_type} ${item.discount_value}`}
-                          </span>
-                        </div>
+                        <PriceCell item={item} />
                       </TableCell>
                       <TableCell>
-                        <VariantSummary variants={item.variants as ItemVariant[] | null} />
+                        <StockCell item={item} />
                       </TableCell>
                       <TableCell>
-                        <ScheduleSummary schedule={item.availability_schedule as AvailabilitySlot[] | null} />
+                        <ItemExtrasSummary
+                          variants={item.variants as ItemVariant[] | null}
+                          schedule={item.availability_schedule as AvailabilitySlot[] | null}
+                          ingredients={item.ingredients}
+                          comboOffers={item.combo_offers}
+                        />
                       </TableCell>
                       <TableCell>
-                        <IngredientSummary ingredients={item.ingredients} />
+                        <ReviewSummaryBadge average={item.review_summary?.average} count={item.review_summary?.count} />
                       </TableCell>
                       <TableCell>
-                        <ComboSummary comboOffers={item.combo_offers} />
+                        <ActiveBadge active={item.is_active} />
                       </TableCell>
-                      <TableCell>
-                        <div className="grid gap-1">
-                          <span>{item.stock_qty}{item.is_low_stock ? " (Low)" : ""}</span>
-                          <span className="text-xs text-muted-foreground">{item.show_stock_quantity ?? true ? "Visible qty" : "Hidden qty"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{item.review_summary?.average ?? "-"} / {item.review_summary?.count ?? 0}</TableCell>
-                      <TableCell>{item.is_active ? "Yes" : "No"}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="secondary"
-                          onClick={() => {
-                            setEditItem({
-                              ...item,
-                              item_kind: item.item_kind ?? "regular",
-                              variants: item.variants ?? [],
-                              availability_schedule: item.availability_schedule ?? [],
-                              ingredients: item.ingredients ?? [],
-                              combo_offers: hydrateComboOffers(item.combo_offers, getComboSelectableItems(items, item.id)),
-                            });
-                            setEditImageFiles([]);
-                            setEditOpen(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
+                      <TableCell className="pr-4 text-right">
+                        <ItemActions item={item} onEdit={openEdit} />
                       </TableCell>
                     </TableRow>
                   ))}
-
-                  {items.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={12} className="text-sm text-muted-foreground">
-                        No items yet.
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
                 </TableBody>
               </Table>
             </div>
-          )}
-        </CardContent>
+            <div className="grid gap-3 p-4 lg:hidden">
+              {filteredItems.map((item) => (
+                <ProductCard key={item.id} item={item} layout="row" onEdit={openEdit} />
+              ))}
+            </div>
+          </>
+        )}
       </Card>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="app-modal-shell sm:max-w-[min(900px,calc(100%-2rem))]">
-          <DialogHeader>
-            <div className="app-modal-header">
-              <DialogTitle className="panel-title">Edit item</DialogTitle>
-            </div>
-          </DialogHeader>
-
-          <div className="app-modal-body">
-            {editItem ? (
-              <div className="app-modal-main">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="md:col-span-2 rounded-xl border p-4">
-                    <div className="mb-3">
-                      <Label className="field-label">Item type</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Choose whether this item stays regular or should open combo pricing with selected market items.
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant={editItemKind === "regular" ? "default" : "secondary"}
-                        onClick={() => setEditItem({ ...editItem, item_kind: "regular", combo_offers: [] })}
-                      >
-                        Regular item
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={editItemKind === "combo" ? "default" : "secondary"}
-                        onClick={() =>
-                          setEditItem({
-                            ...editItem,
-                            item_kind: "combo",
-                            ingredients: [],
-                            combo_offers:
-                              (editItem.combo_offers ?? []).length > 0 ? [editItem.combo_offers?.[0] ?? emptyComboOffer()] : [emptyComboOffer()],
-                          })
-                        }
-                        disabled={editComboSelectableItems.length === 0}
-                      >
-                        Combo item
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Name</Label>
-                    <Input
-                      value={editItem.name}
-                      onChange={(event) => setEditItem({ ...editItem, name: event.target.value })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">SKU</Label>
-                    <Input
-                      value={editItem.sku}
-                      onChange={(event) => setEditItem({ ...editItem, sku: event.target.value })}
-                      className="input-shell"
-                    />
-                    <div className="text-xs text-muted-foreground">Must be unique inside this market.</div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Category</Label>
-                    <Input
-                      value={editItem.category ?? ""}
-                      onChange={(event) => setEditItem({ ...editItem, category: event.target.value })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">{editItemKind === "combo" ? "Combo price" : "Price"}</Label>
-                    <Input
-                      value={String(editItem.price)}
-                      onChange={(event) => setEditItem({ ...editItem, price: event.target.value })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Discount Type</Label>
-                    <Select
-                      value={editItem.discount_type}
-                      onValueChange={(value) => setEditItem({ ...editItem, discount_type: value as Item["discount_type"] })}
-                    >
-                      <SelectTrigger className="input-shell w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        <SelectItem value="percent">Percent</SelectItem>
-                        <SelectItem value="fixed">Fixed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Discount Value</Label>
-                    <Input
-                      value={String(editItem.discount_value)}
-                      onChange={(event) => setEditItem({ ...editItem, discount_value: event.target.value })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Stock Qty</Label>
-                    <Input
-                      value={String(editItem.stock_qty)}
-                      onChange={(event) => setEditItem({ ...editItem, stock_qty: Number(event.target.value) })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="rounded-xl border p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <Label className="field-label">Show quantity to customers</Label>
-                        <div className="text-sm text-muted-foreground">When off, customers only see stock status.</div>
-                      </div>
-                      <Switch
-                        checked={editItem.show_stock_quantity ?? true}
-                        onCheckedChange={(checked) => setEditItem({ ...editItem, show_stock_quantity: checked })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Low Stock Threshold</Label>
-                    <Input
-                      value={String(editItem.low_stock_threshold ?? 5)}
-                      onChange={(event) => setEditItem({ ...editItem, low_stock_threshold: Number(event.target.value) })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">Upload New Images</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(event) => setEditImageFiles(Array.from(event.target.files ?? []))}
-                      className="input-shell"
-                    />
-                    {editImageFiles.length > 0 ? (
-                      <div className="text-xs text-muted-foreground">
-                        {editImageFiles.length} new image{editImageFiles.length === 1 ? "" : "s"} selected
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label className="field-label">External Image URL</Label>
-                    <Input
-                      value={editItem.image_url ?? ""}
-                      onChange={(event) => setEditItem({ ...editItem, image_url: event.target.value })}
-                      className="input-shell"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2 rounded-xl border p-4">
-                    <div className="mb-3">
-                      <Label className="field-label">Variants</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Add customer-selectable options here instead of raw JSON.
-                      </div>
-                    </div>
-
-                    <VariantEditor
-                      variants={(editItem.variants as ItemVariant[] | null) ?? []}
-                      onChange={(variants) => setEditItem({ ...editItem, variants })}
-                    />
-                  </div>
-
-                  <div className="md:col-span-2 rounded-xl border p-4">
-                    <div className="mb-3">
-                      <Label className="field-label">Availability schedule</Label>
-                      <div className="text-sm text-muted-foreground">
-                        Add rows for limited windows, or leave it empty to keep the item available all day.
-                      </div>
-                    </div>
-
-                    <ScheduleEditor
-                      schedule={(editItem.availability_schedule as AvailabilitySlot[] | null) ?? []}
-                      onChange={(availability_schedule) => setEditItem({ ...editItem, availability_schedule })}
-                    />
-                  </div>
-
-                  {editItemKind === "regular" ? (
-                    <div className="md:col-span-2 rounded-xl border p-4">
-                      <div className="mb-3">
-                        <Label className="field-label">Ingredients</Label>
-                        <div className="text-sm text-muted-foreground">
-                          Mark only optional ingredients as removable so customers can order without them.
-                        </div>
-                      </div>
-
-                      <IngredientEditor
-                        ingredients={editItem.ingredients ?? []}
-                        onChange={(ingredients) => setEditItem({ ...editItem, ingredients })}
-                      />
-                    </div>
-                  ) : null}
-
-                  {editItemKind === "combo" ? (
-                    <div className="md:col-span-2 rounded-xl border p-4">
-                      <div className="mb-3">
-                        <Label className="field-label">Combo offers</Label>
-                        <div className="text-sm text-muted-foreground">
-                          Build combo deals by selecting other items from this market and setting the combo price.
-                        </div>
-                      </div>
-
-                      <ComboOfferEditor
-                        comboOffers={editItem.combo_offers ?? []}
-                        availableItems={editComboSelectableItems}
-                        itemKind={editItemKind}
-                        onChange={(combo_offers) => setEditItem({ ...editItem, combo_offers })}
-                      />
-                    </div>
-                  ) : null}
-
-                  <div className="md:col-span-2 flex items-center justify-between rounded-xl border p-4">
-                    <div>
-                      <Label className="field-label">Active</Label>
-                      <div className="text-sm text-muted-foreground">Visible on the public storefront.</div>
-                    </div>
-                    <Switch
-                      checked={!!editItem.is_active}
-                      onCheckedChange={(checked) => setEditItem({ ...editItem, is_active: checked })}
-                    />
-                  </div>
-                </div>
-
-                {getItemImageUrls(editItem).length > 0 ? (
-                  <div className="rounded-xl border p-4">
-                    <div className="mb-2 text-sm font-medium">Current gallery</div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {getItemImageUrls(editItem).map((url, index) => (
-                        <div key={`${url}-${index}`} className="grid gap-2">
-                          <img src={url} alt={`${editItem.name} ${index + 1}`} className="h-40 w-full rounded-xl object-cover" />
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={() => void deleteImageM.mutate(index)}
-                            disabled={deleteImageM.isPending || clearImagesM.isPending}
-                          >
-                            Delete this image
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => void clearImagesM.mutate()}
-                        disabled={deleteImageM.isPending || clearImagesM.isPending}
-                      >
-                        Delete all images
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {updateError ? <div className="text-sm text-red-600">{updateError}</div> : null}
-              </div>
-            ) : null}
-          </div>
-
-          <DialogFooter className="app-modal-footer">
-            <Button onClick={() => updateM.mutate()} disabled={!editItem || updateM.isPending}>
-              {updateM.isPending ? "Saving..." : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+        {editValues ? (
+          <MarketItemFormDialog
+            key={`${editItem?.id ?? "none"}-${editTab}`}
+            mode="edit"
+            values={editValues}
+            onChange={patchEdit}
+            comboItems={editComboSelectableItems}
+            categories={categories}
+            initialTab={editTab}
+            gallery={{
+              urls: getItemImageUrls(editItem),
+              onDelete: (index) =>
+                void deleteImageM.mutate(index, {
+                  onSuccess: () => toast.success("Image deleted"),
+                  onError: (error) => toast.error(errorMessage(error, "Could not delete the image")),
+                }),
+              onClearAll: () =>
+                void clearImagesM.mutate(undefined, {
+                  onSuccess: () => toast.success("All images deleted"),
+                  onError: (error) => toast.error(errorMessage(error, "Could not delete the images")),
+                }),
+              busy: deleteImageM.isPending || clearImagesM.isPending,
+            }}
+            error={updateError}
+            canSubmit={!!editItem}
+            submitting={updateM.isPending}
+            onSubmit={submitUpdate}
+          />
+        ) : null}
       </Dialog>
     </div>
   );

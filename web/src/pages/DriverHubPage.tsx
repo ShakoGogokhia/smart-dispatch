@@ -1,17 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Clock3, MapPinned, Navigation, PackageCheck, XCircle } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDown,
+  Banknote,
+  CheckCircle2,
+  Clock3,
+  Inbox,
+  MapPin,
+  MapPinned,
+  Navigation,
+  PackageCheck,
+  Phone,
+  Power,
+  Route,
+  Store,
+  Truck,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus } from "@/lib/format";
 import { useMe } from "@/lib/useMe";
+import { cn } from "@/lib/utils";
 import type { Order } from "@/types/api";
+import { EmptyState } from "@/components/app/empty-state";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { StatusBadge, toneForStatus } from "@/components/app/status-badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
 
 type DriverFeed = {
   driver: {
@@ -109,60 +136,137 @@ function formatCountdown(secondsRemaining: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function OrderCard({
-  order,
-  meta,
-  actions,
-}: {
-  order: Order;
-  meta?: React.ReactNode;
-  actions?: React.ReactNode;
-}) {
+function RouteSummary({ order }: { order: Order }) {
   return (
-    <div className="paper-panel-muted rounded-[26px] p-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <div className="theme-muted text-xs uppercase tracking-[0.2em]">{order.market?.code || text.ordersTitle}</div>
-          <div className="font-display theme-ink mt-2 text-2xl font-semibold">{order.code}</div>
-          <div className="theme-copy mt-2 text-sm">{order.dropoff_address || text.noAddress}</div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="secondary" className="rounded-full">{formatOrderStatus(order.status)}</Badge>
-          {order.total != null && <Badge className="rounded-full">{formatMoney(order.total)}</Badge>}
+    <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Store className="size-3.5" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">Pickup</div>
+          <div className="text-sm font-medium break-words">
+            {order.pickup_address || order.market?.name || order.market?.code || text.noAddress}
+          </div>
         </div>
       </div>
+      <div className="flex w-7 justify-center text-muted-foreground">
+        <ArrowDown className="size-3.5" />
+      </div>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+          <MapPin className="size-3.5" />
+        </span>
+        <div className="min-w-0">
+          <div className="text-xs text-muted-foreground">Dropoff</div>
+          <div className="text-sm font-medium break-words">{order.dropoff_address || text.noAddress}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-      <div className="theme-copy mt-4 grid gap-2 text-sm">
-        <div>{text.customer}: {order.customer_name || order.customer?.name || text.unknown}</div>
-        <div>{text.phone}: {order.customer_phone || text.notProvided}</div>
-        {order.notes && <div>{text.deliveryNotes}: {order.notes}</div>}
-        {order.driver_compensation?.earning_amount != null ? (
-          <div className="rounded-[18px] border border-emerald-200 bg-emerald-50 px-3 py-3 text-emerald-900 dark:border-emerald-300/15 dark:bg-emerald-300/10 dark:text-emerald-100">
-            <div className="font-semibold">
-              {text.potentialEarning}: {formatMoney(order.driver_compensation.earning_amount)}
-            </div>
-            <div className="mt-1 text-xs opacity-80">
-              {text.distance}: {order.driver_compensation.distance_km ?? 0} km
-              {" · "}
-              {text.weather}: {order.driver_compensation.weather_condition || "clear"}
-              {" · "}
-              x{order.driver_compensation.weather_multiplier ?? 1}
-            </div>
+function OrderDetails({ order }: { order: Order }) {
+  const compensation = order.driver_compensation;
+  return (
+    <div className="grid gap-3">
+      <RouteSummary order={order} />
+
+      {compensation?.earning_amount != null ? (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="min-w-0 rounded-lg border bg-success/10 p-3">
+            <div className="truncate text-xs text-muted-foreground">{text.potentialEarning}</div>
+            <div className="truncate text-lg font-semibold tabular-nums text-success">{formatMoney(compensation.earning_amount)}</div>
+          </div>
+          <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
+            <div className="truncate text-xs text-muted-foreground">{text.distance}</div>
+            <div className="truncate text-lg font-semibold tabular-nums">{compensation.distance_km ?? 0} km</div>
+          </div>
+          <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
+            <div className="truncate text-xs text-muted-foreground">{text.weather}</div>
+            <div className="truncate text-sm font-medium capitalize">{compensation.weather_condition || "clear"}</div>
+            <div className="text-xs text-muted-foreground tabular-nums">x{compensation.weather_multiplier ?? 1}</div>
+          </div>
+        </div>
+      ) : null}
+
+      <dl className="grid gap-2 text-sm sm:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="text-xs text-muted-foreground">{text.customer}</dt>
+          <dd className="truncate font-medium">{order.customer_name || order.customer?.name || text.unknown}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-xs text-muted-foreground">{text.phone}</dt>
+          <dd className="truncate font-medium">{order.customer_phone || text.notProvided}</dd>
+        </div>
+        {order.notes ? (
+          <div className="min-w-0 sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">{text.deliveryNotes}</dt>
+            <dd className="break-words">{order.notes}</dd>
           </div>
         ) : null}
         {order.items?.length ? (
-          <div>
-            {text.items}: {order.items.map((item) => {
-              const combo = item.combo_offer?.name ? ` [combo: ${item.combo_offer.name}]` : "";
-              const removed = (item.removed_ingredients ?? []).length ? ` (without ${(item.removed_ingredients ?? []).join(", ")})` : "";
-              return `${item.name} x${item.qty}${combo}${removed}`;
-            }).join(", ")}
+          <div className="min-w-0 sm:col-span-2">
+            <dt className="text-xs text-muted-foreground">{text.items}</dt>
+            <dd className="break-words">
+              {order.items
+                .map((item) => {
+                  const combo = item.combo_offer?.name ? ` [combo: ${item.combo_offer.name}]` : "";
+                  const removed = (item.removed_ingredients ?? []).length ? ` (without ${(item.removed_ingredients ?? []).join(", ")})` : "";
+                  return `${item.name} x${item.qty}${combo}${removed}`;
+                })
+                .join(", ")}
+            </dd>
           </div>
         ) : null}
-      </div>
+      </dl>
+    </div>
+  );
+}
 
-      {meta ? <div className="mt-4">{meta}</div> : null}
-      {actions ? <div className="mt-5 flex flex-wrap gap-3">{actions}</div> : null}
+function OrderHeading({ order }: { order: Order }) {
+  return (
+    <>
+      <CardDescription>{order.market?.code || text.ordersTitle}</CardDescription>
+      <CardTitle className="text-lg tabular-nums">{order.code}</CardTitle>
+      <CardAction className="flex flex-col items-end gap-1.5">
+        <StatusBadge tone={toneForStatus(order.status)} dot>
+          {formatOrderStatus(order.status)}
+        </StatusBadge>
+        {order.total != null ? <span className="text-sm font-semibold tabular-nums">{formatMoney(order.total)}</span> : null}
+      </CardAction>
+    </>
+  );
+}
+
+function ContactLinks({ order }: { order: Order }) {
+  const hasCoords = Boolean(Number(order.dropoff_lat) && Number(order.dropoff_lng));
+  const navigateHref = hasCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${order.dropoff_lat},${order.dropoff_lng}`
+    : order.dropoff_address
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.dropoff_address)}`
+      : null;
+
+  if (!navigateHref && !order.customer_phone) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {navigateHref ? (
+        <Button asChild variant="outline" size="lg">
+          <a href={navigateHref} target="_blank" rel="noreferrer">
+            <Navigation />
+            Navigate
+          </a>
+        </Button>
+      ) : null}
+      {order.customer_phone ? (
+        <Button asChild variant="outline" size="lg">
+          <a href={`tel:${order.customer_phone}`}>
+            <Phone />
+            Call
+          </a>
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -253,218 +357,284 @@ export default function DriverHubPage() {
 
   if (!(meQ.data?.roles ?? []).includes("driver")) {
     return (
-      <Card className="rounded-[30px]">
-        <CardContent className="theme-copy p-8 text-sm">
-          {text.onlyDrivers}
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <PageHeader title={text.title} />
+        <EmptyState icon={Truck} title="Driver access only" description={text.onlyDrivers} />
+      </div>
     );
   }
 
+  const transactions = feedQ.data?.driver?.transactions ?? [];
+  const isOnline = Boolean(activeShift);
+
   return (
-    <div className="grid gap-6">
-      <div className="intro-panel">
-        <h1 className="intro-title">{text.title}</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title={text.title}
+        description="Go online to receive delivery offers, accept jobs and update each delivery as you go."
+      />
+
+      <Card className={cn(isOnline && "border-success/40")}>
+        <CardHeader>
+          <CardTitle>{text.statusTitle}</CardTitle>
+          <CardDescription>
+            {activeShift ? `Shift started ${formatDateTime(activeShift.started_at)}` : text.noActiveShift}
+          </CardDescription>
+          <CardAction>
+            <StatusBadge tone={toneForStatus(driverStatus)} dot>
+              {driverStatus}
+            </StatusBadge>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="grid gap-4">
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+            <span
+              className={cn(
+                "flex size-10 shrink-0 items-center justify-center rounded-full",
+                isOnline ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
+              )}
+            >
+              <Power className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-xs text-muted-foreground">{text.currentState}</div>
+              <div className="font-semibold">{isOnline ? "You're online and can receive offers" : "You're offline"}</div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button size="lg" className="h-12 text-base" onClick={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
+              {startShiftM.isPending ? <Spinner /> : <Clock3 />}
+              {startShiftM.isPending ? text.starting : `Go online (${text.startShift.toLowerCase()})`}
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 text-base"
+              onClick={() => endShiftM.mutate()}
+              disabled={!activeShift || endShiftM.isPending}
+            >
+              {endShiftM.isPending ? <Spinner /> : <Power />}
+              {endShiftM.isPending ? text.ending : `Go offline (${text.endShift.toLowerCase()})`}
+            </Button>
+          </div>
+
+          {mutationError ? (
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertDescription>{mutationError}</AlertDescription>
+            </Alert>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <StatGrid>
+        <StatCard label={text.currentBalance} value={formatMoney(feedQ.data?.driver?.balance ?? 0)} icon={Wallet} tone="success" />
+        <StatCard label={text.totalEarned} value={formatMoney(feedQ.data?.driver?.total_earned ?? 0)} icon={Banknote} tone="primary" />
+        <StatCard label={text.offersLive} value={offeredOrders.length} icon={Inbox} tone={offeredOrders.length ? "warning" : "default"} />
+        <StatCard label={text.activeDrops} value={assignedOrders.length} icon={Route} tone="info" />
+      </StatGrid>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="min-w-0 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold">{text.incomingOffers}</h2>
+            <p className="text-sm text-muted-foreground">{text.offerExpiresSoon}</p>
+          </div>
+          {offeredOrders.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title={text.noOffers}
+              description={isOnline ? "New offers appear here automatically. Keep this page open." : "Go online to start receiving offers."}
+            />
+          ) : (
+            offeredOrders.map((order) => {
+              const secondsRemaining = getOfferSecondsRemaining(order.offer_sent_at, nowMs);
+              const isExpired = secondsRemaining === 0;
+              const isUrgent = !isExpired && secondsRemaining <= 60;
+
+              return (
+                <Card key={order.id} className="border-primary ring-2 ring-primary/20">
+                  <CardHeader>
+                    <OrderHeading order={order} />
+                  </CardHeader>
+                  <CardContent className="grid gap-4">
+                    <div
+                      className={cn(
+                        "grid gap-2 rounded-lg border p-3",
+                        isExpired ? "bg-destructive/10 text-destructive" : isUrgent ? "bg-warning/15" : "bg-muted/30",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-medium">{text.timeLeftToAccept}</span>
+                        <span className="font-mono text-xl font-semibold tabular-nums">{formatCountdown(secondsRemaining)}</span>
+                      </div>
+                      <Progress
+                        value={(secondsRemaining / OFFER_TIMEOUT_SECONDS) * 100}
+                        className={cn(
+                          isExpired && "bg-destructive/20",
+                          isUrgent && "bg-warning/25 [&>[data-slot=progress-indicator]]:bg-warning",
+                        )}
+                      />
+                      {isExpired ? <div className="text-xs">{text.offerExpired}</div> : null}
+                    </div>
+                    <OrderDetails order={order} />
+                  </CardContent>
+                  <CardFooter className="grid grid-cols-2 gap-3">
+                    <Button
+                      size="lg"
+                      className="h-12 text-base"
+                      onClick={() => actionM.mutate({ orderId: order.id, action: "accept" })}
+                      disabled={actionM.isPending || isExpired}
+                    >
+                      <CheckCircle2 />
+                      {text.accept}
+                    </Button>
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="h-12 text-base"
+                      onClick={() => actionM.mutate({ orderId: order.id, action: "decline" })}
+                      disabled={actionM.isPending || isExpired}
+                    >
+                      <XCircle />
+                      {text.decline}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })
+          )}
+        </section>
+
+        <section className="min-w-0 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold">{text.assignedDeliveries}</h2>
+            <p className="text-sm text-muted-foreground">Pick up the order, then mark it delivered with proof.</p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Proof of delivery</CardTitle>
+              <CardDescription>Attached when you tap "{text.markDelivered}".</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="proof-signature">{text.proofSignature}</Label>
+                <Input
+                  id="proof-signature"
+                  placeholder="Name of the person who received it"
+                  value={proofSignature}
+                  onChange={(event) => setProofSignature(event.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="proof-photo">Proof photo</Label>
+                <Input id="proof-photo" type="file" accept="image/*" onChange={(event) => setProofPhoto(event.target.files?.[0] ?? null)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          {assignedOrders.length === 0 ? (
+            <EmptyState icon={PackageCheck} title={text.noAssigned} description="Accepted offers show up here as active deliveries." />
+          ) : (
+            assignedOrders.map((order) => (
+              <Card key={order.id}>
+                <CardHeader>
+                  <OrderHeading order={order} />
+                </CardHeader>
+                <CardContent className="grid gap-4">
+                  <OrderDetails order={order} />
+                  <ContactLinks order={order} />
+                </CardContent>
+                {order.status === "ASSIGNED" || order.status === "PICKED_UP" ? (
+                  <CardFooter>
+                    {order.status === "ASSIGNED" && (
+                      <Button
+                        size="lg"
+                        className="h-12 w-full text-base"
+                        onClick={() => actionM.mutate({ orderId: order.id, action: "picked-up" })}
+                        disabled={actionM.isPending}
+                      >
+                        <PackageCheck />
+                        {text.markPickedUp}
+                      </Button>
+                    )}
+                    {order.status === "PICKED_UP" && (
+                      <Button
+                        size="lg"
+                        className="h-12 w-full text-base"
+                        onClick={() => actionM.mutate({ orderId: order.id, action: "delivered" })}
+                        disabled={actionM.isPending}
+                      >
+                        <MapPinned />
+                        {text.markDelivered}
+                      </Button>
+                    )}
+                  </CardFooter>
+                ) : null}
+              </Card>
+            ))
+          )}
+        </section>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="rounded-[30px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+        <Card>
           <CardHeader>
-            <CardTitle className="font-display text-2xl">{text.statusTitle}</CardTitle>
+            <CardTitle>{text.sendLocation}</CardTitle>
+            <CardDescription>Share your position so dispatch can see where you are.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="rounded-[24px] bg-slate-950 p-5 text-white">
-              <div className="text-sm text-slate-300">{text.currentState}</div>
-              <div className="mt-2 text-3xl font-semibold">{driverStatus}</div>
-              <div className="mt-2 text-sm text-slate-300">
-                {activeShift ? `Shift started ${formatDateTime(activeShift.started_at)}` : text.noActiveShift}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label htmlFor="ping-lat">{text.latitude}</Label>
+                <Input id="ping-lat" inputMode="decimal" value={lat} onChange={(event) => setLat(event.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="ping-lng">{text.longitude}</Label>
+                <Input id="ping-lng" inputMode="decimal" value={lng} onChange={(event) => setLng(event.target.value)} />
               </div>
             </div>
+            <Button variant="outline" size="lg" onClick={() => pingM.mutate()} disabled={pingM.isPending}>
+              {pingM.isPending ? <Spinner /> : <Navigation />}
+              {pingM.isPending ? text.sending : text.sendPing}
+            </Button>
+          </CardContent>
+        </Card>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[24px] border border-emerald-200/80 bg-emerald-50/90 p-5 dark:border-emerald-300/15 dark:bg-emerald-300/10">
-                <div className="text-sm text-emerald-700 dark:text-emerald-100">{text.currentBalance}</div>
-                <div className="mt-2 text-3xl font-semibold text-emerald-900 dark:text-white">
-                  {formatMoney(feedQ.data?.driver?.balance ?? 0)}
-                </div>
-              </div>
-              <div className="rounded-[24px] border border-cyan-200/80 bg-cyan-50/90 p-5 dark:border-cyan-300/15 dark:bg-cyan-300/10">
-                <div className="text-sm text-cyan-700 dark:text-cyan-100">{text.totalEarned}</div>
-                <div className="mt-2 text-3xl font-semibold text-cyan-900 dark:text-white">
-                  {formatMoney(feedQ.data?.driver?.total_earned ?? 0)}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button onClick={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
-                <Clock3 className="mr-2 h-4 w-4" />
-                {startShiftM.isPending ? text.starting : text.startShift}
-              </Button>
-              <Button variant="secondary" onClick={() => endShiftM.mutate()} disabled={!activeShift || endShiftM.isPending}>
-                {endShiftM.isPending ? text.ending : text.endShift}
-              </Button>
-            </div>
-
-            <div className="subpanel grid gap-3 p-4">
-              <div className="theme-ink font-semibold">{text.sendLocation}</div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label>{text.latitude}</Label>
-                  <Input value={lat} onChange={(event) => setLat(event.target.value)} className="rounded-2xl" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>{text.longitude}</Label>
-                  <Input value={lng} onChange={(event) => setLng(event.target.value)} className="rounded-2xl" />
-                </div>
-              </div>
-              <Button variant="secondary" onClick={() => pingM.mutate()} disabled={pingM.isPending}>
-                <Navigation className="mr-2 h-4 w-4" />
-                {pingM.isPending ? text.sending : text.sendPing}
-              </Button>
-            </div>
-
-            {mutationError && (
-              <div className="status-bad rounded-[20px] border px-4 py-3 text-sm">
-                {mutationError}
+        <Card>
+          <CardHeader>
+            <CardTitle>{text.recentEarnings}</CardTitle>
+            <CardDescription>
+              {text.delivered}: <span className="tabular-nums">{transactions.length}</span>
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {transactions.length === 0 ? (
+              <EmptyState compact icon={Banknote} title={text.noEarnings} description="Complete a delivery to see earnings here." />
+            ) : (
+              <div className="grid">
+                {transactions.map((transaction, index) => (
+                  <div key={transaction.id}>
+                    {index > 0 ? <Separator /> : null}
+                    <div className="flex items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{transaction.description || text.deliveryEarning}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {transaction.distance_km ?? 0} km · {transaction.weather_condition || "clear"} · {formatDateTime(transaction.created_at)}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="shrink-0 border-transparent bg-success/15 tabular-nums text-success">
+                        {formatMoney(transaction.amount)}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
-
-        <div className="grid gap-6">
-          <Card className="rounded-[30px]">
-            <CardHeader>
-              <CardTitle className="font-display text-2xl">{text.recentEarnings}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="paper-panel-muted rounded-[24px] p-4 text-sm theme-copy">{text.delivered}: {feedQ.data?.driver?.transactions?.length ?? 0}</div>
-                <div className="paper-panel-muted rounded-[24px] p-4 text-sm theme-copy">{text.offersLive}: {offeredOrders.length}</div>
-                <div className="paper-panel-muted rounded-[24px] p-4 text-sm theme-copy">{text.activeDrops}: {assignedOrders.length}</div>
-              </div>
-              {(feedQ.data?.driver?.transactions ?? []).length === 0 ? (
-                <div className="paper-panel-muted rounded-[24px] p-5 text-sm theme-copy">{text.noEarnings}</div>
-              ) : (
-                (feedQ.data?.driver?.transactions ?? []).map((transaction) => (
-                  <div key={transaction.id} className="paper-panel-muted rounded-[24px] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="theme-ink font-semibold">{transaction.description || text.deliveryEarning}</div>
-                        <div className="theme-muted mt-1 text-sm">
-                          {transaction.distance_km ?? 0} km - {transaction.weather_condition || "clear"} - {formatDateTime(transaction.created_at)}
-                        </div>
-                      </div>
-                      <Badge className="rounded-full">{formatMoney(transaction.amount)}</Badge>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[30px]">
-            <CardHeader>
-              <CardTitle className="font-display text-2xl">{text.incomingOffers}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              {offeredOrders.length === 0 ? (
-                <div className="paper-panel-muted rounded-[24px] p-5 text-sm theme-copy">
-                  {text.noOffers}
-                </div>
-              ) : (
-                offeredOrders.map((order) => (
-                  (() => {
-                    const secondsRemaining = getOfferSecondsRemaining(order.offer_sent_at, nowMs);
-                    const isExpired = secondsRemaining === 0;
-
-                    return (
-                      <OrderCard
-                        key={order.id}
-                        order={order}
-                        meta={
-                          <div className={`rounded-[20px] border px-4 py-3 text-sm ${isExpired ? "status-bad" : secondsRemaining <= 60 ? "status-warn" : "border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-300/15 dark:bg-cyan-300/10 dark:text-cyan-100"}`}>
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="font-semibold">
-                                {text.timeLeftToAccept}
-                              </span>
-                              <span className="font-mono text-base font-semibold">{formatCountdown(secondsRemaining)}</span>
-                            </div>
-                            <div className="mt-1">
-                              {isExpired ? text.offerExpired : text.offerExpiresSoon}
-                            </div>
-                          </div>
-                        }
-                        actions={
-                          <>
-                            <Button onClick={() => actionM.mutate({ orderId: order.id, action: "accept" })} disabled={actionM.isPending || isExpired}>
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              {text.accept}
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              onClick={() => actionM.mutate({ orderId: order.id, action: "decline" })}
-                              disabled={actionM.isPending || isExpired}
-                            >
-                              <XCircle className="mr-2 h-4 w-4" />
-                              {text.decline}
-                            </Button>
-                          </>
-                        }
-                      />
-                    );
-                  })()
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[30px]">
-            <CardHeader>
-              <CardTitle className="font-display text-2xl">{text.assignedDeliveries}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="subpanel grid gap-3 p-4">
-                <div className="grid gap-2">
-                  <Label>{text.proofSignature}</Label>
-                  <Input value={proofSignature} onChange={(event) => setProofSignature(event.target.value)} className="rounded-2xl" />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Proof photo</Label>
-                  <Input type="file" accept="image/*" onChange={(event) => setProofPhoto(event.target.files?.[0] ?? null)} className="rounded-2xl" />
-                </div>
-              </div>
-              {assignedOrders.length === 0 ? (
-                <div className="paper-panel-muted rounded-[24px] p-5 text-sm theme-copy">
-                  {text.noAssigned}
-                </div>
-              ) : (
-                assignedOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    actions={
-                      <>
-                        {order.status === "ASSIGNED" && (
-                          <Button onClick={() => actionM.mutate({ orderId: order.id, action: "picked-up" })} disabled={actionM.isPending}>
-                            <PackageCheck className="mr-2 h-4 w-4" />
-                            {text.markPickedUp}
-                          </Button>
-                        )}
-                        {order.status === "PICKED_UP" && (
-                          <Button onClick={() => actionM.mutate({ orderId: order.id, action: "delivered" })} disabled={actionM.isPending}>
-                            <MapPinned className="mr-2 h-4 w-4" />
-                            {text.markDelivered}
-                          </Button>
-                        )}
-                      </>
-                    }
-                  />
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );

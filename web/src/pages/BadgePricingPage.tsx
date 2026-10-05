@@ -1,14 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { Layers3, Megaphone, Package, Sparkles, WandSparkles } from "lucide-react";
+import { Check, CircleSlash, Layers3, Megaphone, Package, Sparkles, WandSparkles } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/useMe";
+import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/app/page-header";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { OrderStatusBadge, StatusBadge, humanizeStatus } from "@/components/app/status-badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type PromotionPlanKey = "week" | "month" | "year";
 type PromotionTargetType = "market" | "item";
@@ -149,30 +159,35 @@ const marketTemplates: Array<{
   },
 ];
 
+// The stored tone names are kept for the API; the preview maps them onto theme tokens.
 function getBadgePreviewClass(tone: PromotionTone, shape: PromotionShape) {
   const toneMap: Record<PromotionTone, string> = {
-    amber: "bg-amber-300 text-black border border-amber-200",
-    cyan: "bg-cyan-500 text-white border border-cyan-400",
-    emerald: "bg-emerald-500 text-white border border-emerald-400",
-    rose: "bg-rose-500 text-white border border-rose-400",
-    slate: "bg-slate-900 text-white border border-slate-800",
+    amber: "border border-warning bg-warning text-warning-foreground",
+    cyan: "border border-info bg-info text-primary-foreground",
+    emerald: "border border-success bg-success text-primary-foreground",
+    rose: "border border-destructive bg-destructive text-primary-foreground",
+    slate: "border border-foreground bg-foreground text-background",
   };
 
   const shapeMap: Record<PromotionShape, string> = {
     pill: "rounded-full",
-    soft: "rounded-2xl",
-    outline: "rounded-full bg-transparent text-current",
+    soft: "rounded-lg",
+    outline: "rounded-full",
   };
 
   const outlineToneMap: Record<PromotionTone, string> = {
-    amber: "border border-amber-300 bg-amber-50 text-amber-800",
-    cyan: "border border-cyan-400 bg-cyan-50 text-cyan-700",
-    emerald: "border border-emerald-400 bg-emerald-50 text-emerald-700",
-    rose: "border border-rose-400 bg-rose-50 text-rose-700",
-    slate: "border border-slate-400 bg-slate-50 text-slate-700",
+    amber: "border border-warning bg-background text-warning",
+    cyan: "border border-info bg-background text-info",
+    emerald: "border border-success bg-background text-success",
+    rose: "border border-destructive bg-background text-destructive",
+    slate: "border border-foreground bg-background text-foreground",
   };
 
-  return `${shapeMap[shape]} px-3 py-1 text-xs font-semibold ${shape === "outline" ? outlineToneMap[tone] : toneMap[tone]}`;
+  return `${shapeMap[shape]} px-3 py-1 text-xs font-semibold shadow-sm ${shape === "outline" ? outlineToneMap[tone] : toneMap[tone]}`;
+}
+
+function customPrice(priceLabel: string) {
+  return priceLabel.replace("$120", "$220").replace("$360", "$640").replace("$2400", "$4200");
 }
 
 function resolveMediaUrl(url?: string | null) {
@@ -277,6 +292,7 @@ export default function BadgePricingPage() {
       if (targetType === "item") {
         await qc.invalidateQueries({ queryKey: ["promotion-market-items", marketId] });
       }
+      toast.success("Promotion purchased and activated");
     },
   });
 
@@ -293,7 +309,7 @@ export default function BadgePricingPage() {
   const selectedPlan = promotionPlans.find((plan) => plan.key === planKey) ?? promotionPlans[0];
   const effectivePriceLabel =
     targetType === "market" && isCustomSponsor
-      ? selectedPlan.priceLabel.replace("$120", "$220").replace("$360", "$640").replace("$2400", "$4200")
+      ? customPrice(selectedPlan.priceLabel)
       : selectedPlan.priceLabel;
   const purchaseError =
     (purchaseM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
@@ -307,59 +323,86 @@ export default function BadgePricingPage() {
 
   if (!canManagePromotion) {
     return (
-      <Card className="rounded-[30px]">
-        <CardContent className="p-8 text-sm text-slate-600 dark:text-slate-300">
-          Only market owners or admins can purchase storefront promotion.
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <PageHeader title="Storefront promotion" />
+        <EmptyState
+          icon={CircleSlash}
+          title="Owners and admins only"
+          description="Only market owners or admins can purchase storefront promotion."
+        />
+      </div>
     );
   }
 
+  const purchases = purchasesQ.data ?? [];
+
   return (
-    <div className="grid gap-6">
-      <section className="intro-panel">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="section-kicker text-white/70">Promotion Studio</div>
-            <h1 className="intro-title">Storefront promotion</h1>
-            <p className="intro-copy">
-              Market owners can purchase promotion directly here. Market promotion applies immediately and turns the storefront into a promoted market automatically.
-            </p>
-          </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Storefront promotion"
+        description="Market owners can purchase promotion directly here. Market promotion applies immediately and turns the storefront into a promoted market automatically."
+        actions={
           <div className="flex flex-wrap gap-2">
-            <span className="status-chip">{marketsQ.data?.length ?? 0} markets</span>
-            <span className="status-chip">{promotionPlans.length} plans</span>
+            <Badge variant="secondary" className="tabular-nums">
+              {marketsQ.data?.length ?? 0} markets
+            </Badge>
+            <Badge variant="secondary" className="tabular-nums">
+              {promotionPlans.length} plans
+            </Badge>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       <section className="grid gap-4 md:grid-cols-3">
-        {promotionPlans.map((plan) => (
-          <Card key={plan.key}>
-            <CardContent className="grid gap-4 p-6">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-cyan-50 text-cyan-700 dark:bg-cyan-300/10 dark:text-cyan-100">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="theme-ink text-xl font-semibold">{plan.durationText}</div>
-                <div className="theme-warm mt-2 text-sm font-semibold">{plan.priceLabel}</div>
-              </div>
-              <div className="theme-copy text-sm leading-7">{plan.text}</div>
-            </CardContent>
-          </Card>
-        ))}
+        {promotionPlans.map((plan) => {
+          const selected = plan.key === planKey;
+          return (
+            <Card key={plan.key} className={cn("transition-shadow", selected && "ring-2 ring-primary")}>
+              <CardHeader>
+                <CardTitle className="text-base">{plan.durationText}</CardTitle>
+                <CardDescription>{plan.label}</CardDescription>
+                {selected ? (
+                  <CardAction>
+                    <Badge>Selected</Badge>
+                  </CardAction>
+                ) : null}
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div>
+                  <div className="text-2xl font-semibold tabular-nums tracking-tight">{plan.priceLabel.split(" / ")[0]}</div>
+                  <div className="text-xs text-muted-foreground">
+                    per {plan.label} · custom sponsor {customPrice(plan.priceLabel).split(" / ")[0]}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">{plan.text}</p>
+                <ul className="grid gap-2 text-sm">
+                  {[`${plan.label} of featured placement`, "Promoted badge on the storefront or item", "Activates immediately after purchase"].map((feature) => (
+                    <li key={feature} className="flex items-start gap-2">
+                      <Check className="mt-0.5 size-4 shrink-0 text-success" />
+                      <span>{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+              <CardFooter className="mt-auto">
+                <Button variant={selected ? "default" : "outline"} className="w-full" onClick={() => setPlanKey(plan.key)}>
+                  {selected ? "Selected plan" : "Choose plan"}
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <Card>
-          <CardContent className="grid gap-5 p-6">
-            <div>
-              <div className="section-kicker">Preview</div>
-              <div className="theme-ink mt-2 text-2xl font-semibold">What customers will see</div>
-            </div>
-
-            <div className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="relative h-44 bg-zinc-100 dark:bg-zinc-800">
+      <section className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <Card className="h-fit">
+          <CardHeader>
+            <CardTitle className="text-base">What customers will see</CardTitle>
+            <CardDescription>Live preview of the promoted card.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-hidden rounded-lg border bg-card">
+              <div className="relative h-40 bg-muted">
                 {resolveMediaUrl(selectedMarket?.banner_url ?? selectedMarket?.logo_url) ? (
                   <img
                     src={resolveMediaUrl(selectedMarket?.banner_url ?? selectedMarket?.logo_url) ?? undefined}
@@ -367,35 +410,32 @@ export default function BadgePricingPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : null}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                <div className="absolute left-4 top-4">
+                <div className="absolute left-3 top-3">
                   <span className={getBadgePreviewClass(tone, shape)}>
                     {targetType === "market" ? badge || "Promoted Market" : "Promoted Item"}
                   </span>
                 </div>
               </div>
 
-              <div className="grid gap-3 p-5">
+              <div className="grid gap-3 p-4">
                 <div className="flex items-start gap-3">
                   {resolveMediaUrl(selectedMarket?.logo_url) ? (
                     <img
                       src={resolveMediaUrl(selectedMarket?.logo_url) ?? undefined}
                       alt={selectedMarket?.name ?? "Market logo"}
-                      className="h-16 w-16 rounded-[1.4rem] border border-zinc-200 object-cover dark:border-zinc-800"
+                      className="size-12 shrink-0 rounded-lg border object-cover"
                     />
                   ) : (
-                    <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] border border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-800">
-                      {targetType === "market" ? <Megaphone className="h-6 w-6 text-zinc-400" /> : <Package className="h-6 w-6 text-zinc-400" />}
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground">
+                      {targetType === "market" ? <Megaphone className="size-5" /> : <Package className="size-5" />}
                     </div>
                   )}
 
                   <div className="min-w-0">
-                    <div className="theme-ink text-xl font-semibold">
-                      {targetType === "market"
-                        ? selectedMarket?.name || "Selected market"
-                        : selectedItem?.name || "Selected item"}
+                    <div className="truncate font-semibold">
+                      {targetType === "market" ? selectedMarket?.name || "Selected market" : selectedItem?.name || "Selected item"}
                     </div>
-                    <div className="theme-muted mt-1 text-sm">
+                    <div className="text-sm text-muted-foreground">
                       {targetType === "market"
                         ? headline || "Featured storefront headline"
                         : `${selectedMarket?.name || "Selected market"} item promotion`}
@@ -403,23 +443,17 @@ export default function BadgePricingPage() {
                   </div>
                 </div>
 
-                <div className="rounded-[22px] border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                  <div className="theme-copy text-sm leading-7">
-                    {targetType === "market"
-                      ? copy || "Promotion copy will appear here."
-                      : "This item will be marked as promoted and stay highlighted inside the storefront."}
-                  </div>
+                <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                  {targetType === "market"
+                    ? copy || "Promotion copy will appear here."
+                    : "This item will be marked as promoted and stay highlighted inside the storefront."}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <span className="status-chip status-neutral">{selectedPlan.durationText}</span>
-                  <span className="status-chip status-good">{effectivePriceLabel}</span>
-                  <span className="status-chip status-neutral">
-                    {targetType === "market" ? "Storefront promotion" : "Item promotion"}
-                  </span>
-                  {targetType === "market" && isCustomSponsor ? (
-                    <span className="status-chip status-warn">Custom sponsor</span>
-                  ) : null}
+                  <StatusBadge>{selectedPlan.durationText}</StatusBadge>
+                  <StatusBadge tone="success">{effectivePriceLabel}</StatusBadge>
+                  <StatusBadge>{targetType === "market" ? "Storefront promotion" : "Item promotion"}</StatusBadge>
+                  {targetType === "market" && isCustomSponsor ? <StatusBadge tone="warning">Custom sponsor</StatusBadge> : null}
                 </div>
               </div>
             </div>
@@ -427,17 +461,16 @@ export default function BadgePricingPage() {
         </Card>
 
         <Card>
-          <CardContent className="grid gap-5 p-6">
-            <div>
-              <div className="section-kicker">Purchase</div>
-              <div className="theme-ink mt-2 text-2xl font-semibold">Choose promotion settings</div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="field-group">
-                <Label className="field-label">Market</Label>
+          <CardHeader>
+            <CardTitle className="text-base">Choose promotion settings</CardTitle>
+            <CardDescription>Pick the market, what to promote and for how long.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="promo-market">Market</Label>
                 <Select value={marketId} onValueChange={setMarketId}>
-                  <SelectTrigger className="input-shell w-full">
+                  <SelectTrigger id="promo-market" className="w-full">
                     <SelectValue placeholder="Select your market" />
                   </SelectTrigger>
                   <SelectContent>
@@ -450,10 +483,10 @@ export default function BadgePricingPage() {
                 </Select>
               </div>
 
-              <div className="field-group">
-                <Label className="field-label">Promotion target</Label>
+              <div className="grid gap-2">
+                <Label htmlFor="promo-target">Promotion target</Label>
                 <Select value={targetType} onValueChange={(value) => setTargetType(value as PromotionTargetType)}>
-                  <SelectTrigger className="input-shell w-full">
+                  <SelectTrigger id="promo-target" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -463,10 +496,10 @@ export default function BadgePricingPage() {
                 </Select>
               </div>
 
-              <div className="field-group">
-                <Label className="field-label">Plan</Label>
+              <div className="grid gap-2">
+                <Label htmlFor="promo-plan">Plan</Label>
                 <Select value={planKey} onValueChange={(value) => setPlanKey(value as PromotionPlanKey)}>
-                  <SelectTrigger className="input-shell w-full">
+                  <SelectTrigger id="promo-plan" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -480,10 +513,10 @@ export default function BadgePricingPage() {
               </div>
 
               {targetType === "item" ? (
-                <div className="field-group">
-                  <Label className="field-label">Item</Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="promo-item">Item</Label>
                   <Select value={itemId} onValueChange={setItemId} disabled={!marketId}>
-                    <SelectTrigger className="input-shell w-full">
+                    <SelectTrigger id="promo-item" className="w-full">
                       <SelectValue placeholder={marketId ? "Select an item" : "Choose a market first"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -496,33 +529,34 @@ export default function BadgePricingPage() {
                   </Select>
                 </div>
               ) : null}
+            </div>
 
-              {targetType === "market" ? (
-                <>
-                  <div className="paper-panel-muted p-5 md:col-span-2">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <div className="section-kicker">Safety</div>
-                        <div className="theme-copy mt-2 text-sm leading-7">
-                          Standard storefront promotion uses safe pre-made copy only. Custom sponsor unlocks custom text, color, and badge shape for a higher cost.
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant={isCustomSponsor ? "default" : "secondary"}
-                        onClick={() => setIsCustomSponsor((current) => !current)}
-                      >
-                        <WandSparkles className="mr-2 h-4 w-4" />
-                        {isCustomSponsor ? "Using custom sponsor" : "Switch to custom sponsor"}
-                      </Button>
-                    </div>
+            {targetType === "market" ? (
+              <>
+                <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{isCustomSponsor ? "Custom sponsor" : "Safe template"}</div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Standard storefront promotion uses safe pre-made copy only. Custom sponsor unlocks custom text, color, and badge shape for a higher cost.
+                    </p>
                   </div>
+                  <Button
+                    type="button"
+                    variant={isCustomSponsor ? "default" : "outline"}
+                    className="shrink-0"
+                    onClick={() => setIsCustomSponsor((current) => !current)}
+                  >
+                    <WandSparkles />
+                    {isCustomSponsor ? "Using custom sponsor" : "Switch to custom sponsor"}
+                  </Button>
+                </div>
 
+                <div className="grid gap-4 sm:grid-cols-2">
                   {!isCustomSponsor ? (
-                    <div className="field-group md:col-span-2">
-                      <Label className="field-label">Safe promotion template</Label>
+                    <div className="grid gap-2 sm:col-span-2">
+                      <Label htmlFor="promo-template">Safe promotion template</Label>
                       <Select value={templateKey} onValueChange={(value) => setTemplateKey(value as TemplateKey)}>
-                        <SelectTrigger className="input-shell w-full">
+                        <SelectTrigger id="promo-template" className="w-full">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -536,25 +570,26 @@ export default function BadgePricingPage() {
                     </div>
                   ) : null}
 
-                  <div className="field-group">
-                    <Label className="field-label">Badge</Label>
-                    <Input value={badge} onChange={(event) => setBadge(event.target.value)} className="input-shell" disabled={!isCustomSponsor} />
+                  <div className="grid gap-2">
+                    <Label htmlFor="promo-badge">Badge</Label>
+                    <Input id="promo-badge" value={badge} onChange={(event) => setBadge(event.target.value)} disabled={!isCustomSponsor} />
                   </div>
 
-                  <div className="field-group">
-                    <Label className="field-label">Headline</Label>
-                    <Input value={headline} onChange={(event) => setHeadline(event.target.value)} className="input-shell" disabled={!isCustomSponsor} />
+                  <div className="grid gap-2">
+                    <Label htmlFor="promo-headline">Headline</Label>
+                    <Input id="promo-headline" value={headline} onChange={(event) => setHeadline(event.target.value)} disabled={!isCustomSponsor} />
                   </div>
 
-                  <div className="field-group md:col-span-2">
-                    <Label className="field-label">Preview copy</Label>
-                    <Input value={copy} onChange={(event) => setCopy(event.target.value)} className="input-shell" disabled={!isCustomSponsor} />
+                  <div className="grid gap-2 sm:col-span-2">
+                    <Label htmlFor="promo-copy">Preview copy</Label>
+                    <Input id="promo-copy" value={copy} onChange={(event) => setCopy(event.target.value)} disabled={!isCustomSponsor} />
+                    {!isCustomSponsor ? <p className="text-xs text-muted-foreground">Switch to custom sponsor to edit the text.</p> : null}
                   </div>
 
-                  <div className="field-group">
-                    <Label className="field-label">Badge color</Label>
+                  <div className="grid gap-2">
+                    <Label htmlFor="promo-tone">Badge color</Label>
                     <Select value={tone} onValueChange={(value) => setTone(value as PromotionTone)} disabled={!isCustomSponsor}>
-                      <SelectTrigger className="input-shell w-full">
+                      <SelectTrigger id="promo-tone" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -567,10 +602,10 @@ export default function BadgePricingPage() {
                     </Select>
                   </div>
 
-                  <div className="field-group">
-                    <Label className="field-label">Badge shape</Label>
+                  <div className="grid gap-2">
+                    <Label htmlFor="promo-shape">Badge shape</Label>
                     <Select value={shape} onValueChange={(value) => setShape(value as PromotionShape)} disabled={!isCustomSponsor}>
-                      <SelectTrigger className="input-shell w-full">
+                      <SelectTrigger id="promo-shape" className="w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -580,79 +615,119 @@ export default function BadgePricingPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                </>
-              ) : (
-                <div className="paper-panel-muted p-5 md:col-span-2">
-                  <div className="section-kicker">Item promotion</div>
-                  <div className="theme-copy mt-2 text-sm leading-7">
-                    Purchasing item promotion marks the selected item as promoted immediately and keeps it highlighted for the selected duration.
-                  </div>
                 </div>
-              )}
-            </div>
+              </>
+            ) : (
+              <Alert>
+                <Package />
+                <AlertTitle>Item promotion</AlertTitle>
+                <AlertDescription>
+                  Purchasing item promotion marks the selected item as promoted immediately and keeps it highlighted for the selected duration.
+                </AlertDescription>
+              </Alert>
+            )}
 
-            {purchaseError ? <div className="text-sm text-red-700 dark:text-red-300">{purchaseError}</div> : null}
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={() => purchaseM.mutate()} disabled={!canPurchase || purchaseM.isPending}>
-                {purchaseM.isPending ? "Processing..." : `Purchase ${targetType === "market" ? "market" : "item"} promotion`}
-              </Button>
-              <div className="theme-muted text-sm">
-                This action activates promotion immediately and updates the public storefront state automatically.
-              </div>
-            </div>
+            {purchaseError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{purchaseError}</AlertDescription>
+              </Alert>
+            ) : null}
           </CardContent>
+          <CardFooter className="flex-col items-stretch gap-3 border-t sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              Total <span className="font-medium text-foreground tabular-nums">{effectivePriceLabel}</span>. This action activates promotion
+              immediately and updates the public storefront state automatically.
+            </p>
+            <Button className="shrink-0" onClick={() => purchaseM.mutate()} disabled={!canPurchase || purchaseM.isPending}>
+              {purchaseM.isPending ? "Processing..." : `Purchase ${targetType === "market" ? "market" : "item"} promotion`}
+            </Button>
+          </CardFooter>
         </Card>
       </section>
 
-      <section className="dashboard-card">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="section-kicker">History</div>
-            <div className="theme-ink mt-2 text-2xl font-semibold">Promotion purchases</div>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-            <Layers3 className="h-4 w-4" />
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b py-4">
+          <CardTitle className="text-base">Promotion purchases</CardTitle>
+          <CardDescription className="flex items-center gap-1.5">
+            <Layers3 className="size-3.5" />
             {marketId ? "Filtered by selected market" : "Select a market to view purchases"}
-          </div>
-        </div>
+          </CardDescription>
+        </CardHeader>
 
-        <div className="mt-5 grid gap-3">
-          {(purchasesQ.data ?? []).map((purchase) => (
-            <div key={purchase.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="theme-ink font-semibold">
-                  {purchase.target_type === "market"
-                    ? `${purchase.market?.name ?? "Market"} storefront promotion`
-                    : `${purchase.item?.name ?? "Item"} item promotion`}
-                </div>
-                <div className="theme-copy text-sm">
-                  {purchase.duration_days} days • {purchase.price_label} • {purchase.badge || purchase.plan_key}
-                </div>
-                <div className="theme-muted mt-1 text-xs">
-                  Ends at: {purchase.ends_at || "-"}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="status-chip status-neutral">{purchase.target_type}</span>
-                <span className="status-chip status-good">{purchase.status}</span>
-              </div>
+        {!marketId ? (
+          <EmptyState compact icon={Layers3} title="No market selected" description="Select a market to see promotion history." />
+        ) : purchasesQ.isLoading ? (
+          <LoadingState rows={2} className="p-4" />
+        ) : !purchases.length ? (
+          <EmptyState
+            compact
+            icon={Sparkles}
+            title="No purchases yet"
+            description="No promotion purchases yet for this market. Choose a plan above to get started."
+          />
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">Promotion</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Ends</TableHead>
+                    <TableHead className="pr-6">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {purchases.map((purchase) => (
+                    <TableRow key={purchase.id}>
+                      <TableCell className="pl-6">
+                        <div className="font-medium">{purchaseTitle(purchase)}</div>
+                        <div className="text-xs text-muted-foreground">{purchase.badge || purchase.plan_key}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{humanizeStatus(purchase.target_type)}</Badge>
+                      </TableCell>
+                      <TableCell className="tabular-nums">
+                        <div>{purchase.duration_days} days</div>
+                        <div className="text-xs text-muted-foreground">{purchase.price_label}</div>
+                      </TableCell>
+                      <TableCell className="text-sm">{purchase.ends_at ? formatDateTime(purchase.ends_at) : "-"}</TableCell>
+                      <TableCell className="pr-6">
+                        <OrderStatusBadge status={purchase.status} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-          ))}
 
-          {!marketId ? (
-            <div className="theme-copy text-sm">Select a market to see promotion history.</div>
-          ) : null}
-
-          {marketId && purchasesQ.isLoading ? (
-            <div className="theme-copy text-sm">Loading promotion history...</div>
-          ) : null}
-
-          {marketId && !purchasesQ.isLoading && !(purchasesQ.data ?? []).length ? (
-            <div className="theme-copy text-sm">No promotion purchases yet for this market.</div>
-          ) : null}
-        </div>
-      </section>
+            <div className="divide-y md:hidden">
+              {purchases.map((purchase) => (
+                <div key={purchase.id} className="grid gap-2 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 font-medium">{purchaseTitle(purchase)}</div>
+                    <OrderStatusBadge status={purchase.status} />
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {purchase.duration_days} days · {purchase.price_label} · {purchase.badge || purchase.plan_key}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline">{humanizeStatus(purchase.target_type)}</Badge>
+                    Ends: {purchase.ends_at ? formatDateTime(purchase.ends_at) : "-"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
+}
+
+function purchaseTitle(purchase: PromotionPurchase) {
+  return purchase.target_type === "market"
+    ? `${purchase.market?.name ?? "Market"} storefront promotion`
+    : `${purchase.item?.name ?? "Item"} item promotion`;
 }

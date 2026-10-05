@@ -1,25 +1,65 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { ArrowRight, Search, Sparkles, TicketPercent, UserRound } from "lucide-react";
+import type { Dispatch, SetStateAction } from "react";
+import {
+  BadgeCheck,
+  CheckCircle2,
+  ClipboardCheck,
+  Clock3,
+  ExternalLink,
+  LayoutDashboard,
+  MoreHorizontal,
+  Package,
+  Plus,
+  Search,
+  Settings,
+  Sparkles,
+  Store,
+  TicketPercent,
+  UserRound,
+} from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { useMe } from "@/lib/useMe";
 import { formatMoney, toNumber } from "@/lib/format";
 import type { StorefrontMarket } from "@/lib/storefront";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/app/page-header";
+import { StatCard, StatGrid } from "@/components/app/stat-card";
+import { EmptyState } from "@/components/app/empty-state";
+import { LoadingState } from "@/components/app/loading-state";
+import { OrderStatusBadge, StatusBadge } from "@/components/app/status-badge";
+import { MarketBanner, MarketLogo } from "@/components/markets/market-media";
+import { marketErrorMessage } from "@/components/markets/market-utils";
+
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
@@ -63,6 +103,8 @@ type MarketDraft = {
   featuredCopy: string;
 };
 
+type StatusFilter = "all" | "active" | "hidden" | "open" | "featured";
+
 const emptyDraft: MarketDraft = {
   name: "",
   code: "",
@@ -99,6 +141,7 @@ export default function MarketsPage() {
   const isAdmin = (meQ.data?.roles ?? []).includes("admin");
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   const marketsQ = useQuery({
     queryKey: ["markets"],
@@ -128,13 +171,18 @@ export default function MarketsPage() {
   });
 
   const owners = ownersQ.data ?? [];
-  const markets = marketsQ.data ?? [];
+  const markets = useMemo(() => marketsQ.data ?? [], [marketsQ.data]);
 
   const filteredMarkets = useMemo(() => {
     const normalized = deferredSearch.trim().toLowerCase();
-    if (!normalized) return markets;
 
     return markets.filter((market) => {
+      if (statusFilter === "active" && !market.is_active) return false;
+      if (statusFilter === "hidden" && market.is_active) return false;
+      if (statusFilter === "open" && !market.operating_status?.is_open) return false;
+      if (statusFilter === "featured" && !market.is_featured) return false;
+      if (!normalized) return true;
+
       const haystack = [
         market.name,
         market.code,
@@ -151,7 +199,7 @@ export default function MarketsPage() {
 
       return haystack.includes(normalized);
     });
-  }, [deferredSearch, markets]);
+  }, [deferredSearch, markets, statusFilter]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createDraft, setCreateDraft] = useState<MarketDraft>(emptyDraft);
@@ -231,20 +279,9 @@ export default function MarketsPage() {
     },
   });
 
-  const createError =
-    (createMarketM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
-    (createMarketM.error as { message?: string })?.message ??
-    null;
-
-  const assignError =
-    (assignOwnerM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
-    (assignOwnerM.error as { message?: string })?.message ??
-    null;
-
-  const updateError =
-    (updateMarketM.error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message ??
-    (updateMarketM.error as { message?: string })?.message ??
-    null;
+  const createError = marketErrorMessage(createMarketM.error);
+  const assignError = marketErrorMessage(assignOwnerM.error);
+  const updateError = marketErrorMessage(updateMarketM.error);
 
   const canCreate =
     createDraft.name.trim().length >= 2 &&
@@ -254,6 +291,7 @@ export default function MarketsPage() {
 
   const featuredCount = markets.filter((market) => market.is_featured).length;
   const activeCount = markets.filter((market) => market.is_active).length;
+  const openCount = markets.filter((market) => market.operating_status?.is_open).length;
   const promoCount = markets.filter((market) => market.active_promo).length;
   const reviewApprovalM = useMutation({
     mutationFn: async ({ id, status }: { id: number; status: "approved" | "rejected" }) =>
@@ -263,368 +301,575 @@ export default function MarketsPage() {
     },
   });
 
+  const approvals = approvalsQ.data ?? [];
+  const badgeRequests = badgeRequestsQ.data ?? [];
+  const pendingApprovals = approvals.filter((request) => request.status === "pending").length;
+  const pendingBadges = badgeRequests.filter((request) => request.status === "pending").length;
+
+  const openEdit = (market: Market) => {
+    setEditMarket(market);
+    setEditDraft(toDraft(market));
+    setEditOpen(true);
+  };
+
+  const openAssign = (market: Market) => {
+    setAssignMarket(market);
+    setAssignOwnerId(String(market.owner_user_id));
+    setAssignOpen(true);
+  };
+
   if (!isAdmin) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Markets</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">You are not an admin.</CardContent>
-      </Card>
+      <div className="space-y-6">
+        <PageHeader title="Markets" description="Manage every market on the platform." />
+        <EmptyState icon={Store} title="Admins only" description="You are not an admin, so the full market list is not available to you." />
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-6">
-      <section className="intro-panel">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="intro-title">Markets</h1>
-          </div>
-
+    <div className="space-y-6">
+      <PageHeader
+        title="Markets"
+        description="Create markets, assign owners, review requests and control how each storefront appears to customers."
+        actions={
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
-              <Button size="lg">Create market</Button>
+              <Button>
+                <Plus />
+                Create market
+              </Button>
             </DialogTrigger>
-            <DialogContent className="app-modal-shell sm:max-w-[min(840px,calc(100%-2rem))]">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
-                <div className="app-modal-header">
-                  <DialogTitle className="panel-title">Create market</DialogTitle>
-                </div>
+                <DialogTitle>Create market</DialogTitle>
+                <DialogDescription>Add a new storefront and choose who owns it. You can change everything later.</DialogDescription>
               </DialogHeader>
 
-              <div className="app-modal-body">
-              <div className="app-modal-main">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="field-group">
-                  <Label className="field-label">Name</Label>
-                  <Input value={createDraft.name} onChange={(e) => setCreateDraft((current) => ({ ...current, name: e.target.value }))} className="input-shell" />
-                </div>
-                <div className="field-group">
-                  <Label className="field-label">Code</Label>
-                  <Input value={createDraft.code} onChange={(e) => setCreateDraft((current) => ({ ...current, code: e.target.value }))} className="input-shell" />
-                </div>
-                <div className="field-group md:col-span-2">
-                  <Label className="field-label">Address</Label>
-                  <Input
-                    value={createDraft.address}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, address: e.target.value }))}
-                    placeholder="Service address or pickup zone"
-                    className="input-shell"
-                  />
-                </div>
-                <div className="field-group">
-                  <Label className="field-label">Latitude</Label>
-                  <Input value={createDraft.lat} onChange={(e) => setCreateDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" className="input-shell" />
-                </div>
-                <div className="field-group">
-                  <Label className="field-label">Longitude</Label>
-                  <Input value={createDraft.lng} onChange={(e) => setCreateDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" className="input-shell" />
-                </div>
-                <div className="field-group md:col-span-2">
-                  <Label className="field-label">Owner</Label>
-                  <Select value={createDraft.ownerId} onValueChange={(value) => setCreateDraft((current) => ({ ...current, ownerId: value }))}>
-                    <SelectTrigger className="input-shell w-full">
-                      <SelectValue placeholder="Select owner user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {owners.map((owner) => (
-                        <SelectItem key={owner.id} value={String(owner.id)}>
-                          {owner.name} ({owner.email})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="section-divider" />
+              <MarketFormFields
+                idPrefix="create"
+                draft={createDraft}
+                setDraft={setCreateDraft}
+                owners={owners}
+                showOwner
+                headlinePlaceholder="Fastest weekly essentials"
+                copyPlaceholder="This message appears in the public spotlight experience."
+                activeLabel="Market active"
+                activeHint="Inactive markets stay hidden from the public marketplace."
+                featuredLabel="Promote on landing page"
+                featuredHint="Featured markets receive the premium public treatment."
+              />
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="field-group">
-                  <Label className="field-label">Featured badge</Label>
-                  <Input
-                    value={createDraft.featuredBadge}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
-                    placeholder="Promoted market"
-                    className="input-shell"
-                  />
-                </div>
-                <div className="field-group">
-                  <Label className="field-label">Featured headline</Label>
-                  <Input
-                    value={createDraft.featuredHeadline}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
-                    placeholder="Fastest weekly essentials"
-                    className="input-shell"
-                  />
-                </div>
-                <div className="field-group md:col-span-2">
-                  <Label className="field-label">Featured copy</Label>
-                  <Input
-                    value={createDraft.featuredCopy}
-                    onChange={(e) => setCreateDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
-                    placeholder="This message appears in the public spotlight experience."
-                    className="input-shell"
-                  />
-                </div>
-                <div className="subpanel flex items-center justify-between p-4">
-                  <div>
-                    <div className="theme-ink font-medium">Market active</div>
-                    <div className="theme-muted text-sm">Inactive markets stay hidden from the public marketplace.</div>
-                  </div>
-                  <Switch
-                    checked={createDraft.isActive}
-                    onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isActive: checked }))}
-                  />
-                </div>
-                <div className="subpanel flex items-center justify-between p-4">
-                  <div>
-                    <div className="theme-ink font-medium">Promote on landing page</div>
-                    <div className="theme-muted text-sm">Featured markets receive the premium public treatment.</div>
-                  </div>
-                  <Switch
-                    checked={createDraft.isFeatured}
-                    onCheckedChange={(checked) => setCreateDraft((current) => ({ ...current, isFeatured: checked }))}
-                  />
-                </div>
-              </div>
+              {createError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{createError}</AlertDescription>
+                </Alert>
+              ) : null}
 
-              {createError && <div className="text-sm text-red-600">{createError}</div>}
-              </div>
-              </div>
-
-              <DialogFooter className="app-modal-footer">
-                <Button onClick={() => createMarketM.mutate()} disabled={!canCreate || createMarketM.isPending}>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() =>
+                    createMarketM.mutate(undefined, {
+                      onSuccess: () => toast.success("Market created"),
+                      onError: (error) => toast.error(marketErrorMessage(error) ?? "Could not create market"),
+                    })
+                  }
+                  disabled={!canCreate || createMarketM.isPending}
+                >
+                  {createMarketM.isPending ? <Spinner /> : null}
                   {createMarketM.isPending ? "Creating..." : "Create market"}
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
-      </section>
+        }
+      />
 
-      <section className="data-grid">
-        <Card>
-          <CardContent className="p-6">
-            <div className="section-kicker">Total markets</div>
-            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{markets.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="section-kicker">Active storefronts</div>
-            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{activeCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="section-kicker">Promoted markets</div>
-            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{featuredCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="section-kicker">Live promo codes</div>
-            <div className="font-display theme-ink mt-3 text-4xl font-semibold">{promoCount}</div>
-          </CardContent>
-        </Card>
-      </section>
+      <StatGrid className="xl:grid-cols-5">
+        <StatCard label="Total markets" value={markets.length} icon={Store} tone="primary" onClick={() => setStatusFilter("all")} active={statusFilter === "all"} />
+        <StatCard label="Active storefronts" value={activeCount} icon={CheckCircle2} tone="success" onClick={() => setStatusFilter("active")} active={statusFilter === "active"} />
+        <StatCard label="Open now" value={openCount} icon={Clock3} tone="info" onClick={() => setStatusFilter("open")} active={statusFilter === "open"} />
+        <StatCard label="Promoted markets" value={featuredCount} icon={Sparkles} tone="warning" onClick={() => setStatusFilter("featured")} active={statusFilter === "featured"} />
+        <StatCard label="Live promo codes" value={promoCount} icon={TicketPercent} />
+      </StatGrid>
 
-      <section className="dashboard-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="section-kicker">Approvals</div>
-            <h2 className="panel-title mt-2">Market, promo, badge, and refund workflow</h2>
-          </div>
-          <span className="status-chip">{(approvalsQ.data ?? []).filter((request) => request.status === "pending").length} pending</span>
-        </div>
+      <Tabs defaultValue="markets" className="gap-4">
+        <TabsList className="w-full sm:w-fit">
+          <TabsTrigger value="markets">Markets</TabsTrigger>
+          <TabsTrigger value="approvals">
+            Approvals
+            {pendingApprovals > 0 ? <Badge className="h-5 min-w-5 px-1.5 tabular-nums">{pendingApprovals}</Badge> : null}
+          </TabsTrigger>
+          <TabsTrigger value="badges">
+            Badge requests
+            {pendingBadges > 0 ? <Badge className="h-5 min-w-5 px-1.5 tabular-nums">{pendingBadges}</Badge> : null}
+          </TabsTrigger>
+        </TabsList>
 
-        <div className="mt-5 grid gap-3">
-          {(approvalsQ.data ?? []).slice(0, 8).map((approval) => (
-            <div key={approval.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="theme-ink font-semibold">{approval.type} - {approval.market?.name || approval.order?.code || "General request"}</div>
-                <div className="theme-copy text-sm">{approval.requester?.name || "Requester"} - {approval.notes || "No notes"}</div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="status-chip">{approval.status}</span>
-                {approval.status === "pending" && (
-                  <>
-                    <Button size="sm" onClick={() => reviewApprovalM.mutate({ id: approval.id, status: "approved" })}>Approve</Button>
-                    <Button size="sm" variant="secondary" onClick={() => reviewApprovalM.mutate({ id: approval.id, status: "rejected" })}>Reject</Button>
-                  </>
-                )}
-              </div>
+        <TabsContent value="markets" className="space-y-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search markets, owners, promo code"
+                className="pl-9"
+                aria-label="Search markets"
+              />
             </div>
-          ))}
-
-          {approvalsQ.isLoading && <div className="theme-copy text-sm">Loading approvals...</div>}
-          {!approvalsQ.isLoading && !(approvalsQ.data ?? []).length && <div className="theme-copy text-sm">No workflow approvals yet.</div>}
-        </div>
-      </section>
-
-      <section className="dashboard-card">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="section-kicker">Badge requests</div>
-            <h2 className="panel-title mt-2">Owner requests waiting for admin review</h2>
-          </div>
-          <span className="status-chip">{(badgeRequestsQ.data ?? []).filter((request) => request.status === "pending").length} pending</span>
-        </div>
-
-        <div className="mt-5 grid gap-3">
-          {(badgeRequestsQ.data ?? []).slice(0, 6).map((request) => (
-            <div key={request.id} className="subpanel flex flex-col gap-3 px-4 py-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="theme-ink font-semibold">{request.market?.name ?? "Market"} - {request.badge}</div>
-                <div className="theme-copy text-sm">{request.requester?.name ?? "Owner"} - {request.duration_days} days - {request.notes || "No note"}</div>
-              </div>
-              <span className="status-chip">{request.status}</span>
+            <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as StatusFilter)}>
+              <SelectTrigger className="w-full sm:w-44" aria-label="Filter markets">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All markets</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="hidden">Hidden</SelectItem>
+                <SelectItem value="open">Open now</SelectItem>
+                <SelectItem value="featured">Promoted</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="text-sm text-muted-foreground sm:ml-auto">
+              {filteredMarkets.length} of {markets.length} shown
             </div>
-          ))}
-
-          {badgeRequestsQ.isLoading && <div className="theme-copy text-sm">Loading badge requests...</div>}
-          {!badgeRequestsQ.isLoading && !(badgeRequestsQ.data ?? []).length && <div className="theme-copy text-sm">No badge requests yet.</div>}
-        </div>
-      </section>
-
-      <section className="dashboard-card">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="section-kicker">Storefront finder</div>
-            <h2 className="panel-title mt-2">Search by market, owner, or active promo</h2>
           </div>
-          <div className="relative w-full lg:max-w-md">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search markets, owners, promo code"
-              className="input-shell pl-11"
+
+          {marketsQ.isLoading ? (
+            <LoadingState rows={3} />
+          ) : marketsQ.error ? (
+            <Alert variant="destructive">
+              <AlertDescription>Failed to load markets.</AlertDescription>
+            </Alert>
+          ) : filteredMarkets.length === 0 ? (
+            <EmptyState
+              icon={Search}
+              title="No markets found"
+              description={markets.length === 0 ? "Create the first market to get started." : "No markets matched your search or filter."}
+              action={
+                markets.length === 0 ? (
+                  <Button onClick={() => setCreateOpen(true)}>
+                    <Plus />
+                    Create market
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setSearch("");
+                      setStatusFilter("all");
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )
+              }
             />
-          </div>
-        </div>
-      </section>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {filteredMarkets.map((market) => (
+                <AdminMarketCard key={market.id} market={market} onEdit={() => openEdit(market)} onAssign={() => openAssign(market)} />
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-      {marketsQ.isLoading ? (
-        <Card>
-          <CardContent className="p-8 text-sm text-muted-foreground">Loading markets...</CardContent>
-        </Card>
-      ) : marketsQ.error ? (
-        <Card>
-          <CardContent className="p-8 text-sm text-red-600">Failed to load markets.</CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-5 xl:grid-cols-2">
-          {filteredMarkets.map((market) => (
-            <Card key={market.id} className={market.is_featured ? "market-card-featured" : ""}>
-              <CardContent className="grid gap-5 p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="section-kicker">{market.code}</span>
-                      {market.is_featured && <span className="status-chip status-good">{market.featured_badge || "Promoted"}</span>}
-                      {market.active_promo && <span className="status-chip status-warn">{market.active_promo.code}</span>}
+        <TabsContent value="approvals">
+          <Card>
+            <CardHeader>
+              <CardTitle>Workflow approvals</CardTitle>
+              <CardDescription>Market, promo, badge and refund requests that need an admin decision.</CardDescription>
+              <CardAction>
+                <StatusBadge tone={pendingApprovals ? "warning" : "neutral"}>{pendingApprovals} pending</StatusBadge>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {approvalsQ.isLoading ? <LoadingState rows={2} /> : null}
+              {!approvalsQ.isLoading && approvals.length === 0 ? (
+                <EmptyState compact icon={ClipboardCheck} title="No workflow approvals yet" description="New requests will show up here." />
+              ) : null}
+              {approvals.slice(0, 8).map((approval) => (
+                <div key={approval.id} className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="font-medium break-words">
+                      {humanize(approval.type)} - {approval.market?.name || approval.order?.code || "General request"}
                     </div>
-                    <h3 className="font-display theme-ink mt-2 text-3xl font-semibold tracking-[-0.05em]">{market.name}</h3>
-                    <p className="theme-copy mt-2 text-sm leading-6">{market.featured_headline || market.address || "No public marketing copy yet."}</p>
-                  </div>
-                  <span className={`status-chip ${market.is_active ? "status-good" : "status-neutral"}`}>
-                    {market.is_active ? "Live" : "Hidden"}
-                  </span>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="subpanel p-4">
-                    <div className="section-kicker">Owner</div>
-                    <div className="theme-ink mt-2 font-semibold">{market.owner?.name ?? `User #${market.owner_user_id}`}</div>
-                    <div className="theme-muted mt-1 text-sm">{market.owner?.email ?? "No email loaded"}</div>
-                  </div>
-                  <div className="subpanel p-4">
-                    <div className="section-kicker">Visible items</div>
-                    <div className="theme-ink mt-2 text-2xl font-semibold">{market.active_items_count ?? 0}</div>
-                  </div>
-                  <div className="subpanel p-4">
-                    <div className="section-kicker">Offer state</div>
-                    <div className="theme-ink mt-2 font-semibold">
-                      {market.active_promo ? `${market.active_promo.code} live` : "No live code"}
+                    <div className="text-sm text-muted-foreground break-words">
+                      {approval.requester?.name || "Requester"} - {approval.notes || "No notes"}
                     </div>
-                    {market.active_promo && (
-                      <div className="theme-muted mt-1 text-sm">
-                        {market.active_promo.type === "percent"
-                          ? `${toNumber(market.active_promo.value)}% off`
-                          : `${formatMoney(market.active_promo.value)} off`}
-                      </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <OrderStatusBadge status={approval.status} />
+                    {approval.status === "pending" && (
+                      <>
+                        <Button
+                          size="sm"
+                          disabled={reviewApprovalM.isPending}
+                          onClick={() =>
+                            reviewApprovalM.mutate(
+                              { id: approval.id, status: "approved" },
+                              { onSuccess: () => toast.success("Request approved"), onError: (e) => toast.error(marketErrorMessage(e) ?? "Could not approve") },
+                            )
+                          }
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={reviewApprovalM.isPending}
+                          onClick={() =>
+                            reviewApprovalM.mutate(
+                              { id: approval.id, status: "rejected" },
+                              { onSuccess: () => toast.success("Request rejected"), onError: (e) => toast.error(marketErrorMessage(e) ?? "Could not reject") },
+                            )
+                          }
+                        >
+                          Reject
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setEditMarket(market);
-                      setEditDraft(toDraft(market));
-                      setEditOpen(true);
-                    }}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    Edit storefront
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setAssignMarket(market);
-                      setAssignOwnerId(String(market.owner_user_id));
-                      setAssignOpen(true);
-                    }}
-                  >
-                    <UserRound className="h-4 w-4" />
-                    Assign owner
-                  </Button>
-                  <Button asChild variant="secondary">
-                    <Link to={`/markets/${market.id}/promo-codes`}>
-                      <TicketPercent className="h-4 w-4" />
-                      Promo codes
-                    </Link>
-                  </Button>
-                  <Button asChild>
-                    <Link to={`/markets/${market.id}`}>
-                      Open settings
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
+        <TabsContent value="badges">
+          <Card>
+            <CardHeader>
+              <CardTitle>Badge requests</CardTitle>
+              <CardDescription>Owner requests for promotional badges waiting for admin review.</CardDescription>
+              <CardAction>
+                <StatusBadge tone={pendingBadges ? "warning" : "neutral"}>{pendingBadges} pending</StatusBadge>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {badgeRequestsQ.isLoading ? <LoadingState rows={2} /> : null}
+              {!badgeRequestsQ.isLoading && badgeRequests.length === 0 ? (
+                <EmptyState compact icon={BadgeCheck} title="No badge requests yet" description="Owners can request badges from the promotion studio." />
+              ) : null}
+              {badgeRequests.slice(0, 6).map((request) => (
+                <div key={request.id} className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <div className="font-medium break-words">
+                      {request.market?.name ?? "Market"} - {request.badge}
+                    </div>
+                    <div className="text-sm text-muted-foreground break-words">
+                      {request.requester?.name ?? "Owner"} - {request.duration_days} days - {request.notes || "No note"}
+                    </div>
+                  </div>
+                  <OrderStatusBadge status={request.status} />
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-
-          {filteredMarkets.length === 0 && (
-            <Card>
-              <CardContent className="p-8 text-sm text-muted-foreground">No markets matched your search.</CardContent>
-            </Card>
-          )}
-        </div>
-      )}
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
-        <DialogContent className="app-modal-shell sm:max-w-[min(760px,calc(100%-2rem))]">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <div className="app-modal-header">
-              <DialogTitle className="panel-title">Assign owner</DialogTitle>
-            </div>
+            <DialogTitle>Assign owner</DialogTitle>
+            <DialogDescription>
+              Choose who owns <span className="font-medium text-foreground">{assignMarket?.name}</span>. The owner can manage settings, products and staff.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="app-modal-body">
-          <div className="app-modal-main">
-            <div className="subpanel p-4 text-sm">
-              Market: <span className="font-semibold">{assignMarket?.name}</span>
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="assign-owner">Owner</Label>
+            <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
+              <SelectTrigger id="assign-owner" className="w-full">
+                <SelectValue placeholder="Select owner user" />
+              </SelectTrigger>
+              <SelectContent>
+                {owners.map((owner) => (
+                  <SelectItem key={owner.id} value={String(owner.id)}>
+                    {owner.name} ({owner.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="field-group">
-              <Label className="field-label">Owner</Label>
-              <Select value={assignOwnerId} onValueChange={setAssignOwnerId}>
-                <SelectTrigger className="input-shell w-full">
+          {assignError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{assignError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                assignOwnerM.mutate(undefined, {
+                  onSuccess: () => toast.success("Owner updated"),
+                  onError: (error) => toast.error(marketErrorMessage(error) ?? "Could not assign owner"),
+                })
+              }
+              disabled={!assignMarket || !assignOwnerId || assignOwnerM.isPending}
+            >
+              {assignOwnerM.isPending ? <Spinner /> : null}
+              {assignOwnerM.isPending ? "Saving..." : "Save owner"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit storefront</DialogTitle>
+            <DialogDescription>Update the market details, visibility and promotion placement.</DialogDescription>
+          </DialogHeader>
+
+          <MarketFormFields
+            idPrefix="edit"
+            draft={editDraft}
+            setDraft={setEditDraft}
+            owners={owners}
+            showOwner={false}
+            headlinePlaceholder="City's fastest essentials drop"
+            copyPlaceholder="Shown on the public landing spotlight."
+            activeLabel="Storefront active"
+            activeHint="Controls whether the market is visible publicly."
+            featuredLabel="Featured promotion placement"
+            featuredHint="Moves this market into the premium public spotlight."
+          />
+
+          {updateError ? (
+            <Alert variant="destructive">
+              <AlertDescription>{updateError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                updateMarketM.mutate(undefined, {
+                  onSuccess: () => toast.success("Storefront saved"),
+                  onError: (error) => toast.error(marketErrorMessage(error) ?? "Could not save storefront"),
+                })
+              }
+              disabled={!editMarket || updateMarketM.isPending || !editDraft.name.trim()}
+            >
+              {updateMarketM.isPending ? <Spinner /> : null}
+              {updateMarketM.isPending ? "Saving..." : "Save storefront"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function humanize(value: string) {
+  const s = value.replace(/[_-]+/g, " ").trim().toLowerCase();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : value;
+}
+
+function AdminMarketCard({ market, onEdit, onAssign }: { market: Market; onEdit: () => void; onAssign: () => void }) {
+  const isOpen = market.operating_status?.is_open;
+
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <MarketBanner src={market.banner_url} name={market.name}>
+        {market.is_featured ? (
+          <StatusBadge tone="warning" className="bg-warning text-warning-foreground">
+            <Sparkles className="size-3" />
+            {market.featured_badge || "Promoted"}
+          </StatusBadge>
+        ) : null}
+      </MarketBanner>
+
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <div className="flex items-start gap-3">
+          <MarketLogo src={market.logo_url ?? market.image_url} name={market.name} className="-mt-10 size-14 border-2 border-card bg-card shadow-sm" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-semibold">{market.name}</h3>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <Badge variant="outline" className="font-mono">
+                    {market.code}
+                  </Badge>
+                  <StatusBadge tone={market.is_active ? "success" : "neutral"} dot>
+                    {market.is_active ? "Live" : "Hidden"}
+                  </StatusBadge>
+                  {market.operating_status ? (
+                    <StatusBadge tone={isOpen ? "info" : "destructive"}>{isOpen ? "Open" : "Closed"}</StatusBadge>
+                  ) : null}
+                </div>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${market.name}`}>
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel>{market.name}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to={`/markets/${market.id}/dashboard`}>
+                      <LayoutDashboard />
+                      Open dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to={`/markets/${market.id}`}>
+                      <Settings />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to={`/markets/${market.id}/items`}>
+                      <Package />
+                      Products
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to={`/markets/${market.id}/promo-codes`}>
+                      <TicketPercent />
+                      Promo codes
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to={`/m/${market.id}`} target="_blank" rel="noreferrer">
+                      <ExternalLink />
+                      View storefront
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={onEdit}>
+                    <Sparkles />
+                    Edit storefront
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={onAssign}>
+                    <UserRound />
+                    Assign owner
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+
+        <p className="line-clamp-2 text-sm text-muted-foreground">{market.featured_headline || market.address || "No public marketing copy yet."}</p>
+
+        <Separator />
+
+        <dl className="grid grid-cols-3 gap-3 text-sm">
+          <div className="min-w-0">
+            <dt className="text-xs text-muted-foreground">Owner</dt>
+            <dd className="truncate font-medium" title={market.owner?.email ?? undefined}>
+              {market.owner?.name ?? `User #${market.owner_user_id}`}
+            </dd>
+            <dd className="truncate text-xs text-muted-foreground">{market.owner?.email ?? "No email loaded"}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-xs text-muted-foreground">Visible items</dt>
+            <dd className="font-medium tabular-nums">{market.active_items_count ?? 0}</dd>
+          </div>
+          <div className="min-w-0">
+            <dt className="text-xs text-muted-foreground">Offer</dt>
+            <dd className="truncate font-medium">{market.active_promo ? `${market.active_promo.code} live` : "No live code"}</dd>
+            {market.active_promo ? (
+              <dd className="truncate text-xs text-muted-foreground">
+                {market.active_promo.type === "percent" ? `${toNumber(market.active_promo.value)}% off` : `${formatMoney(market.active_promo.value)} off`}
+              </dd>
+            ) : null}
+          </div>
+        </dl>
+      </div>
+
+      <CardFooter className="gap-2 border-t bg-muted/20 px-4 py-3">
+        <Button variant="outline" size="sm" className="flex-1" onClick={onEdit}>
+          <Sparkles />
+          Edit storefront
+        </Button>
+        <Button asChild size="sm" className="flex-1">
+          <Link to={`/markets/${market.id}`}>
+            <Settings />
+            Open settings
+          </Link>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
+
+function MarketFormFields({
+  idPrefix,
+  draft,
+  setDraft,
+  owners,
+  showOwner,
+  headlinePlaceholder,
+  copyPlaceholder,
+  activeLabel,
+  activeHint,
+  featuredLabel,
+  featuredHint,
+}: {
+  idPrefix: string;
+  draft: MarketDraft;
+  setDraft: Dispatch<SetStateAction<MarketDraft>>;
+  owners: UserLite[];
+  showOwner: boolean;
+  headlinePlaceholder: string;
+  copyPlaceholder: string;
+  activeLabel: string;
+  activeHint: string;
+  featuredLabel: string;
+  featuredHint: string;
+}) {
+  const field = (key: keyof MarketDraft) => `${idPrefix}-${key}`;
+  const set = <K extends keyof MarketDraft>(key: K, value: MarketDraft[K]) => setDraft((current) => ({ ...current, [key]: value }));
+
+  return (
+    <div className="grid gap-6">
+      <section className="grid gap-4">
+        <div>
+          <h3 className="text-sm font-semibold">Market details</h3>
+          <p className="text-xs text-muted-foreground">Name, short code and where the market is located.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor={field("name")}>Name</Label>
+            <Input id={field("name")} value={draft.name} onChange={(e) => set("name", e.target.value)} />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={field("code")}>Code</Label>
+            <Input id={field("code")} value={draft.code} onChange={(e) => set("code", e.target.value)} />
+            <p className="text-xs text-muted-foreground">Short unique identifier, at least 2 characters.</p>
+          </div>
+          <div className="grid gap-2 sm:col-span-2">
+            <Label htmlFor={field("address")}>Address</Label>
+            <Input id={field("address")} value={draft.address} onChange={(e) => set("address", e.target.value)} placeholder="Service address or pickup zone" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={field("lat")}>Latitude</Label>
+            <Input id={field("lat")} inputMode="decimal" value={draft.lat} onChange={(e) => set("lat", e.target.value)} placeholder="41.7151" />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={field("lng")}>Longitude</Label>
+            <Input id={field("lng")} inputMode="decimal" value={draft.lng} onChange={(e) => set("lng", e.target.value)} placeholder="44.8271" />
+          </div>
+          {showOwner ? (
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor={field("ownerId")}>Owner</Label>
+              <Select value={draft.ownerId} onValueChange={(value) => set("ownerId", value)}>
+                <SelectTrigger id={field("ownerId")} className="w-full">
                   <SelectValue placeholder="Select owner user" />
                 </SelectTrigger>
                 <SelectContent>
@@ -636,111 +881,46 @@ export default function MarketsPage() {
                 </SelectContent>
               </Select>
             </div>
+          ) : null}
+        </div>
+      </section>
 
-            {assignError && <div className="text-sm text-red-600">{assignError}</div>}
+      <Separator />
+
+      <section className="grid gap-4">
+        <div>
+          <h3 className="text-sm font-semibold">Visibility and promotion</h3>
+          <p className="text-xs text-muted-foreground">Control whether customers see this market and how it is featured.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-2">
+            <Label htmlFor={field("featuredBadge")}>Featured badge</Label>
+            <Input id={field("featuredBadge")} value={draft.featuredBadge} onChange={(e) => set("featuredBadge", e.target.value)} placeholder="Promoted market" />
           </div>
+          <div className="grid gap-2">
+            <Label htmlFor={field("featuredHeadline")}>Featured headline</Label>
+            <Input id={field("featuredHeadline")} value={draft.featuredHeadline} onChange={(e) => set("featuredHeadline", e.target.value)} placeholder={headlinePlaceholder} />
           </div>
-
-          <DialogFooter className="app-modal-footer">
-            <Button onClick={() => assignOwnerM.mutate()} disabled={!assignMarket || !assignOwnerId || assignOwnerM.isPending}>
-              {assignOwnerM.isPending ? "Saving..." : "Save owner"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="app-modal-shell sm:max-w-[min(840px,calc(100%-2rem))]">
-          <DialogHeader>
-            <div className="app-modal-header">
-              <DialogTitle className="panel-title">Edit storefront</DialogTitle>
-            </div>
-          </DialogHeader>
-
-          <div className="app-modal-body">
-          <div className="app-modal-main">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="field-group">
-              <Label className="field-label">Name</Label>
-              <Input value={editDraft.name} onChange={(e) => setEditDraft((current) => ({ ...current, name: e.target.value }))} className="input-shell" />
-            </div>
-            <div className="field-group">
-              <Label className="field-label">Code</Label>
-              <Input value={editDraft.code} onChange={(e) => setEditDraft((current) => ({ ...current, code: e.target.value }))} className="input-shell" />
-            </div>
-            <div className="field-group md:col-span-2">
-              <Label className="field-label">Address</Label>
-              <Input value={editDraft.address} onChange={(e) => setEditDraft((current) => ({ ...current, address: e.target.value }))} className="input-shell" />
-            </div>
-            <div className="field-group">
-              <Label className="field-label">Latitude</Label>
-              <Input value={editDraft.lat} onChange={(e) => setEditDraft((current) => ({ ...current, lat: e.target.value }))} placeholder="41.7151" className="input-shell" />
-            </div>
-            <div className="field-group">
-              <Label className="field-label">Longitude</Label>
-              <Input value={editDraft.lng} onChange={(e) => setEditDraft((current) => ({ ...current, lng: e.target.value }))} placeholder="44.8271" className="input-shell" />
-            </div>
+          <div className="grid gap-2 sm:col-span-2">
+            <Label htmlFor={field("featuredCopy")}>Featured copy</Label>
+            <Input id={field("featuredCopy")} value={draft.featuredCopy} onChange={(e) => set("featuredCopy", e.target.value)} placeholder={copyPlaceholder} />
           </div>
-          <div className="section-divider" />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="field-group">
-              <Label className="field-label">Featured badge</Label>
-              <Input
-                value={editDraft.featuredBadge}
-                onChange={(e) => setEditDraft((current) => ({ ...current, featuredBadge: e.target.value }))}
-                placeholder="Promoted market"
-                className="input-shell"
-              />
+          <label htmlFor={field("isActive")} className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border bg-muted/30 p-4">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{activeLabel}</div>
+              <div className="text-xs text-muted-foreground">{activeHint}</div>
             </div>
-            <div className="field-group">
-              <Label className="field-label">Featured headline</Label>
-              <Input
-                value={editDraft.featuredHeadline}
-                onChange={(e) => setEditDraft((current) => ({ ...current, featuredHeadline: e.target.value }))}
-                placeholder="City's fastest essentials drop"
-                className="input-shell"
-              />
+            <Switch id={field("isActive")} checked={draft.isActive} onCheckedChange={(checked) => set("isActive", checked)} />
+          </label>
+          <label htmlFor={field("isFeatured")} className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border bg-muted/30 p-4">
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{featuredLabel}</div>
+              <div className="text-xs text-muted-foreground">{featuredHint}</div>
             </div>
-            <div className="field-group md:col-span-2">
-              <Label className="field-label">Featured copy</Label>
-              <Input
-                value={editDraft.featuredCopy}
-                onChange={(e) => setEditDraft((current) => ({ ...current, featuredCopy: e.target.value }))}
-                placeholder="Shown on the public landing spotlight."
-                className="input-shell"
-              />
-            </div>
-            <div className="subpanel flex items-center justify-between p-4">
-              <div>
-                <div className="theme-ink font-medium">Storefront active</div>
-                <div className="theme-muted text-sm">Controls whether the market is visible publicly.</div>
-              </div>
-              <Switch checked={editDraft.isActive} onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isActive: checked }))} />
-            </div>
-            <div className="subpanel flex items-center justify-between p-4">
-              <div>
-                <div className="theme-ink font-medium">Featured promotion placement</div>
-                <div className="theme-muted text-sm">Moves this market into the premium public spotlight.</div>
-              </div>
-              <Switch
-                checked={editDraft.isFeatured}
-                onCheckedChange={(checked) => setEditDraft((current) => ({ ...current, isFeatured: checked }))}
-              />
-            </div>
-            </div>
-          </div>
-          </div>
-
-          {updateError && <div className="text-sm text-red-600">{updateError}</div>}
-
-          <DialogFooter className="app-modal-footer">
-            <Button onClick={() => updateMarketM.mutate()} disabled={!editMarket || updateMarketM.isPending || !editDraft.name.trim()}>
-              {updateMarketM.isPending ? "Saving..." : "Save storefront"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <Switch id={field("isFeatured")} checked={draft.isFeatured} onCheckedChange={(checked) => set("isFeatured", checked)} />
+          </label>
+        </div>
+      </section>
     </div>
   );
 }
