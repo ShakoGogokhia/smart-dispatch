@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { AppText, Button, EmptyState, Row, Separator, Sheet, radius, useColors, withAlpha } from "@/src/components/ui";
 import { formatMoney } from "@/src/lib/format";
-import type { CartItem } from "@/src/lib/storage";
+import { cartLineTotal, type CartItem } from "@/src/lib/storage";
 import { usePreferences } from "@/src/providers/app-providers";
 
 import { MediaImage, QtyStepper, SummaryRow } from "./common";
@@ -40,7 +40,7 @@ export function CartLines({
                   </AppText>
                 </View>
                 <AppText variant="label" style={[styles.semibold, styles.tabular]}>
-                  {formatMoney(line.price * line.qty, language)}
+                  {formatMoney(cartLineTotal(line), language)}
                 </AppText>
               </Row>
               <Row justify="space-between" gap={8} style={styles.mt8}>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatMoney, toNumber } from "@/lib/format";
+import { multiBuyBadge, multiBuyLabel, normalizeMultiBuy } from "@/lib/market-types";
 import { calcStorefrontPrice } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +64,7 @@ export function ProductCard({
   const imageUrls = getItemImageUrls(item);
   const finalPrice = calcStorefrontPrice(item);
   const isDiscounted = Math.abs(toNumber(item.price) - finalPrice) > 0.01;
+  const deal = item.item_kind === "combo" ? null : normalizeMultiBuy(item.multi_buy);
   const outOfStock = item.stock_qty <= 0;
   const needsCustomization = itemNeedsCustomization(item);
   const showStock = item.show_stock_quantity ?? true;
@@ -95,6 +97,11 @@ export function ProductCard({
 
         <div className="pointer-events-none absolute top-2 left-2 flex flex-wrap gap-1">
           {isDiscounted ? <Badge variant="destructive">Deal</Badge> : null}
+          {deal ? (
+            <Badge className="border-transparent bg-success text-success-foreground" title={multiBuyLabel(deal)}>
+              {multiBuyBadge(deal)}
+            </Badge>
+          ) : null}
           {item.item_kind === "combo" || (item.combo_offers?.length ?? 0) > 0 ? (
             <Badge variant="secondary">{item.item_kind === "combo" ? "Combo" : "Combo deals"}</Badge>
           ) : null}

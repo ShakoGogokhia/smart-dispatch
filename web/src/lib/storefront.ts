@@ -1,4 +1,5 @@
 import { formatMoney, toNumber } from "@/lib/format";
+import type { ItemSpec, MultiBuy } from "@/lib/market-types";
 
 export type MarketPromo = {
   id: number;
@@ -26,6 +27,8 @@ export type StorefrontItemPreview = {
   price: number | string;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: number | string;
+  multi_buy?: MultiBuy | null;
+  specs?: ItemSpec[] | null;
   stock_qty: number;
   low_stock_threshold?: number;
   is_low_stock?: boolean;
@@ -39,6 +42,7 @@ export type StorefrontMarket = {
   id: number;
   name: string;
   code: string;
+  market_type?: string | null;
   address?: string | null;
   image_url?: string | null;
   banner_url?: string | null;

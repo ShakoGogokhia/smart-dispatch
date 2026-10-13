@@ -153,6 +153,7 @@ export type MarketLite = {
   id: number;
   name: string;
   code: string;
+  market_type?: string | null;
   address?: string | null;
   lat?: number | string | null;
   lng?: number | string | null;
@@ -368,6 +369,8 @@ export type Item = {
   price: string | number;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: string | number;
+  multi_buy?: { buy: number; get: number } | null;
+  specs?: Array<{ label: string; value: string }> | null;
   stock_qty: number;
   low_stock_threshold?: number;
   is_low_stock?: boolean;

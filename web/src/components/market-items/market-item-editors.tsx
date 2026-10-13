@@ -1,6 +1,7 @@
 import { Check, Clock, Layers, Plus, Star, Trash2, Utensils } from "lucide-react";
 
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
+import type { ItemSpec } from "@/lib/market-types";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -646,5 +647,80 @@ export function ReviewSummaryBadge({ average, count }: { average?: number | null
       {average ?? "-"}
       <span className="text-xs text-muted-foreground">({count})</span>
     </span>
+  );
+}
+
+export function SpecEditor({
+  specs,
+  suggestions,
+  onChange,
+}: {
+  specs: ItemSpec[];
+  suggestions: string[];
+  onChange: (specs: ItemSpec[]) => void;
+}) {
+  const listId = "spec-label-suggestions";
+  const update = (index: number, patch: Partial<ItemSpec>) =>
+    onChange(specs.map((entry, entryIndex) => (entryIndex === index ? { ...entry, ...patch } : entry)));
+  const unused = suggestions.filter((label) => !specs.some((spec) => spec.label.trim().toLowerCase() === label.toLowerCase()));
+
+  return (
+    <div className="grid gap-3">
+      <datalist id={listId}>
+        {suggestions.map((label) => (
+          <option key={label} value={label} />
+        ))}
+      </datalist>
+
+      {specs.map((spec, index) => (
+        <div
+          key={`spec-${index}`}
+          className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_auto] sm:items-end"
+        >
+          <div className="grid gap-2">
+            <Label htmlFor={`spec-label-${index}`}>Label</Label>
+            <Input
+              id={`spec-label-${index}`}
+              list={listId}
+              value={spec.label}
+              onChange={(event) => update(index, { label: event.target.value })}
+              placeholder={suggestions[0] ?? "Brand"}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor={`spec-value-${index}`}>Value</Label>
+            <Input
+              id={`spec-value-${index}`}
+              value={spec.value}
+              onChange={(event) => update(index, { value: event.target.value })}
+              placeholder="e.g. 2 years"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-destructive"
+            aria-label="Remove specification"
+            onClick={() => onChange(specs.filter((_, entryIndex) => entryIndex !== index))}
+          >
+            <Trash2 />
+          </Button>
+        </div>
+      ))}
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" onClick={() => onChange([...specs, { label: "", value: "" }])}>
+          <Plus />
+          Add specification
+        </Button>
+        {unused.slice(0, 4).map((label) => (
+          <Button key={label} type="button" variant="ghost" size="sm" onClick={() => onChange([...specs, { label, value: "" }])}>
+            <Plus />
+            {label}
+          </Button>
+        ))}
+      </div>
+    </div>
   );
 }

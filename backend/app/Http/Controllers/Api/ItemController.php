@@ -7,6 +7,7 @@ use App\Models\Market;
 use App\Models\ProductReview;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -58,6 +59,7 @@ class ItemController extends Controller
             'combo_offers.*.item_ids' => ['nullable', 'array'],
             'combo_offers.*.item_ids.*' => ['integer', 'min:1'],
             'low_stock_threshold' => ['nullable', 'integer', 'min:0'],
+            ...$this->dealAndSpecRules(),
         ], [
             'sku.unique' => 'This SKU already exists in this market. Use a different SKU for the combo item.',
         ]);
@@ -82,6 +84,8 @@ class ItemController extends Controller
                 : $this->normalizeIngredients($data['ingredients'] ?? null),
             'combo_offers' => $this->normalizeComboOffers($data['combo_offers'] ?? null, $market),
             'low_stock_threshold' => $data['low_stock_threshold'] ?? 5,
+            'multi_buy' => $this->normalizeMultiBuy($data['multi_buy'] ?? null, $market),
+            'specs' => $this->normalizeSpecs($data['specs'] ?? null, $market),
         ]);
 
         return response()->json($this->serializeItem($item), 201);
@@ -124,6 +128,7 @@ class ItemController extends Controller
             'combo_offers.*.item_ids' => ['nullable', 'array'],
             'combo_offers.*.item_ids.*' => ['integer', 'min:1'],
             'low_stock_threshold' => ['sometimes', 'integer', 'min:0'],
+            ...$this->dealAndSpecRules(),
         ], [
             'sku.unique' => 'This SKU already exists in this market. Use a different SKU for this item.',
         ]);
@@ -138,6 +143,14 @@ class ItemController extends Controller
 
         if (array_key_exists('combo_offers', $data)) {
             $data['combo_offers'] = $this->normalizeComboOffers($data['combo_offers'], $market, $item->id);
+        }
+
+        if (array_key_exists('multi_buy', $data)) {
+            $data['multi_buy'] = $this->normalizeMultiBuy($data['multi_buy'], $market);
+        }
+
+        if (array_key_exists('specs', $data)) {
+            $data['specs'] = $this->normalizeSpecs($data['specs'], $market);
         }
 
         $item->update($data);
@@ -355,6 +368,8 @@ class ItemController extends Controller
             'price' => $item->price,
             'discount_type' => $item->discount_type,
             'discount_value' => $item->discount_value,
+            'multi_buy' => $item->multi_buy,
+            'specs' => $item->specs ?? [],
             'stock_qty' => $item->stock_qty,
             'show_stock_quantity' => (bool) ($item->show_stock_quantity ?? true),
             'low_stock_threshold' => $item->low_stock_threshold,
@@ -365,6 +380,58 @@ class ItemController extends Controller
                 'average' => $avg !== null ? round((float) $avg, 1) : null,
             ],
         ];
+    }
+
+    private function dealAndSpecRules(): array
+    {
+        return [
+            'multi_buy' => ['nullable', 'array'],
+            'multi_buy.buy' => ['required_with:multi_buy', 'integer', 'min:1', 'max:10'],
+            'multi_buy.get' => ['required_with:multi_buy', 'integer', 'min:1', 'max:10'],
+            'specs' => ['nullable', 'array', 'max:12'],
+            'specs.*.label' => ['nullable', 'string', 'max:60'],
+            'specs.*.value' => ['nullable', 'string', 'max:160'],
+        ];
+    }
+
+    /** "Buy X get Y free" deals (1+1, 2+1, ...) are only offered by some market types. */
+    private function normalizeMultiBuy(?array $multiBuy, Market $market): ?array
+    {
+        if (!$multiBuy) {
+            return null;
+        }
+
+        if (!$market->supportsFeature('multi_buy')) {
+            throw ValidationException::withMessages([
+                'multi_buy' => "Buy X get Y deals are not available for {$market->typeLabel()} markets.",
+            ]);
+        }
+
+        return ['buy' => (int) $multiBuy['buy'], 'get' => (int) $multiBuy['get']];
+    }
+
+    private function normalizeSpecs(?array $specs, Market $market): ?array
+    {
+        $normalized = collect($specs ?? [])
+            ->map(fn (array $spec) => [
+                'label' => trim((string) $spec['label']),
+                'value' => trim((string) $spec['value']),
+            ])
+            ->filter(fn (array $spec) => $spec['label'] !== '' && $spec['value'] !== '')
+            ->values()
+            ->all();
+
+        if ($normalized === []) {
+            return null;
+        }
+
+        if (!$market->supportsFeature('specs')) {
+            throw ValidationException::withMessages([
+                'specs' => "Specifications are not available for {$market->typeLabel()} markets.",
+            ]);
+        }
+
+        return $normalized;
     }
 
     private function normalizeIngredients(?array $ingredients): ?array

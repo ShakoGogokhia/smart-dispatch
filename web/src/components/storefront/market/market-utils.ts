@@ -2,6 +2,7 @@ import type { AxiosError } from "axios";
 
 import { api } from "@/lib/api";
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
+import type { ItemSpec, MultiBuy } from "@/lib/market-types";
 import type { StorefrontMarket } from "@/lib/storefront";
 
 export type MarketItem = {
@@ -20,6 +21,8 @@ export type MarketItem = {
   price: number | string;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: number | string;
+  multi_buy?: MultiBuy | null;
+  specs?: ItemSpec[] | null;
   is_active: boolean;
   stock_qty: number;
   show_stock_quantity?: boolean;

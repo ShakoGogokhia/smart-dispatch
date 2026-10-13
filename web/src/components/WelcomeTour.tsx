@@ -24,8 +24,8 @@ const STEPS: Step[] = [
     image: "/tour/home.jpg",
     role: "Welcome",
     title: "Smart Dispatch in one minute",
-    body: "A delivery platform with four connected roles: customers order from local markets, market owners prepare the orders, drivers deliver them, and admins dispatch everything in real time. The web app and the mobile app share the same Laravel API.",
-    tryIt: "Browse the markets on the home page without signing in.",
+    body: "A delivery platform with four connected roles: customers order from local markets, market owners prepare the orders, drivers deliver them, and admins dispatch everything in real time. Groceries, restaurants, electronics, auto parts, pharmacies and more share one storefront, and the web and mobile apps use the same Laravel API.",
+    tryIt: "Pick a category under Shop by category, no sign-in needed.",
   },
   {
     image: "/tour/cust-history.jpg",
@@ -45,7 +45,7 @@ const STEPS: Step[] = [
     image: "/tour/owner-dash.jpg",
     role: "Market owner",
     title: "Run the market",
-    body: "Owners see revenue, top sellers, ratings and stock warnings at a glance, and manage products, promo codes and opening hours. Items that run out can be hidden from the storefront automatically.",
+    body: "Owners see revenue, top sellers, ratings and stock warnings at a glance. The market type unlocks the right tools: 1+1 and 2+1 deals for food and pharmacy, specifications like fitment and warranty for auto parts and electronics, plus combos, promo codes and opening hours.",
     tryIt: "Sign in as the market owner and open Dashboard.",
   },
   {

@@ -61,7 +61,7 @@ import { getErrorMessage } from "@/src/lib/errors";
 import { api } from "@/src/lib/api";
 import { formatMoney, toNumber } from "@/src/lib/format";
 import { getDefaultAuthedRoute, normalizeRoles } from "@/src/lib/session";
-import { clearCart, getActiveMarketId, loadCart, saveCart, setActiveMarketId } from "@/src/lib/storage";
+import { cartLineTotal, clearCart, getActiveMarketId, loadCart, saveCart, setActiveMarketId } from "@/src/lib/storage";
 import type { CartItem } from "@/src/lib/storage";
 import { useMe } from "@/src/lib/use-me";
 import { useProtectedAccess } from "@/src/hooks/use-protected-access";
@@ -656,7 +656,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
 
   const totals = useMemo(() => {
     const quantity = cart.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+    const subtotal = cart.reduce((sum, item) => sum + cartLineTotal(item), 0);
     return { quantity, subtotal };
   }, [cart]);
 
@@ -703,7 +703,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
       return;
     }
 
-    void persistCart([...cart, { item_id: item.id, name: item.name, price: nextPrice, qty }]);
+    void persistCart([...cart, { item_id: item.id, name: item.name, price: nextPrice, qty, multi_buy: item.multi_buy ?? null }]);
   }
 
   function adjustQty(itemId: number, delta: number) {
@@ -1242,7 +1242,7 @@ export function CheckoutScreen({ navigation }: CheckoutProps) {
 
   const totals = useMemo(() => {
     const items = cart.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+    const subtotal = cart.reduce((sum, item) => sum + cartLineTotal(item), 0);
     return { items, subtotal };
   }, [cart]);
 

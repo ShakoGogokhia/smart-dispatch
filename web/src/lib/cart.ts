@@ -1,3 +1,5 @@
+import { type MultiBuy, multiBuyLabel, normalizeMultiBuy, paidQuantity } from "@/lib/market-types";
+
 export type ItemIngredient = {
   name: string;
   removable: boolean;
@@ -28,7 +30,25 @@ export type CartItem = {
   ingredients?: ItemIngredient[];
   removed_ingredients?: string[];
   combo_offer?: ComboOffer | null;
+  multi_buy?: MultiBuy | null;
 };
+
+/** Line total after any "buy X get Y free" deal; combos never stack with deals. */
+export function cartLineTotal(line: Pick<CartItem, "price" | "qty" | "combo_offer" | "multi_buy">) {
+  return line.price * (line.combo_offer ? line.qty : paidQuantity(line.qty, line.multi_buy));
+}
+
+export function cartSubtotal(lines: CartItem[]) {
+  return lines.reduce((sum, line) => sum + cartLineTotal(line), 0);
+}
+
+/** e.g. "Buy 1, get 1 free · 2 free", or null when no deal applies to the line. */
+export function cartDealNote(line: Pick<CartItem, "price" | "qty" | "combo_offer" | "multi_buy">) {
+  if (line.combo_offer || !line.multi_buy) return null;
+  const free = line.qty - paidQuantity(line.qty, line.multi_buy);
+  const label = multiBuyLabel(line.multi_buy);
+  return free > 0 ? `${label} · ${free} free` : label;
+}
 
 const ACTIVE_MARKET_KEY = "activeMarketId";
 
@@ -192,6 +212,7 @@ export function loadCart(marketId: string): CartItem[] {
           ingredients,
           removed_ingredients: removedIngredients,
           combo_offer: comboOffer,
+          multi_buy: comboOffer ? null : normalizeMultiBuy(entry.multi_buy),
         };
       })
       .filter((item): item is CartItem => item !== null);

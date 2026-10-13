@@ -32,7 +32,7 @@ import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
-import { clearCart, getActiveMarketId, loadCart, saveCart } from "@/lib/cart";
+import { cartDealNote, cartLineTotal, cartSubtotal, clearCart, getActiveMarketId, loadCart, saveCart } from "@/lib/cart";
 import type { CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
 import { resolveApiMediaUrl } from "@/lib/media";
@@ -94,7 +94,7 @@ export default function CheckoutPage() {
 
   const totals = useMemo(() => {
     const items = cart.reduce((sum, item) => sum + item.qty, 0);
-    const subtotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+    const subtotal = cartSubtotal(cart);
     return { items, subtotal };
   }, [cart]);
 
@@ -567,7 +567,7 @@ export default function CheckoutPage() {
                               <Plus />
                             </Button>
                           </div>
-                          <div className="w-20 text-right text-sm font-semibold tabular-nums">{formatMoney(item.price * item.qty)}</div>
+                          <div className="w-20 text-right text-sm font-semibold tabular-nums">{formatMoney(cartLineTotal(item))}</div>
                         </div>
                       </li>
                     ))}
@@ -698,11 +698,13 @@ function ItemThumb({ item }: { item: CartItem }) {
 
 function ItemCustomizations({ item }: { item: CartItem }) {
   const removed = item.removed_ingredients ?? [];
-  if (!item.combo_offer && removed.length === 0) return null;
+  const deal = cartDealNote(item);
+  if (!item.combo_offer && removed.length === 0 && !deal) return null;
   return (
     <div className="mt-0.5 grid gap-0.5 text-xs text-muted-foreground">
       {item.combo_offer ? <span className="truncate">Combo: {item.combo_offer.name}</span> : null}
       {removed.length > 0 ? <span className="truncate">Without: {removed.join(", ")}</span> : null}
+      {deal ? <span className="truncate font-medium text-success">{deal}</span> : null}
     </div>
   );
 }
@@ -718,7 +720,7 @@ function SummaryLineItem({ item }: { item: CartItem }) {
           {item.qty} × {formatMoney(item.price)}
         </div>
       </div>
-      <div className="text-sm font-medium tabular-nums">{formatMoney(item.price * item.qty)}</div>
+      <div className="text-sm font-medium tabular-nums">{formatMoney(cartLineTotal(item))}</div>
     </li>
   );
 }

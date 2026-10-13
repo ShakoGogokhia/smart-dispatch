@@ -29,6 +29,7 @@ import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
 import {
   buildCartItemId,
+  cartSubtotal,
   clearCart,
   loadCart,
   saveCart,
@@ -37,6 +38,7 @@ import {
   type ComboOffer,
 } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
+import { normalizeMultiBuy } from "@/lib/market-types";
 import {
   calcStorefrontPrice,
   formatMarketHours,
@@ -231,7 +233,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
   const totals = useMemo(
     () => ({
       quantity: cart.reduce((sum, i) => sum + i.qty, 0),
-      subtotal: cart.reduce((sum, i) => sum + i.qty * i.price, 0),
+      subtotal: cartSubtotal(cart),
     }),
     [cart],
   );
@@ -316,6 +318,7 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
           ingredients: item.ingredients ?? [],
           removed_ingredients: normalizedRemovedIngredients,
           combo_offer: comboOffer ?? null,
+          multi_buy: comboOffer ? null : normalizeMultiBuy(item.multi_buy),
         },
       ]);
     }

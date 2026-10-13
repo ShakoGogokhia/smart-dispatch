@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
+import { multiBuyBadge, multiBuyLabel, normalizeMultiBuy } from "@/lib/market-types";
 import { calcStorefrontPrice } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
 import type { ReviewRecord } from "@/types/api";
@@ -94,6 +95,8 @@ export function ProductDialog({
   const basePrice = item ? calcStorefrontPrice(item) : 0;
   const unitPrice = selectedComboOffer ? toNumber(selectedComboOffer.combo_price) : basePrice;
   const isDiscounted = item ? Math.abs(toNumber(item.price) - basePrice) > 0.01 : false;
+  const deal = item && item.item_kind !== "combo" ? normalizeMultiBuy(item.multi_buy) : null;
+  const specs = item?.specs ?? [];
   const outOfStock = (item?.stock_qty ?? 0) <= 0;
   const addDisabled = !item || outOfStock || !item.is_active || !marketIsOpen;
   const comboItems = item?.item_kind === "combo" ? item.combo_offers?.[0]?.items ?? [] : [];
@@ -190,6 +193,11 @@ export function ProductDialog({
                   <div className="flex flex-wrap items-center gap-2">
                     <RatingInline value={item.review_summary?.average ?? null} count={item.review_summary?.count ?? 0} />
                     {isDiscounted ? <Badge variant="destructive">Deal</Badge> : null}
+                    {deal ? (
+                      <Badge className="border-transparent bg-success text-success-foreground">
+                        {multiBuyBadge(deal)} · {multiBuyLabel(deal)}
+                      </Badge>
+                    ) : null}
                     {item.is_promoted ? <Badge>Promoted</Badge> : null}
                     {item.item_kind === "combo" ? <Badge variant="secondary">Combo</Badge> : null}
                     {!item.is_active ? <Badge variant="outline">Unavailable</Badge> : null}
@@ -210,6 +218,20 @@ export function ProductDialog({
                 </div>
 
                 <Separator />
+
+                {specs.length > 0 ? (
+                  <div className="space-y-3">
+                    <SectionTitle title="Specifications" description="Details provided by the market." />
+                    <dl className="divide-y rounded-lg border text-sm">
+                      {specs.map((spec) => (
+                        <div key={spec.label} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3 px-3 py-2">
+                          <dt className="text-muted-foreground">{spec.label}</dt>
+                          <dd className="font-medium">{spec.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ) : null}
 
                 {/* Ingredients */}
                 {(item.ingredients ?? []).length > 0 ? (
@@ -280,11 +302,11 @@ export function ProductDialog({
                       })}
                     </div>
                   </div>
-                ) : (
+                ) : specs.length === 0 ? (
                   <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
                     No ingredients listed for this item yet.
                   </p>
-                )}
+                ) : null}
 
                 {/* Combo contents (combo items) */}
                 {comboItems.length > 0 ? (

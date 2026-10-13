@@ -11,7 +11,7 @@ class Item extends Model
 
     protected $fillable = [
         'market_id','name','sku','item_kind','price',
-        'discount_type','discount_value',
+        'discount_type','discount_value','multi_buy','specs',
         'stock_qty','show_stock_quantity','is_active',
         'is_promoted','promotion_starts_at','promotion_ends_at',
         'category','image_url','image_path','image_paths',
@@ -27,6 +27,8 @@ class Item extends Model
         'show_stock_quantity' => 'boolean',
         'is_promoted' => 'boolean',
         'image_paths' => 'array',
+        'multi_buy' => 'array',
+        'specs' => 'array',
         'variants' => 'array',
         'availability_schedule' => 'array',
         'ingredients' => 'array',
@@ -58,5 +60,21 @@ class Item extends Model
     public function reviews()
     {
         return $this->hasMany(ProductReview::class);
+    }
+
+    /**
+     * Units the customer pays for under a "buy X get Y free" deal.
+     * With 1+1 and qty 5 that is 3: two pairs get one free unit each.
+     */
+    public function paidQuantity(int $qty): int
+    {
+        $buy = (int) ($this->multi_buy['buy'] ?? 0);
+        $get = (int) ($this->multi_buy['get'] ?? 0);
+
+        if ($buy < 1 || $get < 1) {
+            return $qty;
+        }
+
+        return $qty - intdiv($qty, $buy + $get) * $get;
     }
 }

@@ -3,6 +3,14 @@ import { AlertCircle, ImageOff, ImagePlus, Layers, Package, Trash2, Utensils } f
 
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
 import { formatMoney } from "@/lib/format";
+import {
+  getMarketType,
+  type ItemSpec,
+  marketSupports,
+  MULTI_BUY_OPTIONS,
+  multiBuyBadge,
+  multiBuyLabel,
+} from "@/lib/market-types";
 import { cn } from "@/lib/utils";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -26,7 +34,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-import { ComboOfferEditor, IngredientEditor, ScheduleEditor, VariantEditor } from "./market-item-editors";
+import { ComboOfferEditor, IngredientEditor, ScheduleEditor, SpecEditor, VariantEditor } from "./market-item-editors";
 import {
   computeFinalPrice,
   emptyComboOffer,
@@ -45,6 +53,9 @@ export type ItemFormValues = {
   price: string;
   discountType: Item["discount_type"];
   discountValue: string;
+  /** "none" or a deal key such as "1+1". */
+  multiBuy: string;
+  specs: ItemSpec[];
   stockQty: string;
   showStockQuantity: boolean;
   lowStockThreshold: string;
@@ -131,6 +142,7 @@ export function MarketItemFormDialog({
   onChange,
   comboItems,
   categories,
+  marketType,
   initialTab = "basics",
   gallery,
   error,
@@ -144,6 +156,8 @@ export function MarketItemFormDialog({
   onChange: (patch: Partial<ItemFormValues>) => void;
   comboItems: ComboSelectableItem[];
   categories: string[];
+  /** The market's type decides which extra fields (deals, specifications) are offered. */
+  marketType?: string | null;
   initialTab?: ItemFormTab;
   gallery?: GalleryProps;
   error?: string | null;
@@ -156,6 +170,9 @@ export function MarketItemFormDialog({
   const [pendingImageDelete, setPendingImageDelete] = useState<number | "all" | null>(null);
 
   const isCombo = values.itemKind === "combo";
+  const typeConfig = getMarketType(marketType);
+  const canUseMultiBuy = marketSupports(marketType, "multi_buy") && !isCombo;
+  const canUseSpecs = marketSupports(marketType, "specs");
   const basePrice = Number(values.price || 0);
   const finalPrice = computeFinalPrice(values.price, values.discountType, values.discountValue);
   const savings = Math.max(0, basePrice - finalPrice);
@@ -359,6 +376,26 @@ export function MarketItemFormDialog({
               </div>
             </div>
 
+            {canUseMultiBuy ? (
+              <div className="grid gap-2 sm:max-w-sm">
+                <Label>Buy X get Y deal</Label>
+                <Select value={values.multiBuy} onValueChange={(value) => onChange({ multiBuy: value })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No deal</SelectItem>
+                    {MULTI_BUY_OPTIONS.map((deal) => (
+                      <SelectItem key={multiBuyBadge(deal)} value={multiBuyBadge(deal)}>
+                        {multiBuyBadge(deal)} · {multiBuyLabel(deal)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldHint>Free units are taken off automatically in the cart. Available for {typeConfig.label} markets.</FieldHint>
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap items-end justify-between gap-4 rounded-lg border bg-muted/30 p-4">
               <div className="grid gap-1">
                 <span className="text-xs font-medium text-muted-foreground">Customer pays (estimate)</span>
@@ -509,6 +546,18 @@ export function MarketItemFormDialog({
 
           {/* ---------------- Options ---------------- */}
           <TabsContent value="options" className="grid gap-6">
+            {canUseSpecs ? (
+              <>
+                <div className="grid gap-3">
+                  <SectionHeading
+                    title="Specifications"
+                    description={`Details shoppers compare in ${typeConfig.label} stores, shown as a table on the product page.`}
+                  />
+                  <SpecEditor specs={values.specs} suggestions={typeConfig.specLabels} onChange={(specs) => onChange({ specs })} />
+                </div>
+                <Separator />
+              </>
+            ) : null}
             <div className="grid gap-3">
               <SectionHeading
                 title="Variants"

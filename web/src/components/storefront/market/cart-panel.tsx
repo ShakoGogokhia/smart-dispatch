@@ -3,7 +3,7 @@ import { Minus, Plus, ShoppingBag, Store, Tag, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/app/empty-state";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { CartItem } from "@/lib/cart";
+import { cartDealNote, cartLineTotal, type CartItem } from "@/lib/cart";
 import { formatMoney, toNumber } from "@/lib/format";
 import type { MarketPromo } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
@@ -46,9 +46,10 @@ export function CartLines({
                   <div className="line-clamp-2 text-sm font-medium leading-snug">{line.name}</div>
                   <div className="text-xs text-muted-foreground tabular-nums">{formatMoney(line.price)} each</div>
                 </div>
-                <div className="text-sm font-semibold whitespace-nowrap tabular-nums">{formatMoney(line.price * line.qty)}</div>
+                <div className="text-sm font-semibold whitespace-nowrap tabular-nums">{formatMoney(cartLineTotal(line))}</div>
               </div>
               {line.combo_offer ? <div className="mt-1 text-xs text-primary">Combo: {line.combo_offer.name}</div> : null}
+              {cartDealNote(line) ? <div className="mt-1 text-xs font-medium text-success">{cartDealNote(line)}</div> : null}
               {(line.removed_ingredients ?? []).length > 0 ? (
                 <div className="mt-1 text-xs text-muted-foreground">Without: {line.removed_ingredients?.join(", ")}</div>
               ) : null}

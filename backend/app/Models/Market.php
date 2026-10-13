@@ -17,6 +17,7 @@ class Market extends Model
     protected $fillable = [
         'name',
         'code',
+        'market_type',
         'owner_user_id',
         'address',
         'lat',
@@ -279,5 +280,24 @@ class Market extends Model
         }
 
         return null;
+    }
+
+    /** Keys of config/market_types.php, e.g. "grocery" or "auto_parts". */
+    public static function typeKeys(): array
+    {
+        return array_keys(config('market_types', []));
+    }
+
+    public function supportsFeature(string $feature): bool
+    {
+        $type = config('market_types.' . ($this->market_type ?: 'general'))
+            ?? config('market_types.general');
+
+        return in_array($feature, $type['features'] ?? [], true);
+    }
+
+    public function typeLabel(): string
+    {
+        return config('market_types.' . ($this->market_type ?: 'general') . '.label', 'General Store');
     }
 }

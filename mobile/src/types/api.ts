@@ -306,6 +306,7 @@ export type Item = {
   price: string | number;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: string | number;
+  multi_buy?: { buy: number; get: number } | null;
   stock_qty: number;
   low_stock_threshold?: number;
   is_low_stock?: boolean;

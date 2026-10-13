@@ -3,6 +3,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use App\Models\Market;
 use App\Models\User;
 use Illuminate\Support\Facades\Storage;
@@ -91,6 +92,7 @@ class MarketController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => ['required', 'string', 'max:50', 'unique:markets,code'],
+            'market_type' => ['nullable', 'string', Rule::in(Market::typeKeys())],
             'owner_user_id' => ['required', 'exists:users,id'],
             'address' => ['nullable', 'string', 'max:255'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
@@ -115,6 +117,7 @@ class MarketController extends Controller
         $market = Market::create([
             'name' => $data['name'],
             'code' => $data['code'],
+            'market_type' => $data['market_type'] ?? 'general',
             'owner_user_id' => $data['owner_user_id'],
             'address' => $data['address'] ?? null,
             'lat' => $data['lat'] ?? null,
@@ -141,6 +144,7 @@ class MarketController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'code' => ['sometimes', 'string', 'max:50', 'unique:markets,code,' . $market->id],
+            'market_type' => ['sometimes', 'string', Rule::in(Market::typeKeys())],
             'address' => ['nullable', 'string', 'max:255'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'numeric', 'between:-180,180'],
@@ -198,6 +202,7 @@ class MarketController extends Controller
 
         $rules = [
             'name' => ['sometimes', 'string', 'max:255'],
+            'market_type' => ['sometimes', 'string', Rule::in(Market::typeKeys())],
             'address' => ['nullable', 'string', 'max:255'],
             'lat' => ['nullable', 'numeric', 'between:-90,90'],
             'lng' => ['nullable', 'numeric', 'between:-180,180'],
@@ -353,6 +358,7 @@ public function addStaff(Request $request, Market $market)
             'id' => $market->id,
             'name' => $market->name,
             'code' => $market->code,
+            'market_type' => $market->market_type ?: 'general',
             'address' => $market->address,
             'lat' => $market->lat !== null ? (float) $market->lat : null,
             'lng' => $market->lng !== null ? (float) $market->lng : null,

@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import type { MultiBuy } from "@/lib/market-types";
 import type { StorefrontMarket } from "@/lib/storefront";
 
 /** Item shape returned by `/api/public/discovery-items`. */
@@ -21,6 +22,7 @@ export type DiscoveryItem = {
   price: number | string;
   discount_type?: "none" | "percent" | "fixed";
   discount_value?: number | string;
+  multi_buy?: MultiBuy | null;
   stock_qty: number;
   ordered_qty?: number;
   is_promoted?: boolean;

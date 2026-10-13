@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatMoney } from "@/lib/format";
+import { getMarketType } from "@/lib/market-types";
 import { calcStorefrontPrice, formatMarketHours, formatPromoLabel, type StorefrontMarket } from "@/lib/storefront";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ export function MarketCard({ market, className }: { market: StorefrontMarket; cl
   const heroImage = getMarketBannerUrl(market);
   const logoImage = resolveMarketMediaUrl(market.logo_url);
   const isOpen = isMarketOpen(market);
+  const marketType = getMarketType(market.market_type);
+  const TypeIcon = marketType.icon;
   const hoursLabel = formatMarketHours(market);
   const statusLabel = market.operating_status?.label ?? (isOpen ? "Open now" : "Closed now");
   const blurb = market.featured_headline || market.featured_copy;
@@ -91,6 +94,10 @@ export function MarketCard({ market, className }: { market: StorefrontMarket; cl
             <h3 className="truncate font-semibold">{market.name}</h3>
             <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{market.code}</span>
           </div>
+          <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-primary">
+            <TypeIcon className="size-3.5 shrink-0" />
+            <span className="truncate">{marketType.label}</span>
+          </p>
           <p className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
             <MapPin className="size-3.5 shrink-0" />
             <span className="truncate">{market.address || "Marketplace location"}</span>

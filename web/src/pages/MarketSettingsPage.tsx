@@ -20,6 +20,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { describeFeatures, getMarketType, MARKET_TYPE_KEYS, MARKET_TYPES, type MarketTypeKey } from "@/lib/market-types";
 import { useMe } from "@/lib/useMe";
 import type { StorefrontMarket } from "@/lib/storefront";
 
@@ -143,6 +144,7 @@ export default function MarketSettingsPage() {
 
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [marketType, setMarketType] = useState<MarketTypeKey>("general");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [isActive, setIsActive] = useState(true);
@@ -159,6 +161,7 @@ export default function MarketSettingsPage() {
     if (!market) return;
     setName(market.name ?? "");
     setAddress(market.address ?? "");
+    setMarketType(getMarketType(market.market_type).key);
     setLat(market.lat != null ? String(market.lat) : "");
     setLng(market.lng != null ? String(market.lng) : "");
     setIsActive(typeof market.is_active === "boolean" ? market.is_active : true);
@@ -178,6 +181,7 @@ export default function MarketSettingsPage() {
     mutationFn: async () => {
       const payload = {
         name: name.trim(),
+        market_type: marketType,
         address: address.trim() || null,
         lat: lat.trim() ? Number(lat) : null,
         lng: lng.trim() ? Number(lng) : null,
@@ -202,6 +206,7 @@ export default function MarketSettingsPage() {
       await qc.invalidateQueries({ queryKey: ["market-settings-source"] });
       await qc.invalidateQueries({ queryKey: ["markets"] });
       await qc.invalidateQueries({ queryKey: ["my-markets"] });
+      await qc.invalidateQueries({ queryKey: ["my-markets-lite"] });
       await qc.invalidateQueries({ queryKey: ["public-markets"] });
     },
   });
@@ -457,6 +462,28 @@ export default function MarketSettingsPage() {
                     <Label htmlFor="ms-code">Code</Label>
                     <Input id="ms-code" value={market.code} disabled readOnly />
                     <p className="text-xs text-muted-foreground">The market code can only be changed by an admin from the Markets page.</p>
+                  </div>
+                  <div className="grid gap-2 sm:col-span-2">
+                    <Label htmlFor="ms-type">Market type</Label>
+                    <Select value={marketType} onValueChange={(value) => setMarketType(value as MarketTypeKey)}>
+                      <SelectTrigger id="ms-type" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MARKET_TYPE_KEYS.map((key) => {
+                          const { label, icon: Icon } = MARKET_TYPES[key];
+                          return (
+                            <SelectItem key={key} value={key}>
+                              <Icon />
+                              {label}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {MARKET_TYPES[marketType].description} {describeFeatures(MARKET_TYPES[marketType].features)}
+                    </p>
                   </div>
                   <div className="grid gap-2 sm:col-span-2">
                     <Label htmlFor="ms-address">Address</Label>

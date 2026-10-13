@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { getMarketType, MARKET_TYPE_KEYS, type MarketTypeKey } from "@/lib/market-types";
 import { getDefaultAuthedPath } from "@/lib/session";
 import type { StorefrontMarket } from "@/lib/storefront";
 import { useMe } from "@/lib/useMe";
@@ -96,6 +97,7 @@ function HeroStat({ value, label }: { value: number; label: string }) {
 export default function PublicMarketsPage() {
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+  const [typeFilter, setTypeFilter] = useState<MarketTypeKey | "all">("all");
   const token = auth.getToken();
   const meQ = useMe({ enabled: !!token });
 
@@ -112,12 +114,21 @@ export default function PublicMarketsPage() {
   const allMarkets = useMemo(() => marketsQ.data ?? [], [marketsQ.data]);
   const query = search.trim().toLowerCase();
 
-  const searchedMarkets = useMemo(() => {
-    if (!query) return allMarkets;
+  // Only offer type chips for types that at least one live market uses.
+  const availableTypes = useMemo(() => {
+    const used = new Set(allMarkets.map((market) => getMarketType(market.market_type).key));
+    return MARKET_TYPE_KEYS.filter((key) => used.has(key));
+  }, [allMarkets]);
 
-    return allMarkets.filter((market) =>
+  const searchedMarkets = useMemo(() => {
+    const typed =
+      typeFilter === "all" ? allMarkets : allMarkets.filter((market) => getMarketType(market.market_type).key === typeFilter);
+    if (!query) return typed;
+
+    return typed.filter((market) =>
       [
         market.name,
+        getMarketType(market.market_type).label,
         market.code,
         market.address,
         market.featured_badge,
@@ -129,7 +140,7 @@ export default function PublicMarketsPage() {
         .toLowerCase()
         .includes(query)
     );
-  }, [allMarkets, query]);
+  }, [allMarkets, query, typeFilter]);
 
   const filteredMarkets = useMemo(() => {
     switch (quickFilter) {
@@ -228,6 +239,30 @@ export default function PublicMarketsPage() {
 
         {/* Markets */}
         <section id="markets" className="scroll-mt-20 space-y-8">
+          {availableTypes.length > 1 ? (
+            <ScrollRail title="Shop by category" description="Every kind of local store in one place.">
+                {[{ key: "all" as const, label: "All stores", icon: Store }, ...availableTypes.map((key) => getMarketType(key))].map(
+                  ({ key, label, icon: Icon }) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={typeFilter === key}
+                      onClick={() => setTypeFilter(key)}
+                      className={cn(
+                        "flex w-28 shrink-0 snap-start flex-col items-center gap-2 rounded-xl border bg-card px-3 py-4 text-center text-sm font-medium transition-colors hover:border-primary",
+                        typeFilter === key && "border-primary bg-primary/5 text-primary",
+                      )}
+                    >
+                      <span className="flex size-10 items-center justify-center rounded-full bg-muted">
+                        <Icon className="size-5" />
+                      </span>
+                      <span className="leading-tight">{label}</span>
+                    </button>
+                  ),
+                )}
+            </ScrollRail>
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <ToggleGroup
               type="single"

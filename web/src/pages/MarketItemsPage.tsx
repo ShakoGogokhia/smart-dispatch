@@ -27,6 +27,8 @@ import {
 import { api } from "@/lib/api";
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
 import { formatMoney } from "@/lib/format";
+import { cleanSpecs, type ItemSpec, multiBuyBadge, parseMultiBuyKey } from "@/lib/market-types";
+import type { MarketLite } from "@/types/api";
 import { cn } from "@/lib/utils";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -291,6 +293,13 @@ export default function MarketItemsPage() {
   });
 
   const items = useMemo(() => itemsQ.data ?? [], [itemsQ.data]);
+
+  // Same query (and cache) as the workspace market switcher in AppLayout.
+  const myMarketsQ = useQuery({
+    queryKey: ["my-markets-lite"],
+    queryFn: async () => (await api.get("/api/my/markets")).data as MarketLite[],
+  });
+  const marketType = myMarketsQ.data?.find((market) => Number(market.id) === id)?.market_type ?? null;
   const createComboSelectableItems = getComboSelectableItems(items);
 
   /* ---------------- create state (unchanged fields) ---------------- */
@@ -300,6 +309,8 @@ export default function MarketItemsPage() {
   const [price, setPrice] = useState("");
   const [discountType, setDiscountType] = useState<Item["discount_type"]>("none");
   const [discountValue, setDiscountValue] = useState("");
+  const [createMultiBuy, setCreateMultiBuy] = useState("none");
+  const [createSpecs, setCreateSpecs] = useState<ItemSpec[]>([]);
   const [stockQty, setStockQty] = useState("0");
   const [showStockQuantity, setShowStockQuantity] = useState(true);
   const [isActive, setIsActive] = useState(true);
@@ -345,6 +356,8 @@ export default function MarketItemsPage() {
         show_stock_quantity: showStockQuantity,
         low_stock_threshold: Number(lowStockThreshold || 5),
         is_active: isActive,
+        multi_buy: createItemKind === "combo" ? null : parseMultiBuyKey(createMultiBuy),
+        specs: cleanSpecs(createSpecs),
       };
 
       const created = (await api.post(`/api/markets/${id}/items`, payload)).data as Item;
@@ -383,6 +396,8 @@ export default function MarketItemsPage() {
       setCreateIngredients([]);
       setCreateItemKind("regular");
       setCreateComboOffers([]);
+      setCreateMultiBuy("none");
+      setCreateSpecs([]);
       setLowStockThreshold("5");
     },
   });
@@ -414,6 +429,8 @@ export default function MarketItemsPage() {
         combo_offers: buildComboPayload(editItem.item_kind === "combo" ? "combo" : "regular", editItem.combo_offers ?? [], editItem.price),
         low_stock_threshold: Number(editItem.low_stock_threshold || 5),
         is_active: !!editItem.is_active,
+        multi_buy: editItem.item_kind === "combo" ? null : (editItem.multi_buy ?? null),
+        specs: cleanSpecs(editItem.specs),
       };
 
       const updated = (
@@ -522,6 +539,8 @@ export default function MarketItemsPage() {
     price,
     discountType,
     discountValue,
+    multiBuy: createMultiBuy,
+    specs: createSpecs,
     stockQty,
     showStockQuantity,
     lowStockThreshold,
@@ -542,6 +561,8 @@ export default function MarketItemsPage() {
     if (patch.price !== undefined) setPrice(patch.price);
     if (patch.discountType !== undefined) setDiscountType(patch.discountType);
     if (patch.discountValue !== undefined) setDiscountValue(patch.discountValue);
+    if (patch.multiBuy !== undefined) setCreateMultiBuy(patch.multiBuy);
+    if (patch.specs !== undefined) setCreateSpecs(patch.specs);
     if (patch.stockQty !== undefined) setStockQty(patch.stockQty);
     if (patch.showStockQuantity !== undefined) setShowStockQuantity(patch.showStockQuantity);
     if (patch.lowStockThreshold !== undefined) setLowStockThreshold(patch.lowStockThreshold);
@@ -563,6 +584,8 @@ export default function MarketItemsPage() {
         price: String(editItem.price),
         discountType: editItem.discount_type,
         discountValue: String(editItem.discount_value),
+        multiBuy: editItem.multi_buy ? multiBuyBadge(editItem.multi_buy) : "none",
+        specs: editItem.specs ?? [],
         stockQty: String(editItem.stock_qty),
         showStockQuantity: editItem.show_stock_quantity ?? true,
         lowStockThreshold: String(editItem.low_stock_threshold ?? 5),
@@ -587,6 +610,8 @@ export default function MarketItemsPage() {
     if (patch.price !== undefined) next.price = patch.price;
     if (patch.discountType !== undefined) next.discount_type = patch.discountType;
     if (patch.discountValue !== undefined) next.discount_value = patch.discountValue;
+    if (patch.multiBuy !== undefined) next.multi_buy = parseMultiBuyKey(patch.multiBuy);
+    if (patch.specs !== undefined) next.specs = patch.specs;
     if (patch.stockQty !== undefined) next.stock_qty = Number(patch.stockQty);
     if (patch.showStockQuantity !== undefined) next.show_stock_quantity = patch.showStockQuantity;
     if (patch.lowStockThreshold !== undefined) next.low_stock_threshold = Number(patch.lowStockThreshold);
@@ -788,6 +813,7 @@ export default function MarketItemsPage() {
                 onChange={patchCreate}
                 comboItems={createComboSelectableItems}
                 categories={categories}
+                marketType={marketType}
                 error={createError}
                 missing={createMissing}
                 canSubmit={canCreate}
@@ -1078,6 +1104,7 @@ export default function MarketItemsPage() {
             onChange={patchEdit}
             comboItems={editComboSelectableItems}
             categories={categories}
+            marketType={marketType}
             initialTab={editTab}
             gallery={{
               urls: getItemImageUrls(editItem),

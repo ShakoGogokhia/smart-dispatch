@@ -14,7 +14,17 @@ export type CartItem = {
   name: string;
   price: number;
   qty: number;
+  /** "Buy X get Y free" deal (1+1, 2+1, ...) copied from the item when it was added. */
+  multi_buy?: { buy: number; get: number } | null;
 };
+
+/** Line total after any buy X get Y deal; mirrors Item::paidQuantity() on the backend. */
+export function cartLineTotal(line: CartItem) {
+  const buy = Number(line.multi_buy?.buy);
+  const get = Number(line.multi_buy?.get);
+  const free = buy > 0 && get > 0 ? Math.floor(line.qty / (buy + get)) * get : 0;
+  return line.price * (line.qty - free);
+}
 
 type StorageLike = {
   getItem: (key: string) => Promise<string | null>;
@@ -147,7 +157,7 @@ export async function loadCart(marketId: string): Promise<CartItem[]> {
     }
 
     return parsed
-      .map((item) => {
+      .map((item): CartItem | null => {
         if (!item || typeof item !== "object") {
           return null;
         }
@@ -166,6 +176,10 @@ export async function loadCart(marketId: string): Promise<CartItem[]> {
           name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : `Item #${itemId}`,
           price,
           qty,
+          multi_buy:
+            candidate.multi_buy && Number(candidate.multi_buy.buy) > 0 && Number(candidate.multi_buy.get) > 0
+              ? { buy: Number(candidate.multi_buy.buy), get: Number(candidate.multi_buy.get) }
+              : null,
         } satisfies CartItem;
       })
       .filter((item): item is CartItem => item !== null);

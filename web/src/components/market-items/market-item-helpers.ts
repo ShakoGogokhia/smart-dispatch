@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import type { ComboOffer, ItemIngredient } from "@/lib/cart";
+import type { ItemSpec, MultiBuy } from "@/lib/market-types";
 
 export type Item = {
   id: number;
@@ -17,6 +18,8 @@ export type Item = {
   price: string | number;
   discount_type: "none" | "percent" | "fixed";
   discount_value: string | number;
+  multi_buy?: MultiBuy | null;
+  specs?: ItemSpec[] | null;
   stock_qty: number;
   show_stock_quantity?: boolean;
   low_stock_threshold?: number;

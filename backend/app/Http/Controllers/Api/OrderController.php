@@ -177,6 +177,8 @@ class OrderController extends Controller
                     $ingredients = $this->normalizeIngredients($dbItem->ingredients);
                     $comboOffer = $this->resolveComboOffer($dbItem, $item['combo_offer'] ?? null);
                     $unitPrice = $comboOffer['combo_price'] ?? (float) $item['price'];
+                    // Buy X get Y deals apply to the plain item, not to a combo built on it.
+                    $paidQty = $comboOffer ? $requestedQty : $dbItem->paidQuantity($requestedQty);
 
                     return [
                         'item_id' => $dbItem->id,
@@ -184,7 +186,7 @@ class OrderController extends Controller
                         'sku' => $dbItem->sku,
                         'qty' => $requestedQty,
                         'unit_price' => $unitPrice,
-                        'line_total' => $unitPrice * $requestedQty,
+                        'line_total' => $unitPrice * $paidQty,
                         'ingredients' => $ingredients,
                         'removed_ingredients' => $this->normalizeRemovedIngredients($ingredients, $item['removed_ingredients'] ?? []),
                         'combo_offer' => $comboOffer,
