@@ -18,6 +18,7 @@ RUN composer dump-autoload --optimize --no-dev \
 
 ENV APP_ENV=production \
     APP_DEBUG=false \
+    APP_TIMEZONE=Asia/Tbilisi \
     DB_CONNECTION=sqlite \
     DB_DATABASE=/app/database/database.sqlite \
     LOG_CHANNEL=stderr \

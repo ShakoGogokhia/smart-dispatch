@@ -1,0 +1,332 @@
+{
+  "markets": [
+    {
+      "code": "FRESH",
+      "name": "Tbilisi Fresh Market",
+      "type": "grocery",
+      "owner": { "name": "Market Owner", "email": "owner@test.com" },
+      "address": "24 Rustaveli Avenue, Tbilisi",
+      "lat": 41.7008, "lng": 44.7952,
+      "featured": { "badge": "VIP Market", "headline": "Farm-fresh groceries in 30 minutes", "copy": "Local produce, dairy and pantry staples picked daily from Georgian farms.", "theme": { "tone": "amber", "shape": "pill" } },
+      "hours": "always",
+      "delivery_slots": [{ "label": "Morning", "from": "09:00", "to": "12:00" }, { "label": "Afternoon", "from": "12:00", "to": "17:00" }, { "label": "Evening", "from": "17:00", "to": "22:00" }],
+      "banner_query": "vegetable market stall",
+      "promos": [{ "code": "FRESH10", "type": "percent", "value": 10, "max_uses": 500 }],
+      "items": [
+        { "sku": "FR-BAN", "name": "Bananas (1 kg)", "category": "Fruit", "price": 2.9, "stock": 80, "multi_buy": [2, 1], "image_query": "bananas bunch" },
+        { "sku": "FR-APL", "name": "Red Apples (1 kg)", "category": "Fruit", "price": 3.4, "stock": 60, "discount": ["percent", 15], "image_query": "red apples" },
+        { "sku": "FR-TOM", "name": "Vine Tomatoes (1 kg)", "category": "Vegetables", "price": 4.2, "stock": 45, "image_query": "tomatoes on the vine" },
+        { "sku": "FR-CUC", "name": "Cucumbers (1 kg)", "category": "Vegetables", "price": 2.6, "stock": 50, "image_query": "cucumbers vegetable" },
+        { "sku": "FR-AVO", "name": "Avocado", "category": "Fruit", "price": 1.9, "stock": 4, "low": 6, "multi_buy": [1, 1], "image_query": "avocado halved" },
+        { "sku": "FR-MLK", "name": "Whole Milk 1 L", "category": "Dairy", "price": 2.2, "stock": 70, "multi_buy": [1, 1], "promoted": true, "image_query": "milk bottle glass" },
+        { "sku": "FR-EGG", "name": "Free-range Eggs (10 pcs)", "category": "Dairy", "price": 4.5, "stock": 40, "image_query": "eggs carton" },
+        { "sku": "FR-SUL", "name": "Sulguni Cheese 500 g", "category": "Dairy", "price": 8.9, "stock": 25, "discount": ["fixed", 1.5], "image_query": "sulguni cheese" },
+        { "sku": "FR-BRD", "name": "Sourdough Bread", "category": "Bakery", "price": 3.8, "stock": 20, "image_query": "sourdough bread loaf" },
+        { "sku": "FR-CHK", "name": "Chicken Breast 1 kg", "category": "Meat", "price": 11.5, "stock": 18, "image_query": "raw chicken breast" },
+        { "sku": "FR-OIL", "name": "Extra Virgin Olive Oil 750 ml", "category": "Pantry", "price": 14.9, "stock": 30, "discount": ["percent", 20], "image_query": "olive oil bottle" },
+        { "sku": "FR-PAS", "name": "Spaghetti 500 g", "category": "Pantry", "price": 2.4, "stock": 0, "image_query": "spaghetti dry pasta" }
+      ],
+      "combos": [
+        { "sku": "FR-BOX", "name": "Breakfast Box", "category": "Bundles", "price": 13.9, "description": "Milk, eggs, sourdough and sulguni for a full Georgian breakfast.", "items": ["FR-MLK", "FR-EGG", "FR-BRD", "FR-SUL"], "image_query": "breakfast eggs bread cheese" }
+      ]
+    },
+    {
+      "code": "SMOKE",
+      "name": "Smoke & Grill Burgers",
+      "type": "restaurant",
+      "owner": { "name": "Market Owner", "email": "owner@test.com" },
+      "address": "7 Marjanishvili Street, Tbilisi",
+      "lat": 41.7097, "lng": 44.7998,
+      "featured": { "badge": "Staff Pick", "headline": "Smash burgers worth the trip", "copy": "Grass-fed beef, brioche buns and hand-cut fries, grilled to order.", "theme": { "tone": "rose", "shape": "soft" } },
+      "hours": { "open": "11:00", "close": "23:59" },
+      "delivery_slots": [{ "label": "ASAP", "from": "11:00", "to": "23:59" }],
+      "banner_query": "burger and fries restaurant",
+      "promos": [{ "code": "BURGER5", "type": "fixed", "value": 5, "max_uses": 200 }],
+      "items": [
+        { "sku": "SG-CLS", "name": "Classic Smash Burger", "category": "Burgers", "price": 12.5, "stock": 100, "promoted": true, "ingredients": [["Brioche bun", false], ["Beef patty", false], ["Cheddar", true], ["Pickles", true], ["Onion", true], ["House sauce", true]], "image_query": "cheeseburger", "offers": [{ "name": "Make it a meal", "description": "Add fries and a cola", "price": 16.9, "items": ["SG-FRY", "SG-COL"] }] },
+        { "sku": "SG-BCN", "name": "Bacon BBQ Burger", "category": "Burgers", "price": 14.9, "stock": 80, "ingredients": [["Brioche bun", false], ["Beef patty", false], ["Bacon", true], ["BBQ sauce", true], ["Onion rings", true]], "image_query": "bacon burger" },
+        { "sku": "SG-CHK", "name": "Crispy Chicken Burger", "category": "Burgers", "price": 11.9, "stock": 80, "discount": ["percent", 10], "ingredients": [["Bun", false], ["Fried chicken", false], ["Lettuce", true], ["Spicy mayo", true]], "image_query": "fried chicken sandwich" },
+        { "sku": "SG-VEG", "name": "Veggie Burger", "category": "Burgers", "price": 11.5, "stock": 40, "ingredients": [["Bun", false], ["Veggie patty", false], ["Avocado", true], ["Tomato", true]], "image_query": "veggie burger" },
+        { "sku": "SG-FRY", "name": "Hand-cut Fries", "category": "Sides", "price": 4.5, "stock": 150, "multi_buy": [1, 1], "variants": [["Size", "Regular", 0], ["Size", "Large", 1.5]], "image_query": "french fries" },
+        { "sku": "SG-RNG", "name": "Onion Rings", "category": "Sides", "price": 5.2, "stock": 90, "image_query": "onion rings" },
+        { "sku": "SG-WNG", "name": "Buffalo Wings (6 pcs)", "category": "Sides", "price": 9.5, "stock": 60, "image_query": "buffalo wings" },
+        { "sku": "SG-SHK", "name": "Vanilla Milkshake", "category": "Drinks", "price": 6.5, "stock": 50, "variants": [["Flavor", "Vanilla", 0], ["Flavor", "Chocolate", 0], ["Flavor", "Strawberry", 0.5]], "image_query": "milkshake glass" },
+        { "sku": "SG-COL", "name": "Cola 0.5 L", "category": "Drinks", "price": 2.5, "stock": 200, "multi_buy": [2, 1], "image_query": "cola glass ice" }
+      ],
+      "combos": [
+        { "sku": "SG-MEAL", "name": "Classic Combo", "category": "Combos", "price": 17.5, "description": "Classic Smash Burger, fries and a cola.", "items": ["SG-CLS", "SG-FRY", "SG-COL"], "image_query": "burger fries meal" },
+        { "sku": "SG-FAM", "name": "Family Box", "category": "Combos", "price": 49, "description": "Three burgers, wings, two fries and onion rings to share.", "items": ["SG-CLS", "SG-BCN", "SG-CHK", "SG-WNG", "SG-FRY", "SG-RNG"], "image_query": "burgers platter" }
+      ]
+    },
+    {
+      "code": "NAPOLI",
+      "name": "Napoli Pizza",
+      "type": "restaurant",
+      "owner": { "name": "Giorgi Beridze", "email": "pizza@test.com" },
+      "address": "15 Chavchavadze Avenue, Tbilisi",
+      "lat": 41.7096, "lng": 44.7605,
+      "featured": { "badge": "Fast Delivery", "headline": "Wood-fired pizza at your door", "copy": "Neapolitan dough proofed for 48 hours and baked at 450°C.", "theme": { "tone": "cyan", "shape": "pill" } },
+      "hours": "always",
+      "delivery_slots": [{ "label": "ASAP", "from": "10:00", "to": "23:59" }],
+      "banner_query": "wood fired pizza oven",
+      "promos": [{ "code": "PIZZA2", "type": "percent", "value": 15, "max_uses": 300 }],
+      "items": [
+        { "sku": "NP-MAR", "name": "Margherita", "category": "Pizza", "price": 13, "stock": 100, "variants": [["Size", "30 cm", 0], ["Size", "40 cm", 6]], "ingredients": [["Dough", false], ["Tomato sauce", false], ["Mozzarella", false], ["Basil", true]], "image_query": "pizza margherita" },
+        { "sku": "NP-PEP", "name": "Pepperoni", "category": "Pizza", "price": 15.5, "stock": 100, "multi_buy": [1, 1], "promoted": true, "variants": [["Size", "30 cm", 0], ["Size", "40 cm", 6]], "ingredients": [["Dough", false], ["Tomato sauce", false], ["Mozzarella", false], ["Pepperoni", false], ["Chili flakes", true]], "image_query": "pepperoni pizza" },
+        { "sku": "NP-4CH", "name": "Quattro Formaggi", "category": "Pizza", "price": 16.9, "stock": 80, "discount": ["percent", 10], "variants": [["Size", "30 cm", 0], ["Size", "40 cm", 6]], "image_query": "four cheese pizza" },
+        { "sku": "NP-VEG", "name": "Garden Veggie", "category": "Pizza", "price": 14.5, "stock": 70, "ingredients": [["Dough", false], ["Peppers", true], ["Mushrooms", true], ["Olives", true], ["Onion", true]], "image_query": "vegetable pizza" },
+        { "sku": "NP-GBR", "name": "Garlic Bread", "category": "Starters", "price": 5.5, "stock": 80, "image_query": "garlic bread" },
+        { "sku": "NP-CSR", "name": "Caesar Salad", "category": "Starters", "price": 9.9, "stock": 40, "image_query": "caesar salad" },
+        { "sku": "NP-TIR", "name": "Tiramisu", "category": "Desserts", "price": 7.5, "stock": 25, "image_query": "tiramisu" },
+        { "sku": "NP-LEM", "name": "Homemade Lemonade", "category": "Drinks", "price": 4.5, "stock": 60, "multi_buy": [1, 1], "image_query": "lemonade glass" }
+      ],
+      "combos": [
+        { "sku": "NP-DUO", "name": "Pizza Night for Two", "category": "Combos", "price": 34, "description": "Two pizzas, garlic bread and two lemonades.", "items": ["NP-MAR", "NP-PEP", "NP-GBR", "NP-LEM"], "image_query": "two pizzas table" }
+      ]
+    },
+    {
+      "code": "SAKURA",
+      "name": "Sakura Sushi Bar",
+      "type": "restaurant",
+      "owner": { "name": "Nino Kapanadze", "email": "sushi@test.com" },
+      "address": "3 Kazbegi Avenue, Tbilisi",
+      "lat": 41.7253, "lng": 44.7488,
+      "featured": null,
+      "hours": { "open": "12:00", "close": "23:30" },
+      "delivery_slots": [{ "label": "Lunch", "from": "12:00", "to": "15:00" }, { "label": "Dinner", "from": "18:00", "to": "23:30" }],
+      "banner_query": "sushi platter",
+      "promos": [],
+      "items": [
+        { "sku": "SK-CAL", "name": "California Roll (8 pcs)", "category": "Rolls", "price": 13.5, "stock": 60, "image_query": "california roll" },
+        { "sku": "SK-PHL", "name": "Philadelphia Roll (8 pcs)", "category": "Rolls", "price": 17.9, "stock": 60, "promoted": true, "image_query": "salmon cream cheese roll sushi" },
+        { "sku": "SK-DRG", "name": "Dragon Roll (8 pcs)", "category": "Rolls", "price": 19.5, "stock": 40, "discount": ["fixed", 3], "image_query": "dragon roll sushi" },
+        { "sku": "SK-NIG", "name": "Salmon Nigiri (2 pcs)", "category": "Nigiri", "price": 7.9, "stock": 50, "image_query": "salmon nigiri" },
+        { "sku": "SK-MIS", "name": "Miso Soup", "category": "Soups", "price": 5.5, "stock": 50, "multi_buy": [1, 1], "image_query": "miso soup" },
+        { "sku": "SK-RAM", "name": "Tonkotsu Ramen", "category": "Soups", "price": 16.5, "stock": 30, "image_query": "tonkotsu ramen" },
+        { "sku": "SK-EDA", "name": "Edamame", "category": "Starters", "price": 6.5, "stock": 40, "image_query": "edamame" },
+        { "sku": "SK-TEA", "name": "Green Tea", "category": "Drinks", "price": 3.5, "stock": 100, "image_query": "green tea cup" }
+      ],
+      "combos": [
+        { "sku": "SK-SET", "name": "Sushi Set 32 pcs", "category": "Sets", "price": 49.9, "description": "California, Philadelphia and Dragon rolls with salmon nigiri.", "items": ["SK-CAL", "SK-PHL", "SK-DRG", "SK-NIG"], "image_query": "sushi set" }
+      ]
+    },
+    {
+      "code": "DEDA",
+      "name": "Deda's Georgian Kitchen",
+      "type": "restaurant",
+      "owner": { "name": "Tamar Gelashvili", "email": "georgian@test.com" },
+      "address": "11 Leselidze Street, Old Tbilisi",
+      "lat": 41.6913, "lng": 44.8073,
+      "featured": { "badge": "VIP Market", "headline": "Grandma's Georgian recipes", "copy": "Khachapuri, khinkali and mtsvadi made the traditional way.", "theme": { "tone": "amber", "shape": "pill" } },
+      "hours": "always",
+      "delivery_slots": [{ "label": "Lunch", "from": "12:00", "to": "16:00" }, { "label": "Supra time", "from": "18:00", "to": "23:59" }],
+      "banner_query": "georgian supra table",
+      "promos": [{ "code": "SUPRA20", "type": "percent", "value": 20, "max_uses": 100 }],
+      "items": [
+        { "sku": "DK-ADJ", "name": "Adjarian Khachapuri", "category": "Khachapuri", "price": 14, "stock": 60, "promoted": true, "ingredients": [["Dough", false], ["Sulguni and imeruli cheese", false], ["Egg", true], ["Butter", true]], "image_query": "adjarian khachapuri" },
+        { "sku": "DK-IME", "name": "Imeretian Khachapuri", "category": "Khachapuri", "price": 11.5, "stock": 60, "image_query": "imeruli khachapuri" },
+        { "sku": "DK-KHN", "name": "Khinkali", "category": "Mains", "price": 9, "stock": 200, "multi_buy": [3, 1], "variants": [["Portion", "5 pcs", 0], ["Portion", "10 pcs", 8]], "image_query": "khinkali" },
+        { "sku": "DK-MTS", "name": "Pork Mtsvadi", "category": "Mains", "price": 18.5, "stock": 40, "image_query": "mtsvadi shashlik" },
+        { "sku": "DK-LOB", "name": "Lobiani", "category": "Khachapuri", "price": 8.5, "stock": 50, "discount": ["percent", 10], "image_query": "lobiani" },
+        { "sku": "DK-BAD", "name": "Badrijani with Walnuts", "category": "Starters", "price": 9.5, "stock": 35, "image_query": "badrijani nigvzit" },
+        { "sku": "DK-CHU", "name": "Churchkhela", "category": "Desserts", "price": 4, "stock": 80, "multi_buy": [2, 1], "image_query": "churchkhela" },
+        { "sku": "DK-LAG", "name": "Lagidze Tarragon Water", "category": "Drinks", "price": 3.2, "stock": 120, "image_query": "tarragon lemonade" }
+      ],
+      "combos": [
+        { "sku": "DK-SUP", "name": "Supra for Four", "category": "Feasts", "price": 79, "description": "Two khachapuri, 20 khinkali, mtsvadi, badrijani and churchkhela.", "items": ["DK-ADJ", "DK-IME", "DK-KHN", "DK-MTS", "DK-BAD", "DK-CHU"], "image_query": "georgian feast" }
+      ]
+    },
+    {
+      "code": "BREW",
+      "name": "Brew Lab Coffee & Bakery",
+      "type": "cafe_bakery",
+      "owner": { "name": "Luka Tsiklauri", "email": "cafe@test.com" },
+      "address": "40 Abashidze Street, Vake",
+      "lat": 41.7086, "lng": 44.7652,
+      "featured": null,
+      "hours": "always",
+      "delivery_slots": [{ "label": "Morning", "from": "08:00", "to": "12:00" }, { "label": "Afternoon", "from": "12:00", "to": "20:00" }],
+      "banner_query": "coffee shop counter pastries",
+      "promos": [{ "code": "COFFEE1", "type": "fixed", "value": 2, "max_uses": 1000 }],
+      "items": [
+        { "sku": "BL-ESP", "name": "Espresso", "category": "Coffee", "price": 3.5, "stock": 300, "image_query": "espresso cup" },
+        { "sku": "BL-CAP", "name": "Cappuccino", "category": "Coffee", "price": 5.5, "stock": 300, "multi_buy": [1, 1], "promoted": true, "variants": [["Size", "Small", 0], ["Size", "Large", 1.5], ["Milk", "Oat milk", 1]], "image_query": "cappuccino latte art" },
+        { "sku": "BL-ICE", "name": "Iced Latte", "category": "Coffee", "price": 6.5, "stock": 200, "image_query": "iced latte" },
+        { "sku": "BL-CRO", "name": "Butter Croissant", "category": "Bakery", "price": 4.2, "stock": 40, "multi_buy": [2, 1], "image_query": "croissant" },
+        { "sku": "BL-CHC", "name": "New York Cheesecake", "category": "Cakes", "price": 8.5, "stock": 15, "discount": ["percent", 15], "image_query": "cheesecake slice" },
+        { "sku": "BL-CIN", "name": "Cinnamon Roll", "category": "Bakery", "price": 4.9, "stock": 3, "low": 5, "image_query": "cinnamon roll" },
+        { "sku": "BL-BAG", "name": "Everything Bagel", "category": "Bakery", "price": 3.9, "stock": 30, "image_query": "bagel sesame" }
+      ],
+      "combos": [
+        { "sku": "BL-DUO", "name": "Morning Duo", "category": "Combos", "price": 8.5, "description": "Cappuccino and a butter croissant.", "items": ["BL-CAP", "BL-CRO"], "image_query": "coffee and croissant" }
+      ]
+    },
+    {
+      "code": "TECHZ",
+      "name": "TechZone Electronics",
+      "type": "electronics",
+      "owner": { "name": "Davit Lomidze", "email": "tech@test.com" },
+      "address": "Tbilisi Mall, 16 David Agmashenebeli Alley",
+      "lat": 41.7735, "lng": 44.7662,
+      "featured": { "badge": "VIP Market", "headline": "Latest gadgets with official warranty", "copy": "Phones, laptops and audio from top brands with same-day delivery.", "theme": { "tone": "amber", "shape": "pill" } },
+      "hours": "always",
+      "delivery_slots": [{ "label": "Same day", "from": "10:00", "to": "20:00" }],
+      "banner_query": "electronics store interior",
+      "promos": [{ "code": "TECH50", "type": "fixed", "value": 50, "max_uses": 50 }],
+      "items": [
+        { "sku": "TZ-PHN", "name": "Smartphone Pro 6.7\"", "category": "Phones", "price": 1199, "stock": 12, "promoted": true, "variants": [["Storage", "256 GB", 0], ["Storage", "512 GB", 200]], "specs": [["Brand", "Nova"], ["Screen", "6.7\" OLED, 120 Hz"], ["Storage", "256 GB"], ["Camera", "48 MP triple"], ["Battery", "4,500 mAh"], ["Warranty", "2 years"]], "image_query": "smartphone" },
+        { "sku": "TZ-LAP", "name": "UltraBook 14 Laptop", "category": "Laptops", "price": 1549, "stock": 8, "discount": ["percent", 10], "specs": [["Brand", "Aero"], ["CPU", "8-core, 4.8 GHz"], ["Memory", "16 GB"], ["Storage", "1 TB SSD"], ["Screen", "14\" 2.8K"], ["Warranty", "2 years"]], "image_query": "laptop computer" },
+        { "sku": "TZ-EAR", "name": "Wireless Earbuds ANC", "category": "Audio", "price": 189, "stock": 35, "discount": ["fixed", 30], "specs": [["Brand", "Sonic"], ["Noise cancelling", "Active"], ["Battery", "8 h + 24 h case"], ["Warranty", "1 year"]], "image_query": "wireless earbuds" },
+        { "sku": "TZ-WAT", "name": "Smartwatch Series 5", "category": "Wearables", "price": 329, "stock": 20, "specs": [["Brand", "Nova"], ["Screen", "1.9\" AMOLED"], ["Water resistance", "5 ATM"], ["Battery", "2 days"], ["Warranty", "1 year"]], "image_query": "smartwatch" },
+        { "sku": "TZ-TAB", "name": "Tablet 11\"", "category": "Tablets", "price": 699, "stock": 10, "specs": [["Brand", "Nova"], ["Screen", "11\" LCD"], ["Storage", "128 GB"], ["Warranty", "2 years"]], "image_query": "tablet computer" },
+        { "sku": "TZ-MSE", "name": "Gaming Mouse", "category": "Accessories", "price": 69, "stock": 40, "specs": [["Brand", "Raptor"], ["Sensor", "26,000 DPI"], ["Connection", "Wireless 2.4 GHz"], ["Warranty", "1 year"]], "image_query": "computer mouse" },
+        { "sku": "TZ-KEY", "name": "Mechanical Keyboard", "category": "Accessories", "price": 129, "stock": 2, "low": 5, "specs": [["Brand", "Raptor"], ["Switches", "Brown tactile"], ["Layout", "US, 75%"], ["Warranty", "1 year"]], "image_query": "mechanical keyboard" },
+        { "sku": "TZ-MON", "name": "27\" 4K Monitor", "category": "Monitors", "price": 449, "stock": 9, "discount": ["percent", 12], "specs": [["Brand", "Aero"], ["Resolution", "3840 × 2160"], ["Panel", "IPS, 60 Hz"], ["Warranty", "3 years"]], "image_query": "computer monitor" },
+        { "sku": "TZ-PWR", "name": "Power Bank 20,000 mAh", "category": "Accessories", "price": 49, "stock": 60, "specs": [["Capacity", "20,000 mAh"], ["Output", "65 W USB-C"], ["Warranty", "1 year"]], "image_query": "power bank" }
+      ],
+      "combos": [
+        { "sku": "TZ-WFH", "name": "Work From Home Bundle", "category": "Bundles", "price": 1999, "description": "UltraBook laptop, 4K monitor, mechanical keyboard and gaming mouse.", "items": ["TZ-LAP", "TZ-MON", "TZ-KEY", "TZ-MSE"], "image_query": "home office desk computer" }
+      ]
+    },
+    {
+      "code": "AUTOPRO",
+      "name": "AutoParts Pro",
+      "type": "auto_parts",
+      "owner": { "name": "Market Owner", "email": "owner@test.com" },
+      "address": "85 Tsereteli Avenue, Tbilisi",
+      "lat": 41.7346, "lng": 44.7868,
+      "featured": { "badge": "VIP Market", "headline": "Genuine parts for every car", "copy": "OEM and aftermarket parts with fitment check and fast courier delivery.", "theme": { "tone": "amber", "shape": "pill" } },
+      "hours": { "open": "09:00", "close": "21:00" },
+      "delivery_slots": [{ "label": "Day", "from": "09:00", "to": "18:00" }, { "label": "Evening", "from": "18:00", "to": "21:00" }],
+      "banner_query": "auto parts store",
+      "promos": [{ "code": "SERVICE15", "type": "percent", "value": 15, "max_uses": 150 }],
+      "items": [
+        { "sku": "AP-BRK", "name": "Front Brake Pads Set", "category": "Brakes", "price": 64, "stock": 25, "promoted": true, "specs": [["Brand", "Brembo"], ["Fits", "Toyota Camry 2018-2024, RAV4 2019-2024"], ["Part number", "P83167"], ["Position", "Front axle"], ["Warranty", "2 years"]], "image_query": "brake pads" },
+        { "sku": "AP-DSC", "name": "Brake Disc 296 mm", "category": "Brakes", "price": 89, "stock": 14, "specs": [["Brand", "ATE"], ["Fits", "VW Golf VII, Skoda Octavia III"], ["Diameter", "296 mm"], ["Warranty", "2 years"]], "image_query": "brake disc rotor" },
+        { "sku": "AP-OIL", "name": "Engine Oil 5W-30", "category": "Oils & Fluids", "price": 42, "stock": 60, "discount": ["percent", 15], "variants": [["Volume", "4 L", 0], ["Volume", "5 L", 9]], "specs": [["Brand", "Castrol"], ["Viscosity", "5W-30"], ["Type", "Fully synthetic"], ["Approvals", "VW 504/507, MB 229.51"]], "image_query": "motor oil bottles" },
+        { "sku": "AP-FLT", "name": "Oil Filter", "category": "Filters", "price": 12.5, "stock": 80, "specs": [["Brand", "Mann-Filter"], ["Fits", "Toyota 2.0-2.5 petrol"], ["Part number", "W 68/3"]], "image_query": "oil filter car" },
+        { "sku": "AP-AIR", "name": "Air Filter", "category": "Filters", "price": 18, "stock": 50, "specs": [["Brand", "Bosch"], ["Fits", "Hyundai Tucson 2015-2021"], ["Part number", "F 026 400 489"]], "image_query": "car air filter" },
+        { "sku": "AP-SPK", "name": "Iridium Spark Plugs (4 pcs)", "category": "Ignition", "price": 56, "stock": 30, "specs": [["Brand", "NGK"], ["Type", "Laser Iridium"], ["Fits", "Most 4-cylinder petrol engines"], ["Service life", "100,000 km"]], "image_query": "spark plugs" },
+        { "sku": "AP-BAT", "name": "Car Battery 70 Ah", "category": "Electrical", "price": 165, "stock": 10, "discount": ["fixed", 20], "specs": [["Brand", "Varta"], ["Capacity", "70 Ah"], ["Cold cranking", "760 A"], ["Warranty", "3 years"]], "image_query": "car battery" },
+        { "sku": "AP-WIP", "name": "Wiper Blades Pair", "category": "Accessories", "price": 24, "stock": 45, "variants": [["Length", "600 + 400 mm", 0], ["Length", "650 + 450 mm", 3]], "specs": [["Brand", "Bosch Aerotwin"], ["Fits", "Hook arm, most sedans"]], "image_query": "windshield wiper" },
+        { "sku": "AP-H7", "name": "H7 Headlight Bulbs (2 pcs)", "category": "Lighting", "price": 19.9, "stock": 70, "specs": [["Brand", "Philips"], ["Type", "H7 halogen, +150% brightness"], ["Power", "55 W"]], "image_query": "headlight bulb" },
+        { "sku": "AP-TYR", "name": "All-Season Tire 205/55 R16", "category": "Tires", "price": 119, "stock": 3, "low": 8, "specs": [["Brand", "Michelin CrossClimate 2"], ["Size", "205/55 R16 91V"], ["Season", "All-season"], ["Warranty", "5 years"]], "image_query": "car tire" }
+      ],
+      "combos": [
+        { "sku": "AP-KIT", "name": "Oil Service Kit", "category": "Service kits", "price": 66, "description": "5W-30 engine oil, oil filter and air filter for a full service.", "items": ["AP-OIL", "AP-FLT", "AP-AIR"], "image_query": "car oil change" }
+      ]
+    },
+    {
+      "code": "HOMEST",
+      "name": "HomeStyle Appliances",
+      "type": "home_appliances",
+      "owner": { "name": "Ana Javakhishvili", "email": "home@test.com" },
+      "address": "2 Gagarin Street, Saburtalo",
+      "lat": 41.7224, "lng": 44.7516,
+      "featured": null,
+      "hours": "always",
+      "delivery_slots": [{ "label": "Next day", "from": "10:00", "to": "19:00" }],
+      "banner_query": "modern kitchen appliances",
+      "promos": [],
+      "items": [
+        { "sku": "HS-COF", "name": "Espresso Machine", "category": "Kitchen", "price": 389, "stock": 9, "promoted": true, "discount": ["percent", 15], "specs": [["Brand", "Barista"], ["Pressure", "15 bar"], ["Power", "1,450 W"], ["Warranty", "2 years"]], "image_query": "espresso machine" },
+        { "sku": "HS-AFR", "name": "Air Fryer 5.5 L", "category": "Kitchen", "price": 149, "stock": 20, "specs": [["Brand", "CrispPro"], ["Capacity", "5.5 L"], ["Power", "1,700 W"], ["Warranty", "2 years"]], "image_query": "air fryer" },
+        { "sku": "HS-BLN", "name": "High-speed Blender", "category": "Kitchen", "price": 99, "stock": 15, "specs": [["Brand", "VitaMix"], ["Power", "1,200 W"], ["Jar", "1.8 L"]], "image_query": "blender" },
+        { "sku": "HS-MIC", "name": "Microwave Oven 25 L", "category": "Kitchen", "price": 175, "stock": 7, "specs": [["Brand", "HeatWave"], ["Capacity", "25 L"], ["Power", "900 W"], ["Energy class", "A"]], "image_query": "microwave oven" },
+        { "sku": "HS-KET", "name": "Electric Kettle 1.7 L", "category": "Kitchen", "price": 45, "stock": 30, "discount": ["fixed", 8], "specs": [["Brand", "BoilFast"], ["Capacity", "1.7 L"], ["Power", "2,200 W"]], "image_query": "electric kettle" },
+        { "sku": "HS-TST", "name": "2-slice Toaster", "category": "Kitchen", "price": 39, "stock": 25, "image_query": "toaster" },
+        { "sku": "HS-VAC", "name": "Cordless Vacuum Cleaner", "category": "Cleaning", "price": 299, "stock": 6, "specs": [["Brand", "CleanJet"], ["Battery", "60 min"], ["Suction", "180 AW"], ["Warranty", "2 years"]], "image_query": "vacuum cleaner" },
+        { "sku": "HS-IRN", "name": "Steam Iron", "category": "Laundry", "price": 59, "stock": 18, "specs": [["Brand", "SteamGlide"], ["Power", "2,600 W"], ["Steam", "50 g/min"]], "image_query": "steam iron" }
+      ],
+      "combos": []
+    },
+    {
+      "code": "CARE",
+      "name": "CityCare Pharmacy & Beauty",
+      "type": "pharmacy_beauty",
+      "owner": { "name": "Mariam Dolidze", "email": "pharmacy@test.com" },
+      "address": "52 Pekini Avenue, Tbilisi",
+      "lat": 41.7254, "lng": 44.7701,
+      "featured": { "badge": "Fast Delivery", "headline": "Health and beauty in under an hour", "copy": "Vitamins, skincare and everyday essentials, delivered around the clock.", "theme": { "tone": "cyan", "shape": "pill" } },
+      "hours": "always",
+      "delivery_slots": [{ "label": "Express", "from": "00:00", "to": "23:59" }],
+      "banner_query": "pharmacy shelves",
+      "promos": [{ "code": "CARE10", "type": "percent", "value": 10, "max_uses": 400 }],
+      "items": [
+        { "sku": "CC-VTC", "name": "Vitamin C 1000 mg (30 tabs)", "category": "Vitamins", "price": 12.9, "stock": 70, "multi_buy": [1, 1], "promoted": true, "specs": [["Brand", "VitaLife"], ["Count", "30 tablets"], ["Dose", "1 per day"]], "image_query": "vitamin c tablets" },
+        { "sku": "CC-VTD", "name": "Vitamin D3 2000 IU", "category": "Vitamins", "price": 15.5, "stock": 60, "specs": [["Brand", "VitaLife"], ["Count", "60 capsules"]], "image_query": "vitamin capsules" },
+        { "sku": "CC-SPF", "name": "Sunscreen SPF 50", "category": "Skincare", "price": 24, "stock": 40, "discount": ["percent", 20], "specs": [["Brand", "SunShield"], ["Volume", "200 ml"], ["Skin type", "All skin types"]], "image_query": "sunscreen" },
+        { "sku": "CC-CRM", "name": "Hydrating Face Cream", "category": "Skincare", "price": 32, "stock": 25, "specs": [["Brand", "Aqua Derm"], ["Volume", "50 ml"], ["Skin type", "Dry and normal"]], "image_query": "face cream jar" },
+        { "sku": "CC-SHM", "name": "Repair Shampoo 400 ml", "category": "Hair care", "price": 11.5, "stock": 50, "multi_buy": [2, 1], "specs": [["Brand", "HairLab"], ["Volume", "400 ml"]], "image_query": "shampoo bottle" },
+        { "sku": "CC-TPS", "name": "Whitening Toothpaste", "category": "Oral care", "price": 5.9, "stock": 90, "multi_buy": [1, 1], "image_query": "toothpaste" },
+        { "sku": "CC-SAN", "name": "Hand Sanitizer 250 ml", "category": "Hygiene", "price": 4.5, "stock": 100, "image_query": "hand sanitizer" },
+        { "sku": "CC-AID", "name": "First Aid Kit", "category": "First aid", "price": 29, "stock": 15, "specs": [["Pieces", "84"], ["Use", "Home and car"]], "image_query": "first aid kit" }
+      ],
+      "combos": [
+        { "sku": "CC-SUM", "name": "Summer Care Set", "category": "Sets", "price": 49, "description": "Sunscreen, face cream and vitamin C for sunny days.", "items": ["CC-SPF", "CC-CRM", "CC-VTC"], "image_query": "skincare products" }
+      ]
+    },
+    {
+      "code": "BLOOM",
+      "name": "Bloom Flowers & Gifts",
+      "type": "flowers_gifts",
+      "owner": { "name": "Salome Abashidze", "email": "flowers@test.com" },
+      "address": "9 Erekle II Street, Tbilisi",
+      "lat": 41.6935, "lng": 44.8061,
+      "featured": { "badge": "Staff Pick", "headline": "Bouquets that say it for you", "copy": "Hand-tied bouquets and gift boxes with a personal note.", "theme": { "tone": "rose", "shape": "soft" } },
+      "hours": "always",
+      "delivery_slots": [{ "label": "Morning", "from": "09:00", "to": "13:00" }, { "label": "Afternoon", "from": "13:00", "to": "18:00" }, { "label": "Evening", "from": "18:00", "to": "22:00" }],
+      "banner_query": "flower shop bouquets",
+      "promos": [{ "code": "LOVE", "type": "percent", "value": 12, "max_uses": 120 }],
+      "items": [
+        { "sku": "BF-ROS", "name": "Red Roses Bouquet", "category": "Bouquets", "price": 45, "stock": 30, "promoted": true, "variants": [["Stems", "11 roses", 0], ["Stems", "25 roses", 45], ["Stems", "51 roses", 120]], "image_query": "red roses bouquet" },
+        { "sku": "BF-TUL", "name": "Spring Tulips", "category": "Bouquets", "price": 32, "stock": 25, "multi_buy": [1, 1], "image_query": "tulips bouquet" },
+        { "sku": "BF-SUN", "name": "Sunflower Bunch", "category": "Bouquets", "price": 28, "stock": 20, "image_query": "sunflowers" },
+        { "sku": "BF-ORC", "name": "Orchid in Pot", "category": "Plants", "price": 55, "stock": 12, "discount": ["percent", 10], "image_query": "phalaenopsis orchid pot" },
+        { "sku": "BF-SUC", "name": "Succulent Trio", "category": "Plants", "price": 24, "stock": 18, "image_query": "succulents pots" },
+        { "sku": "BF-CHO", "name": "Chocolate Gift Box", "category": "Gifts", "price": 22, "stock": 40, "multi_buy": [2, 1], "image_query": "chocolate box" },
+        { "sku": "BF-TED", "name": "Teddy Bear", "category": "Gifts", "price": 29, "stock": 15, "image_query": "teddy bear" },
+        { "sku": "BF-BAL", "name": "Happy Birthday Balloons", "category": "Gifts", "price": 15, "stock": 35, "image_query": "balloons" }
+      ],
+      "combos": [
+        { "sku": "BF-ROM", "name": "Romantic Set", "category": "Gift sets", "price": 79, "description": "11 red roses, chocolate box and a teddy bear.", "items": ["BF-ROS", "BF-CHO", "BF-TED"], "image_query": "roses gift" }
+      ]
+    },
+    {
+      "code": "PAWS",
+      "name": "Happy Paws Pet Shop",
+      "type": "pet_supplies",
+      "owner": { "name": "Irakli Mamulashvili", "email": "pets@test.com" },
+      "address": "18 Vazha-Pshavela Avenue, Tbilisi",
+      "lat": 41.7243, "lng": 44.7434,
+      "featured": null,
+      "hours": "always",
+      "manual_close": "Stock-taking day. We are back tomorrow at 10:00.",
+      "delivery_slots": [{ "label": "Day", "from": "10:00", "to": "20:00" }],
+      "banner_query": "pet shop dog",
+      "promos": [],
+      "items": [
+        { "sku": "HP-DOG", "name": "Adult Dog Food 12 kg", "category": "Dog", "price": 79, "stock": 20, "promoted": true, "specs": [["Brand", "NutriPaw"], ["Weight", "12 kg"], ["Life stage", "Adult"], ["Pet", "Dog"]], "image_query": "dog food kibble" },
+        { "sku": "HP-CAT", "name": "Indoor Cat Food 4 kg", "category": "Cat", "price": 39, "stock": 25, "discount": ["percent", 10], "specs": [["Brand", "NutriPaw"], ["Weight", "4 kg"], ["Life stage", "Adult"], ["Pet", "Cat"]], "image_query": "cat eating" },
+        { "sku": "HP-TRT", "name": "Dental Dog Treats", "category": "Dog", "price": 8.5, "stock": 60, "multi_buy": [2, 1], "image_query": "dog treats" },
+        { "sku": "HP-LIT", "name": "Clumping Cat Litter 10 L", "category": "Cat", "price": 14, "stock": 40, "multi_buy": [1, 1], "image_query": "cat litter box" },
+        { "sku": "HP-BAL", "name": "Rubber Chew Ball", "category": "Toys", "price": 7, "stock": 50, "image_query": "dog ball toy" },
+        { "sku": "HP-LSH", "name": "Retractable Leash 5 m", "category": "Accessories", "price": 26, "stock": 15, "image_query": "dog leash" },
+        { "sku": "HP-FSH", "name": "Tropical Fish Flakes", "category": "Fish", "price": 6.5, "stock": 30, "image_query": "aquarium tropical fish" }
+      ],
+      "combos": []
+    }
+  ],
+  "customers": [
+    { "name": "Elene Kvaratskhelia", "email": "elene@test.com" },
+    { "name": "Nika Chkheidze", "email": "nika@test.com" },
+    { "name": "Mariam Japaridze", "email": "mariam@test.com" },
+    { "name": "Saba Gogoladze", "email": "saba@test.com" },
+    { "name": "Ketevan Burduli", "email": "keti@test.com" }
+  ],
+  "review_comments": {
+    "5": ["Absolutely perfect, will order again!", "Fast delivery and everything was fresh.", "Best in Tbilisi, no doubt.", "Exactly as described. Great quality.", "The courier was super friendly and quick."],
+    "4": ["Very good, just a little late.", "Great value for the price.", "Tasty and well packed.", "Good quality, would recommend."],
+    "3": ["It was okay, nothing special.", "Decent, but the portion could be bigger."]
+  }
+}

@@ -131,6 +131,25 @@ Admins can also open **Demo scenario** in the web app to create fresh demo marke
 - Support: open **Support** for customer issues, replies, and internal/admin handling.
 - Approvals and audit: admins can open **Approvals** and **Audit logs**.
 
+## Market Types And Deals
+
+Every market has a type (Grocery, Restaurant, Cafe & Bakery, Electronics, Auto Parts, Home Appliances, Pharmacy & Beauty, Flowers & Gifts, Pet Supplies or General Store). Owners pick it under **Market settings**, and it unlocks the right product tools:
+
+- **Buy X get Y deals** (1+1, 2+1, 3+1, 2+2) for food, pharmacy, flowers and pet stores. Free units are taken off in the cart, at checkout and on the server.
+- **Specifications** (brand, fitment, part number, warranty, ...) for electronics, auto parts, appliances, pharmacy and pet stores, shown as a table on the product page.
+
+Types and their features are defined in `backend/config/market_types.php` and mirrored in `web/src/lib/market-types.ts`.
+
+## Demo Catalog
+
+`DemoCatalogSeeder` fills the storefront with 12 markets of every type: photos, VIP / Staff Pick / Fast Delivery badges, percent and fixed discounts, 1+1 deals, combos, specifications, promo codes, reviews and a month of delivered orders.
+
+```bash
+php artisan db:seed --class=DemoCatalogSeeder
+```
+
+Market and product data live in `backend/database/seeders/data/demo-catalog.json`. Photos come from Wikimedia Commons under free licenses; see `backend/database/seeders/demo-media/CREDITS.md`. Extra demo owner accounts (for example `tech@test.com`, `pizza@test.com`) also use the password `123456`.
+
 ## Realtime, Uploads, And CI
 
 - Backend events are broadcast for order and notification updates. By default `BROADCAST_CONNECTION=log` keeps local setup simple; configure Laravel Reverb or Pusher-compatible credentials to enable WebSocket delivery.
