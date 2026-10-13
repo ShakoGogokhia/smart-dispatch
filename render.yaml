@@ -9,7 +9,7 @@ services:
     healthCheckPath: /up
     envVars:
       - key: APP_URL
-        value: https://smart-dispatch-api.onrender.com
+        value: https://smart-dispatch-api-2vrl.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         value: https://smart-dispatch-demo.vercel.app
       - key: CORS_SUPPORTS_CREDENTIALS
