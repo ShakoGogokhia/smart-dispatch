@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import AppLayout from "@/components/AppLayout";
 import RequireAuth from "@/components/RequireAuth";
+import WelcomeTour from "@/components/WelcomeTour";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const AnalyticsPage = lazy(() => import("@/pages/AnalyticsPage"));
@@ -75,51 +76,54 @@ function withSuspense(element: ReactNode) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={withSuspense(<PublicMarketsPage />)} />
-      <Route path="/discover/:collection" element={withSuspense(<PublicDiscoveryPage />)} />
-      <Route path="/m/:marketId" element={withSuspense(<PublicMarketPage />)} />
-      <Route path="/track" element={withSuspense(<OrderTrackingPage />)} />
-      <Route path="/track/:code" element={withSuspense(<OrderTrackingPage />)} />
-      <Route path="/login" element={withSuspense(<LoginPage />)} />
+    <>
+      <WelcomeTour />
+      <Routes>
+        <Route path="/" element={withSuspense(<PublicMarketsPage />)} />
+        <Route path="/discover/:collection" element={withSuspense(<PublicDiscoveryPage />)} />
+        <Route path="/m/:marketId" element={withSuspense(<PublicMarketPage />)} />
+        <Route path="/track" element={withSuspense(<OrderTrackingPage />)} />
+        <Route path="/track/:code" element={withSuspense(<OrderTrackingPage />)} />
+        <Route path="/login" element={withSuspense(<LoginPage />)} />
 
-      <Route element={<AuthedLayout />}>
-        <Route path="/checkout" element={withSuspense(<CheckoutPage />)} />
-      </Route>
-
-      <Route element={<ProtectedLayout />}>
-        <Route path="/orders" element={withSuspense(<OrdersPage />)} />
-        <Route path="/order-history" element={withSuspense(<CustomerHistoryPage />)} />
-        <Route path="/profile" element={withSuspense(<ProfilePage />)} />
-        <Route path="/routes" element={withSuspense(<RoutesPage />)} />
-        <Route path="/live-map" element={withSuspense(<LiveMapPage />)} />
-        <Route path="/dispatch" element={withSuspense(<DispatchConsolePage />)} />
-        <Route path="/analytics" element={withSuspense(<AnalyticsPage />)} />
-        <Route path="/notifications" element={withSuspense(<NotificationsPage />)} />
-        <Route path="/support" element={withSuspense(<SupportTicketsPage />)} />
-        <Route path="/approvals" element={withSuspense(<ApprovalInboxPage />)} />
-        <Route path="/audit-logs" element={withSuspense(<AuditLogsPage />)} />
-        <Route path="/demo-scenario" element={withSuspense(<DemoScenarioPage />)} />
-        <Route path="/badge-pricing" element={withSuspense(<BadgePricingPage />)} />
-        <Route path="/driver-hub" element={withSuspense(<DriverHubPage />)} />
-        <Route path="/driver-earnings" element={withSuspense(<DriverEarningsPage />)} />
-        <Route path="/drivers" element={withSuspense(<DriversPage />)} />
-        <Route path="/users" element={withSuspense(<UsersPage />)} />
-        <Route path="/promo-codes" element={withSuspense(<MarketPromoCodesPage />)} />
-
-        <Route path="/markets">
-          <Route index element={withSuspense(<MarketsPage />)} />
-          <Route path=":marketId" element={withSuspense(<MarketSettingsPage />)} />
-          <Route path=":marketId/dashboard" element={withSuspense(<MarketDashboardPage />)} />
-          <Route path=":marketId/items" element={withSuspense(<MarketItemsPage />)} />
-          <Route path=":marketId/inventory-alerts" element={withSuspense(<InventoryAlertsPage />)} />
-          <Route path=":marketId/promo-codes" element={withSuspense(<MarketPromoCodesPage />)} />
+        <Route element={<AuthedLayout />}>
+          <Route path="/checkout" element={withSuspense(<CheckoutPage />)} />
         </Route>
 
-        <Route path="/my-markets" element={withSuspense(<MyMarketsPage />)} />
-      </Route>
+        <Route element={<ProtectedLayout />}>
+          <Route path="/orders" element={withSuspense(<OrdersPage />)} />
+          <Route path="/order-history" element={withSuspense(<CustomerHistoryPage />)} />
+          <Route path="/profile" element={withSuspense(<ProfilePage />)} />
+          <Route path="/routes" element={withSuspense(<RoutesPage />)} />
+          <Route path="/live-map" element={withSuspense(<LiveMapPage />)} />
+          <Route path="/dispatch" element={withSuspense(<DispatchConsolePage />)} />
+          <Route path="/analytics" element={withSuspense(<AnalyticsPage />)} />
+          <Route path="/notifications" element={withSuspense(<NotificationsPage />)} />
+          <Route path="/support" element={withSuspense(<SupportTicketsPage />)} />
+          <Route path="/approvals" element={withSuspense(<ApprovalInboxPage />)} />
+          <Route path="/audit-logs" element={withSuspense(<AuditLogsPage />)} />
+          <Route path="/demo-scenario" element={withSuspense(<DemoScenarioPage />)} />
+          <Route path="/badge-pricing" element={withSuspense(<BadgePricingPage />)} />
+          <Route path="/driver-hub" element={withSuspense(<DriverHubPage />)} />
+          <Route path="/driver-earnings" element={withSuspense(<DriverEarningsPage />)} />
+          <Route path="/drivers" element={withSuspense(<DriversPage />)} />
+          <Route path="/users" element={withSuspense(<UsersPage />)} />
+          <Route path="/promo-codes" element={withSuspense(<MarketPromoCodesPage />)} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+          <Route path="/markets">
+            <Route index element={withSuspense(<MarketsPage />)} />
+            <Route path=":marketId" element={withSuspense(<MarketSettingsPage />)} />
+            <Route path=":marketId/dashboard" element={withSuspense(<MarketDashboardPage />)} />
+            <Route path=":marketId/items" element={withSuspense(<MarketItemsPage />)} />
+            <Route path=":marketId/inventory-alerts" element={withSuspense(<InventoryAlertsPage />)} />
+            <Route path=":marketId/promo-codes" element={withSuspense(<MarketPromoCodesPage />)} />
+          </Route>
+
+          <Route path="/my-markets" element={withSuspense(<MyMarketsPage />)} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 }
