@@ -388,7 +388,8 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Leaflet in dark mode. */
+/* Leaflet in dark mode: OpenStreetMap tiles inverted into a dark map (no API key needed). */
+.map-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9); }
 .dark .leaflet-container { background: var(--muted); }
 .dark .leaflet-popup-content-wrapper,
 .dark .leaflet-popup-tip {

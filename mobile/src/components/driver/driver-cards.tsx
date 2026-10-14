@@ -1,11 +1,12 @@
-import type { ReactNode } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText, Badge, Button, Card, Panel, Progress, Row, StatusBadge, radius, useColors, withAlpha } from "@/src/components/ui";
 import type { IconName } from "@/src/components/ui";
 import { formatDateTime, formatMoney } from "@/src/lib/format";
 import type { Order } from "@/src/types/api";
+
+import { OfferMap } from "./offer-map";
 
 type Language = "en" | "ka";
 
@@ -153,6 +154,8 @@ export function OfferCard({
   language,
   nowMs,
   busy,
+  compact = false,
+  driverLocation,
   onAccept,
   onDecline,
 }: {
@@ -160,6 +163,10 @@ export function OfferCard({
   language: Language;
   nowMs: number;
   busy: boolean;
+  /** Smaller layout used while the driver already has a delivery in progress. */
+  compact?: boolean;
+  /** Driver's last known position, shown on the offer map. */
+  driverLocation?: { lat: number | string; lng: number | string } | null;
   onAccept: () => void;
   onDecline: () => void;
 }) {
@@ -174,6 +181,8 @@ export function OfferCard({
     <Card highlighted>
       <View style={styles.gap16}>
         <OrderHeader order={order} language={language} />
+
+        <OfferMap order={order} driverLocation={driverLocation} language={language} height={compact ? 190 : 240} />
 
         <View style={[styles.timer, { backgroundColor: timerBg, borderColor: isExpired ? withAlpha(c.destructive, 0.35) : c.border }]}>
           <Row justify="space-between" gap={12}>
@@ -191,75 +200,39 @@ export function OfferCard({
           </AppText>
         </View>
 
-        <OrderDetails order={order} language={language} />
+        {compact ? (
+          <View style={styles.gap8}>
+            <RouteSummary order={order} />
+            {order.driver_compensation?.earning_amount != null ? (
+              <Row gap={6} wrap>
+                <Badge tone="success" icon="cash-outline">{formatMoney(order.driver_compensation.earning_amount, language)}</Badge>
+                <Badge tone="neutral" icon="speedometer-outline">{`${order.driver_compensation.distance_km ?? 0} km`}</Badge>
+              </Row>
+            ) : null}
+          </View>
+        ) : (
+          <OrderDetails order={order} language={language} />
+        )}
 
-        <View style={styles.gap8}>
-          <Button size="lg" fullWidth icon="checkmark-circle-outline" onPress={onAccept} disabled={busy || isExpired}>
-            Accept
-          </Button>
-          <Button size="lg" fullWidth variant="outline" icon="close-circle-outline" onPress={onDecline} disabled={busy || isExpired}>
-            Decline
-          </Button>
-        </View>
-      </View>
-    </Card>
-  );
-}
-
-function navigateUrl(order: Order) {
-  const hasCoords = Boolean(Number(order.dropoff_lat) && Number(order.dropoff_lng));
-  if (hasCoords) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${order.dropoff_lat},${order.dropoff_lng}`;
-  }
-  return order.dropoff_address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.dropoff_address)}` : null;
-}
-
-/** Assigned delivery with Navigate / Call links and the next step button. */
-export function ActiveDeliveryCard({
-  order,
-  language,
-  busy,
-  onPickedUp,
-  onDelivered,
-}: {
-  order: Order;
-  language: Language;
-  busy: boolean;
-  onPickedUp: () => void;
-  onDelivered: () => void;
-}) {
-  const navUrl = navigateUrl(order);
-  const phone = order.customer_phone;
-  const step: ReactNode =
-    order.status === "ASSIGNED" ? (
-      <Button size="lg" fullWidth icon="cube-outline" onPress={onPickedUp} disabled={busy}>
-        Mark picked up
-      </Button>
-    ) : order.status === "PICKED_UP" ? (
-      <Button size="lg" fullWidth icon="checkmark-done-outline" onPress={onDelivered} disabled={busy}>
-        Mark delivered
-      </Button>
-    ) : null;
-
-  return (
-    <Card footer={step ?? undefined}>
-      <View style={styles.gap16}>
-        <OrderHeader order={order} language={language} />
-        <OrderDetails order={order} language={language} />
-        {navUrl || phone ? (
+        {compact ? (
           <Row gap={8}>
-            {navUrl ? (
-              <Button variant="outline" size="lg" icon="navigate-outline" style={styles.flex} onPress={() => void Linking.openURL(navUrl)}>
-                Navigate
-              </Button>
-            ) : null}
-            {phone ? (
-              <Button variant="outline" size="lg" icon="call-outline" style={styles.flex} onPress={() => void Linking.openURL(`tel:${phone}`)}>
-                Call
-              </Button>
-            ) : null}
+            <Button size="lg" variant="outline" icon="close-circle-outline" style={styles.flex} onPress={onDecline} disabled={busy || isExpired}>
+              Decline
+            </Button>
+            <Button size="lg" icon="checkmark-circle-outline" style={styles.flex2} onPress={onAccept} disabled={busy || isExpired}>
+              Accept
+            </Button>
           </Row>
-        ) : null}
+        ) : (
+          <View style={styles.gap8}>
+            <Button size="lg" fullWidth icon="checkmark-circle-outline" onPress={onAccept} disabled={busy || isExpired}>
+              Accept
+            </Button>
+            <Button size="lg" fullWidth variant="outline" icon="close-circle-outline" onPress={onDecline} disabled={busy || isExpired}>
+              Decline
+            </Button>
+          </View>
+        )}
       </View>
     </Card>
   );
@@ -299,6 +272,7 @@ export function NewOfferBanner({ order, language, onDismiss }: { order: Order; l
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
+  flex2: { flex: 2, minWidth: 0 },
   gap8: { gap: 8 },
   gap12: { gap: 12 },
   gap16: { gap: 16 },

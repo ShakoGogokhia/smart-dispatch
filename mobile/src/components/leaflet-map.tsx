@@ -9,8 +9,7 @@ import { usePreferences } from "@/src/providers/app-providers";
 
 /**
  * Leaflet map rendered in a WebView — free OpenStreetMap/CARTO tiles, no API key needed
- * (react-native-maps requires a Google Maps key on Android). Dark tiles match the web; light uses CARTO Voyager
- * because tile.openstreetmap.org blocks requests from apps without a real referer.
+ * (react-native-maps requires a Google Maps key on Android). Free OpenStreetMap tiles; dark mode inverts them.
  * Markers and lines are pushed over the WebView bridge, so updates don't reload the map.
  */
 
@@ -29,6 +28,8 @@ export type MapPolyline = {
   points: { lat: number; lng: number }[];
   color: string;
   width?: number;
+  /** Dashed line (e.g. the way to the pickup). */
+  dashed?: boolean;
 };
 
 export type LeafletMapHandle = {
@@ -43,20 +44,19 @@ type Props = {
   polylines?: MapPolyline[];
   /** Zoom to show all markers/lines the first time they arrive. */
   fitOnLoad?: boolean;
+  /** Re-fit whenever this value changes (e.g. when a road route arrives). */
+  fitKey?: string | number;
+  /** Extra room kept free when fitting (e.g. for overlays on top of the map), in px. */
+  fitPadding?: { top: number; right: number; bottom: number; left: number };
   onMarkerPress?: (id: string) => void;
   style?: StyleProp<ViewStyle>;
   ref?: Ref<LeafletMapHandle>;
 };
 
-const TILES = {
-  light: {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap &copy; CARTO",
-  },
-  dark: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap &copy; CARTO",
-  },
+// Free OpenStreetMap tiles, no API key. Dark mode reuses them with a CSS filter (see .sd-dark below).
+const OSM_TILE = {
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: "&copy; OpenStreetMap contributors",
 };
 
 function buildHtml(center: { lat: number; lng: number }, zoom: number, background: string) {
@@ -68,6 +68,7 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number, backgroun
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0; background: ${background}; }
+  .sd-dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9); }
   .sd-dot { border-radius: 50%; border: 2.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.35); box-sizing: border-box; }
   .leaflet-popup-content { margin: 8px 12px; font: 13px/1.35 -apple-system, system-ui, sans-serif; }
   .sd-title { font-weight: 600; }
@@ -82,7 +83,8 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number, backgroun
   var tiles = null;
   var markerLayer = L.layerGroup().addTo(map);
   var lineLayer = L.layerGroup().addTo(map);
-  var fitted = false;
+  var lastFitKey = null;
+  var currentPadding = null;
 
   function post(msg) { window.ReactNativeWebView.postMessage(JSON.stringify(msg)); }
 
@@ -97,18 +99,21 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number, backgroun
     var bounds = L.latLngBounds([]);
     markerLayer.eachLayer(function (l) { bounds.extend(l.getLatLng()); });
     lineLayer.eachLayer(function (l) { bounds.extend(l.getBounds()); });
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
+    var pad = currentPadding || { top: 32, right: 32, bottom: 32, left: 32 };
+    if (bounds.isValid()) map.fitBounds(bounds, { paddingTopLeft: [pad.left, pad.top], paddingBottomRight: [pad.right, pad.bottom], maxZoom: 16 });
   }
 
   function update(state) {
+    document.body.classList.toggle('sd-dark', !!state.dark);
+    currentPadding = state.fitPadding || null;
     if (state.tile && (!tiles || tiles._url !== state.tile.url)) {
       if (tiles) map.removeLayer(tiles);
-      tiles = L.tileLayer(state.tile.url, { attribution: state.tile.attribution, maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+      tiles = L.tileLayer(state.tile.url, { attribution: state.tile.attribution, maxZoom: 19 }).addTo(map);
     }
     lineLayer.clearLayers();
     (state.polylines || []).forEach(function (p) {
       if (!p.points || p.points.length < 2) return;
-      L.polyline(p.points.map(function (pt) { return [pt.lat, pt.lng]; }), { color: p.color, weight: p.width || 4, opacity: 0.85 }).addTo(lineLayer);
+      L.polyline(p.points.map(function (pt) { return [pt.lat, pt.lng]; }), { color: p.color, weight: p.width || 4, opacity: 0.9, dashArray: p.dashed ? '8 8' : null, lineCap: 'round', lineJoin: 'round' }).addTo(lineLayer);
     });
     markerLayer.clearLayers();
     (state.markers || []).forEach(function (m) {
@@ -125,8 +130,9 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number, backgroun
       marker.on('click', function () { post({ type: 'markerPress', id: String(m.id) }); });
       if (m.selected) marker.openPopup();
     });
-    if (state.fitOnLoad && !fitted && ((state.markers || []).length || (state.polylines || []).length)) {
-      fitted = true;
+    var fitKey = state.fitKey == null ? 'once' : String(state.fitKey);
+    if (state.fitOnLoad && fitKey !== lastFitKey && ((state.markers || []).length || (state.polylines || []).length)) {
+      lastFitKey = fitKey;
       fitToContent();
     }
   }
@@ -137,7 +143,7 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number, backgroun
       if (msg.type === 'update') update(msg.state);
       else if (msg.type === 'flyTo') map.flyTo([msg.lat, msg.lng], msg.zoom || map.getZoom(), { duration: 0.6 });
       else if (msg.type === 'fit') fitToContent();
-    } catch (e) {}
+    } catch (e) { post({ type: 'error', message: String(e && e.message || e) }); }
   }
 
   document.addEventListener('message', function (e) { handle(e.data); });
@@ -148,7 +154,7 @@ function buildHtml(center: { lat: number; lng: number }, zoom: number, backgroun
 </html>`;
 }
 
-export function LeafletMap({ center, zoom = 12, markers = [], polylines = [], fitOnLoad = false, onMarkerPress, style, ref }: Props) {
+export function LeafletMap({ center, zoom = 12, markers = [], polylines = [], fitOnLoad = false, fitKey, fitPadding, onMarkerPress, style, ref }: Props) {
   const { theme, colors } = usePreferences();
   const webRef = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
@@ -162,8 +168,9 @@ export function LeafletMap({ center, zoom = 12, markers = [], polylines = [], fi
   }, []);
 
   const state = useMemo(
-    () => ({ tile: TILES[theme], markers, polylines, fitOnLoad }),
-    [fitOnLoad, markers, polylines, theme],
+    () => ({ tile: OSM_TILE, dark: theme === "dark", markers, polylines, fitOnLoad, fitKey, fitPadding }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fitKey, fitOnLoad, markers, polylines, theme, JSON.stringify(fitPadding)],
   );
 
   useEffect(() => {
@@ -182,9 +189,10 @@ export function LeafletMap({ center, zoom = 12, markers = [], polylines = [], fi
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
-        const msg = JSON.parse(event.nativeEvent.data) as { type: string; id?: string };
+        const msg = JSON.parse(event.nativeEvent.data) as { type: string; id?: string; message?: string };
         if (msg.type === "ready") setReady(true);
         else if (msg.type === "markerPress" && msg.id) onMarkerPress?.(msg.id);
+        else if (msg.type === "error") console.warn("[leaflet-map]", (msg as { message?: string }).message);
       } catch {
         // Ignore malformed bridge messages.
       }

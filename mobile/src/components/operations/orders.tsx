@@ -31,6 +31,11 @@ import type { Order } from "@/src/types/api";
 
 import { DetailGrid, DetailSection, DetailStat } from "./shared";
 
+/** Market can mark an accepted order ready, also while a driver is already on the way. */
+export function canMarkReady(order: Order) {
+  return order.actions?.can_mark_ready ?? order.status === "MARKET_ACCEPTED";
+}
+
 export function driverNameOf(order: Order) {
   return order.assigned_driver?.user?.name || order.offered_driver?.user?.name || null;
 }
@@ -139,7 +144,7 @@ export function OpsOrderCard({
             Accept
           </Button>
         ) : null}
-        {canManage && order.status === "MARKET_ACCEPTED" ? (
+        {canManage && canMarkReady(order) ? (
           <Button size="sm" icon="cube-outline" onPress={onMarkReady} loading={pending}>
             Mark ready
           </Button>
@@ -175,7 +180,7 @@ export function OrderActionsSheet({
       <View>
         <ListItem icon="eye-outline" title="Open detail" onPress={onOpenDetail} />
         {canManage && order?.status === "MARKET_PENDING" ? <ListItem icon="checkmark-circle-outline" title="Accept order" onPress={onAccept} /> : null}
-        {canManage && order?.status === "MARKET_ACCEPTED" ? <ListItem icon="cube-outline" title="Mark ready for pickup" onPress={onMarkReady} /> : null}
+        {canManage && order && canMarkReady(order) ? <ListItem icon="cube-outline" title="Mark ready for pickup" onPress={onMarkReady} /> : null}
       </View>
     </Sheet>
   );
@@ -366,7 +371,7 @@ export function OrderDetailSheet({
             <DetailStat icon="person-outline" label="Customer" value={customerNameOf(order)} strong />
           </DetailGrid>
 
-          {canManage && (order.status === "MARKET_PENDING" || order.status === "MARKET_ACCEPTED") ? (
+          {canManage && (order.status === "MARKET_PENDING" || canMarkReady(order)) ? (
             <Row gap={8} wrap>
               {order.status === "MARKET_PENDING" ? (
                 <Button icon="checkmark-circle-outline" onPress={onAccept} loading={marketPending}>

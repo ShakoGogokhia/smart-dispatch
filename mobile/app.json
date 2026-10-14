@@ -39,6 +39,14 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Smart Dispatch uses your location while you're online so dispatch can show you on the map and send you nearby orders."
+        }
       ]
     ],
     "experiments": {

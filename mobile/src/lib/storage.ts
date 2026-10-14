@@ -120,6 +120,15 @@ export async function setStoredLanguage(language: string) {
   await storage.setItem(STORAGE_KEYS.language, language);
 }
 
+/** Generic key/value access (native storage with an in-memory fallback). */
+export async function getStoredValue(key: string) {
+  return storage.getItem(key);
+}
+
+export async function setStoredValue(key: string, value: string) {
+  await storage.setItem(key, value);
+}
+
 export async function getStoredTheme() {
   return storage.getItem(STORAGE_KEYS.theme);
 }

@@ -756,9 +756,15 @@ export function Chip({
   );
 }
 
-export function ChipRow({ children }: PropsWithChildren) {
+/** Horizontal scroll of chips. `inset` = the parent's horizontal padding, so chips scroll edge to edge instead of being cut off. */
+export function ChipRow({ children, inset = 0 }: PropsWithChildren<{ inset?: number }>) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={inset ? { marginHorizontal: -inset } : undefined}
+      contentContainerStyle={[styles.chipRow, inset ? { paddingHorizontal: inset } : { paddingRight: 16 }]}
+    >
       {children}
     </ScrollView>
   );
@@ -1266,9 +1272,9 @@ const styles = StyleSheet.create({
   segmented: { flexDirection: "row", borderRadius: radius.lg, padding: 3, gap: 3 },
   segment: { flex: 1, minHeight: 32, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 6 },
   segmentText: { fontSize: 13, fontWeight: "500" },
-  chip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: radius.full, paddingHorizontal: 12, height: 32 },
-  chipText: { fontSize: 13, fontWeight: "500" },
-  chipRow: { gap: 8, paddingRight: 16 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderRadius: radius.full, paddingHorizontal: 14, height: 36 },
+  chipText: { fontSize: 13.5, fontWeight: "500" },
+  chipRow: { gap: 8, alignItems: "center", paddingVertical: 2 },
   badge: {
     alignSelf: "flex-start",
     flexDirection: "row",

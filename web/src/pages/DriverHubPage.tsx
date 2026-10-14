@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowDown,
@@ -7,10 +7,7 @@ import {
   Clock3,
   Inbox,
   MapPin,
-  MapPinned,
-  Navigation,
-  PackageCheck,
-  Phone,
+  LocateFixed,
   Power,
   Route,
   Store,
@@ -20,46 +17,27 @@ import {
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
+import { toast } from "sonner";
 
+import { useLiveLocation } from "@/hooks/use-live-location";
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus } from "@/lib/format";
 import { useMe } from "@/lib/useMe";
 import { cn } from "@/lib/utils";
-import type { Order } from "@/types/api";
 import { EmptyState } from "@/components/app/empty-state";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard, StatGrid } from "@/components/app/stat-card";
 import { StatusBadge, toneForStatus } from "@/components/app/status-badge";
+import { CurrentDelivery, NextDeliveryCard, type DeliveryProof } from "@/components/driver/current-delivery";
+import { OfferMap } from "@/components/driver/offer-map";
+import { resolveStep, type DriverFeed, type DriverOrder, type DriverPing, type DriverStep } from "@/components/driver/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
-
-type DriverFeed = {
-  driver: {
-    id: number;
-    status: string;
-    balance?: number | string;
-    total_earned?: number | string;
-    active_shift?: { id: number; started_at: string } | null;
-    latest_ping?: { lat: number | string; lng: number | string; updated_at?: string } | null;
-    transactions?: Array<{
-      id: number;
-      amount: number | string;
-      distance_km?: number | string | null;
-      weather_condition?: string | null;
-      created_at?: string;
-      description?: string | null;
-    }>;
-  };
-  offered_orders: Order[];
-  assigned_orders: Order[];
-};
 
 const OFFER_TIMEOUT_SECONDS = 300;
 
@@ -77,12 +55,8 @@ const text = {
   weather: "Weather",
   onlyDrivers: "Only drivers can view this page.",
   title: "Driver hub",
-  statusTitle: "Driver status",
-  currentState: "Current state",
   noActiveShift: "No active shift",
-  startShift: "Start shift",
   starting: "Starting...",
-  endShift: "End shift",
   ending: "Ending...",
   sendLocation: "Send location",
   latitude: "Latitude",
@@ -97,19 +71,23 @@ const text = {
   activeDrops: "Active drops",
   noEarnings: "No earnings yet.",
   deliveryEarning: "Delivery earning",
-  incomingOffers: "Incoming offers",
-  noOffers: "No offers right now.",
+  newOffer: "New delivery offer",
   timeLeftToAccept: "Time left to accept",
   offerExpired: "Time expired. This offer is being reassigned.",
   offerExpiresSoon: "If the timer runs out, the order is automatically offered to another driver.",
   accept: "Accept",
   decline: "Decline",
-  assignedDeliveries: "Assigned deliveries",
-  proofSignature: "Proof signature",
-  noAssigned: "No assigned deliveries yet.",
-  markPickedUp: "Mark picked up",
-  markDelivered: "Mark delivered",
+  nextDeliveries: "Next deliveries",
 } as const;
+
+const ACTION_SUCCESS: Record<string, string> = {
+  accept: "Offer accepted. Head to the market.",
+  decline: "Offer declined.",
+  "arrived-pickup": "Checked in at the market.",
+  "picked-up": "Picked up. Now go to the customer.",
+  "arrived-dropoff": "Checked in at the customer.",
+  delivered: "Delivered! Great job.",
+};
 
 function getErrorMessage(error: unknown) {
   if (!error) return null;
@@ -136,7 +114,7 @@ function formatCountdown(secondsRemaining: number) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function RouteSummary({ order }: { order: Order }) {
+function RouteSummary({ order }: { order: DriverOrder }) {
   return (
     <div className="grid gap-1 rounded-lg border bg-muted/30 p-3">
       <div className="flex items-start gap-3">
@@ -166,118 +144,148 @@ function RouteSummary({ order }: { order: Order }) {
   );
 }
 
-function OrderDetails({ order }: { order: Order }) {
+function OfferEarnings({ order }: { order: DriverOrder }) {
   const compensation = order.driver_compensation;
+  if (compensation?.earning_amount == null) return null;
   return (
-    <div className="grid gap-3">
-      <RouteSummary order={order} />
-
-      {compensation?.earning_amount != null ? (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="min-w-0 rounded-lg border bg-success/10 p-3">
-            <div className="truncate text-xs text-muted-foreground">{text.potentialEarning}</div>
-            <div className="truncate text-lg font-semibold tabular-nums text-success">{formatMoney(compensation.earning_amount)}</div>
-          </div>
-          <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
-            <div className="truncate text-xs text-muted-foreground">{text.distance}</div>
-            <div className="truncate text-lg font-semibold tabular-nums">{compensation.distance_km ?? 0} km</div>
-          </div>
-          <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
-            <div className="truncate text-xs text-muted-foreground">{text.weather}</div>
-            <div className="truncate text-sm font-medium capitalize">{compensation.weather_condition || "clear"}</div>
-            <div className="text-xs text-muted-foreground tabular-nums">x{compensation.weather_multiplier ?? 1}</div>
-          </div>
-        </div>
-      ) : null}
-
-      <dl className="grid gap-2 text-sm sm:grid-cols-2">
-        <div className="min-w-0">
-          <dt className="text-xs text-muted-foreground">{text.customer}</dt>
-          <dd className="truncate font-medium">{order.customer_name || order.customer?.name || text.unknown}</dd>
-        </div>
-        <div className="min-w-0">
-          <dt className="text-xs text-muted-foreground">{text.phone}</dt>
-          <dd className="truncate font-medium">{order.customer_phone || text.notProvided}</dd>
-        </div>
-        {order.notes ? (
-          <div className="min-w-0 sm:col-span-2">
-            <dt className="text-xs text-muted-foreground">{text.deliveryNotes}</dt>
-            <dd className="break-words">{order.notes}</dd>
-          </div>
-        ) : null}
-        {order.items?.length ? (
-          <div className="min-w-0 sm:col-span-2">
-            <dt className="text-xs text-muted-foreground">{text.items}</dt>
-            <dd className="break-words">
-              {order.items
-                .map((item) => {
-                  const combo = item.combo_offer?.name ? ` [combo: ${item.combo_offer.name}]` : "";
-                  const removed = (item.removed_ingredients ?? []).length ? ` (without ${(item.removed_ingredients ?? []).join(", ")})` : "";
-                  return `${item.name} x${item.qty}${combo}${removed}`;
-                })
-                .join(", ")}
-            </dd>
-          </div>
-        ) : null}
-      </dl>
+    <div className="grid grid-cols-3 gap-2">
+      <div className="min-w-0 rounded-lg border bg-success/10 p-3">
+        <div className="truncate text-xs text-muted-foreground">{text.potentialEarning}</div>
+        <div className="truncate text-lg font-semibold tabular-nums text-success">{formatMoney(compensation.earning_amount)}</div>
+      </div>
+      <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
+        <div className="truncate text-xs text-muted-foreground">{text.distance}</div>
+        <div className="truncate text-lg font-semibold tabular-nums">{compensation.distance_km ?? 0} km</div>
+      </div>
+      <div className="min-w-0 rounded-lg border bg-muted/30 p-3">
+        <div className="truncate text-xs text-muted-foreground">{text.weather}</div>
+        <div className="truncate text-sm font-medium capitalize">{compensation.weather_condition || "clear"}</div>
+        <div className="text-xs text-muted-foreground tabular-nums">x{compensation.weather_multiplier ?? 1}</div>
+      </div>
     </div>
   );
 }
 
-function OrderHeading({ order }: { order: Order }) {
+function OfferCustomerDetails({ order }: { order: DriverOrder }) {
   return (
-    <>
-      <CardDescription>{order.market?.code || text.ordersTitle}</CardDescription>
-      <CardTitle className="text-lg tabular-nums">{order.code}</CardTitle>
-      <CardAction className="flex flex-col items-end gap-1.5">
-        <StatusBadge tone={toneForStatus(order.status)} dot>
-          {formatOrderStatus(order.status)}
-        </StatusBadge>
-        {order.total != null ? <span className="text-sm font-semibold tabular-nums">{formatMoney(order.total)}</span> : null}
-      </CardAction>
-    </>
+    <dl className="grid gap-2 text-sm sm:grid-cols-2">
+      <div className="min-w-0">
+        <dt className="text-xs text-muted-foreground">{text.customer}</dt>
+        <dd className="truncate font-medium">{order.customer_name || order.customer?.name || text.unknown}</dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-xs text-muted-foreground">{text.phone}</dt>
+        <dd className="truncate font-medium">{order.customer_phone || text.notProvided}</dd>
+      </div>
+      {order.notes ? (
+        <div className="min-w-0 sm:col-span-2">
+          <dt className="text-xs text-muted-foreground">{text.deliveryNotes}</dt>
+          <dd className="break-words">{order.notes}</dd>
+        </div>
+      ) : null}
+      {order.items?.length ? (
+        <div className="min-w-0 sm:col-span-2">
+          <dt className="text-xs text-muted-foreground">{text.items}</dt>
+          <dd className="break-words">
+            {order.items
+              .map((item) => {
+                const combo = item.combo_offer?.name ? ` [combo: ${item.combo_offer.name}]` : "";
+                const removed = (item.removed_ingredients ?? []).length ? ` (without ${(item.removed_ingredients ?? []).join(", ")})` : "";
+                return `${item.name} x${item.qty}${combo}${removed}`;
+              })
+              .join(", ")}
+          </dd>
+        </div>
+      ) : null}
+    </dl>
   );
 }
 
-function ContactLinks({ order }: { order: Order }) {
-  const hasCoords = Boolean(Number(order.dropoff_lat) && Number(order.dropoff_lng));
-  const navigateHref = hasCoords
-    ? `https://www.google.com/maps/dir/?api=1&destination=${order.dropoff_lat},${order.dropoff_lng}`
-    : order.dropoff_address
-      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.dropoff_address)}`
-      : null;
-
-  if (!navigateHref && !order.customer_phone) return null;
+function OfferCard({
+  order,
+  nowMs,
+  compact,
+  pending,
+  onAction,
+  driverLocation,
+}: {
+  order: DriverOrder;
+  nowMs: number;
+  compact: boolean;
+  driverLocation?: DriverPing;
+  pending: boolean;
+  onAction: (orderId: number, action: string) => void;
+}) {
+  const secondsRemaining = getOfferSecondsRemaining(order.offer_sent_at, nowMs);
+  const isExpired = secondsRemaining === 0;
+  const isUrgent = !isExpired && secondsRemaining <= 60;
 
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {navigateHref ? (
-        <Button asChild variant="outline" size="lg">
-          <a href={navigateHref} target="_blank" rel="noreferrer">
-            <Navigation />
-            Navigate
-          </a>
+    <Card className="border-primary ring-2 ring-primary/20">
+      <CardHeader>
+        <CardDescription>
+          {text.newOffer} · {order.market?.name || order.market?.code || text.ordersTitle}
+        </CardDescription>
+        <CardTitle className="text-lg tabular-nums">{order.code}</CardTitle>
+        <CardAction className="flex flex-col items-end gap-1.5">
+          <StatusBadge tone={toneForStatus(order.status)} dot>
+            {formatOrderStatus(order.status)}
+          </StatusBadge>
+          {order.total != null ? <span className="text-sm font-semibold tabular-nums">{formatMoney(order.total)}</span> : null}
+        </CardAction>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <OfferMap order={order} driverLocation={driverLocation} className={compact ? "h-48" : undefined} />
+        <div
+          className={cn(
+            "grid gap-2 rounded-lg border p-3",
+            isExpired ? "bg-destructive/10 text-destructive" : isUrgent ? "bg-warning/15" : "bg-muted/30",
+          )}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">{text.timeLeftToAccept}</span>
+            <span className="font-mono text-xl font-semibold tabular-nums">{formatCountdown(secondsRemaining)}</span>
+          </div>
+          <Progress
+            value={(secondsRemaining / OFFER_TIMEOUT_SECONDS) * 100}
+            className={cn(isExpired && "bg-destructive/20", isUrgent && "bg-warning/25 [&>[data-slot=progress-indicator]]:bg-warning")}
+          />
+          <div className="text-xs">{isExpired ? text.offerExpired : text.offerExpiresSoon}</div>
+        </div>
+        <OfferEarnings order={order} />
+        <RouteSummary order={order} />
+        {compact ? null : <OfferCustomerDetails order={order} />}
+      </CardContent>
+      <CardFooter className="grid grid-cols-[2fr_1fr] gap-3">
+        <Button size="lg" className="h-14 text-base" onClick={() => onAction(order.id, "accept")} disabled={pending || isExpired}>
+          <CheckCircle2 />
+          {text.accept}
         </Button>
-      ) : null}
-      {order.customer_phone ? (
-        <Button asChild variant="outline" size="lg">
-          <a href={`tel:${order.customer_phone}`}>
-            <Phone />
-            Call
-          </a>
+        <Button
+          size="lg"
+          variant="outline"
+          className="h-14 text-base"
+          onClick={() => onAction(order.id, "decline")}
+          disabled={pending || isExpired}
+        >
+          <XCircle />
+          {text.decline}
         </Button>
-      ) : null}
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
+
+const DRIVER_STATUS_LABEL: Record<string, string> = {
+  ONLINE: "Online",
+  ON_ROUTE: "On a delivery",
+  OFFLINE: "Offline",
+  BREAK: "On break",
+};
 
 export default function DriverHubPage() {
   const meQ = useMe();
   const queryClient = useQueryClient();
-  const [lat, setLat] = useState("41.7151");
-  const [lng, setLng] = useState("44.8271");
-  const [proofSignature, setProofSignature] = useState("");
-  const [proofPhoto, setProofPhoto] = useState<File | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -293,9 +301,13 @@ export default function DriverHubPage() {
   const feedQ = useQuery({
     queryKey: ["driver-feed"],
     queryFn: async () => (await api.get("/api/driver/orders/feed")).data as DriverFeed,
-    refetchInterval: 7000,
+    refetchInterval: 5000,
     enabled: (meQ.data?.roles ?? []).includes("driver"),
   });
+
+  // Online drivers share live location every 10 s (same as the mobile app).
+  const refreshFeed = useCallback(() => void queryClient.invalidateQueries({ queryKey: ["driver-feed"] }), [queryClient]);
+  const live = useLiveLocation(Boolean(feedQ.data?.driver?.active_shift), refreshFeed);
 
   const refreshQueries = async () => {
     await Promise.all([
@@ -317,43 +329,61 @@ export default function DriverHubPage() {
     onSuccess: refreshQueries,
   });
 
-  const pingM = useMutation({
-    mutationFn: async () =>
-      (await api.post("/api/tracking/ping", { lat: Number(lat), lng: Number(lng) })).data,
-    onSuccess: refreshQueries,
-  });
-
   const actionM = useMutation({
-    mutationFn: async ({ orderId, action }: { orderId: number; action: string }) => {
-      if (action === "delivered" && proofPhoto) {
-        const formData = new FormData();
-        formData.append("proof_photo", proofPhoto);
-        if (proofSignature) formData.append("proof_signature_name", proofSignature);
-        return (await api.post(`/api/driver/orders/${orderId}/delivered`, formData)).data;
+    mutationFn: async ({ orderId, action, proof }: { orderId: number; action: string; proof?: DeliveryProof }) => {
+      if (action === "delivered") {
+        if (proof?.photo) {
+          const formData = new FormData();
+          formData.append("proof_photo", proof.photo);
+          if (proof.signatureName) formData.append("proof_signature_name", proof.signatureName);
+          if (proof.note) formData.append("proof_note", proof.note);
+          return (await api.post(`/api/driver/orders/${orderId}/delivered`, formData)).data;
+        }
+        return (
+          await api.post(`/api/driver/orders/${orderId}/delivered`, {
+            proof_signature_name: proof?.signatureName || null,
+            proof_note: proof?.note || null,
+          })
+        ).data;
       }
 
-      return (
-        await api.post(`/api/driver/orders/${orderId}/${action}`, action === "delivered" ? { proof_signature_name: proofSignature || null } : undefined)
-      ).data;
+      return (await api.post(`/api/driver/orders/${orderId}/${action}`)).data;
     },
-    onSuccess: async () => {
-      setProofPhoto(null);
+    onSuccess: async (_data, { action }) => {
+      const message = ACTION_SUCCESS[action];
+      if (message) toast.success(message);
+      await refreshQueries();
+    },
+    onError: async (error) => {
+      toast.error(getErrorMessage(error) ?? "Something went wrong. Please try again.");
+      // The order may have moved on (e.g. offer expired) — refresh to show the real state.
       await refreshQueries();
     },
   });
 
+  const runAction = (orderId: number, action: string, proof?: DeliveryProof) => actionM.mutate({ orderId, action, proof });
+
   const activeShift = feedQ.data?.driver?.active_shift;
   const driverStatus = feedQ.data?.driver?.status ?? meQ.data?.driver?.status ?? "OFFLINE";
-  const offeredOrders = feedQ.data?.offered_orders ?? [];
-  const assignedOrders = feedQ.data?.assigned_orders ?? [];
-  const mutationError = useMemo(
-    () =>
-      getErrorMessage(startShiftM.error) ||
-      getErrorMessage(endShiftM.error) ||
-      getErrorMessage(pingM.error) ||
-      getErrorMessage(actionM.error),
-    [actionM.error, endShiftM.error, pingM.error, startShiftM.error],
-  );
+  const offeredOrders = useMemo(() => feedQ.data?.offered_orders ?? [], [feedQ.data?.offered_orders]);
+  const assignedOrders = useMemo(() => feedQ.data?.assigned_orders ?? [], [feedQ.data?.assigned_orders]);
+  const [currentOrder, ...nextOrders] = assignedOrders;
+
+  // Tell the driver as soon as the market hands the order over (detected via polling).
+  const previousSteps = useRef<Map<number, DriverStep>>(new Map());
+  useEffect(() => {
+    const next = new Map<number, DriverStep>();
+    for (const order of assignedOrders) {
+      const step = resolveStep(order);
+      if (previousSteps.current.get(order.id) === "waiting_ready" && step === "pickup") {
+        toast.success(`${order.code} is ready — pick it up.`);
+      }
+      next.set(order.id, step);
+    }
+    previousSteps.current = next;
+  }, [assignedOrders]);
+
+  const shiftError = getErrorMessage(startShiftM.error) || getErrorMessage(endShiftM.error);
 
   if (!(meQ.data?.roles ?? []).includes("driver")) {
     return (
@@ -366,28 +396,16 @@ export default function DriverHubPage() {
 
   const transactions = feedQ.data?.driver?.transactions ?? [];
   const isOnline = Boolean(activeShift);
+  const shiftPending = startShiftM.isPending || endShiftM.isPending;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={text.title}
-        description="Go online to receive delivery offers, accept jobs and update each delivery as you go."
-      />
+    <div className="mx-auto max-w-3xl space-y-6">
+      <PageHeader title={text.title} description="Your current job, one step at a time." />
 
-      <Card className={cn(isOnline && "border-success/40")}>
-        <CardHeader>
-          <CardTitle>{text.statusTitle}</CardTitle>
-          <CardDescription>
-            {activeShift ? `Shift started ${formatDateTime(activeShift.started_at)}` : text.noActiveShift}
-          </CardDescription>
-          <CardAction>
-            <StatusBadge tone={toneForStatus(driverStatus)} dot>
-              {driverStatus}
-            </StatusBadge>
-          </CardAction>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+      {/* 1. Shift status (compact) */}
+      <Card className={cn("py-4", isOnline && "border-success/40")}>
+        <CardContent className="grid gap-3 px-4">
+          <div className="flex flex-wrap items-center gap-3">
             <span
               className={cn(
                 "flex size-10 shrink-0 items-center justify-center rounded-full",
@@ -396,37 +414,110 @@ export default function DriverHubPage() {
             >
               <Power className="size-5" />
             </span>
-            <div className="min-w-0">
-              <div className="text-xs text-muted-foreground">{text.currentState}</div>
-              <div className="font-semibold">{isOnline ? "You're online and can receive offers" : "You're offline"}</div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 font-semibold">
+                {isOnline ? "You're online" : "You're offline"}
+                <StatusBadge tone={toneForStatus(driverStatus)} dot>
+                  {DRIVER_STATUS_LABEL[driverStatus] ?? driverStatus}
+                </StatusBadge>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {activeShift ? `Shift started ${formatDateTime(activeShift.started_at)}` : text.noActiveShift}
+              </div>
             </div>
+            {isOnline ? (
+              <Button variant="outline" onClick={() => endShiftM.mutate()} disabled={shiftPending}>
+                {endShiftM.isPending ? <Spinner /> : <Power />}
+                {endShiftM.isPending ? text.ending : "Go offline"}
+              </Button>
+            ) : (
+              <Button onClick={() => startShiftM.mutate()} disabled={shiftPending}>
+                {startShiftM.isPending ? <Spinner /> : <Clock3 />}
+                {startShiftM.isPending ? text.starting : "Go online"}
+              </Button>
+            )}
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Button size="lg" className="h-12 text-base" onClick={() => startShiftM.mutate()} disabled={!!activeShift || startShiftM.isPending}>
-              {startShiftM.isPending ? <Spinner /> : <Clock3 />}
-              {startShiftM.isPending ? text.starting : `Go online (${text.startShift.toLowerCase()})`}
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="h-12 text-base"
-              onClick={() => endShiftM.mutate()}
-              disabled={!activeShift || endShiftM.isPending}
+          {isOnline ? (
+            <p
+              className={cn(
+                "flex items-center gap-1.5 text-xs",
+                live.status === "on" ? "text-success" : live.status === "denied" || live.status === "unavailable" ? "text-destructive" : "text-muted-foreground",
+              )}
             >
-              {endShiftM.isPending ? <Spinner /> : <Power />}
-              {endShiftM.isPending ? text.ending : `Go offline (${text.endShift.toLowerCase()})`}
-            </Button>
-          </div>
-
-          {mutationError ? (
+              <LocateFixed className="size-3.5 shrink-0" />
+              {live.status === "on"
+                ? "Live location on — shared every 10 seconds. New orders arrive when you're close to finishing the current one."
+                : live.status === "denied"
+                  ? "Location permission is blocked. Allow it in the browser so dispatch can send you nearby orders."
+                  : live.status === "unavailable"
+                    ? "Couldn't read your location. Check that location services are on."
+                    : "Turning on live location…"}
+            </p>
+          ) : null}
+          {shiftError ? (
             <Alert variant="destructive">
               <AlertCircle />
-              <AlertDescription>{mutationError}</AlertDescription>
+              <AlertDescription>{shiftError}</AlertDescription>
             </Alert>
           ) : null}
         </CardContent>
       </Card>
+
+      {/* 2. Incoming offers (compact when a delivery is already in progress) */}
+      {offeredOrders.length ? (
+        <section className="space-y-3">
+          {offeredOrders.map((order) => (
+            <OfferCard
+              key={order.id}
+              order={order}
+              nowMs={nowMs}
+              compact={Boolean(currentOrder)}
+              driverLocation={feedQ.data?.driver?.latest_ping}
+              pending={actionM.isPending}
+              onAction={runAction}
+            />
+          ))}
+        </section>
+      ) : null}
+
+      {/* 3. Current delivery + queue */}
+      {currentOrder ? (
+        <section className="space-y-4">
+          <CurrentDelivery
+            key={currentOrder.id}
+            order={currentOrder}
+            ping={feedQ.data?.driver?.latest_ping}
+            pending={actionM.isPending}
+            onAction={runAction}
+          />
+          {nextOrders.length ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">{text.nextDeliveries}</h2>
+              {nextOrders.map((order) => (
+                <NextDeliveryCard key={order.id} order={order} />
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* 4. Nothing to do */}
+      {!currentOrder && !offeredOrders.length ? (
+        feedQ.isLoading ? (
+          <div className="flex justify-center py-14">
+            <Spinner className="size-6" />
+          </div>
+        ) : (
+          <EmptyState
+            icon={isOnline ? Inbox : Power}
+            title="No active deliveries"
+            description={isOnline ? "Stay online — new offers will appear here." : "Go online to start receiving offers."}
+          />
+        )
+      ) : null}
+
+      {/* 5. Stats and tools */}
+      <Separator />
 
       <StatGrid>
         <StatCard label={text.currentBalance} value={formatMoney(feedQ.data?.driver?.balance ?? 0)} icon={Wallet} tone="success" />
@@ -435,177 +526,10 @@ export default function DriverHubPage() {
         <StatCard label={text.activeDrops} value={assignedOrders.length} icon={Route} tone="info" />
       </StatGrid>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="min-w-0 space-y-4">
-          <div>
-            <h2 className="text-base font-semibold">{text.incomingOffers}</h2>
-            <p className="text-sm text-muted-foreground">{text.offerExpiresSoon}</p>
-          </div>
-          {offeredOrders.length === 0 ? (
-            <EmptyState
-              icon={Inbox}
-              title={text.noOffers}
-              description={isOnline ? "New offers appear here automatically. Keep this page open." : "Go online to start receiving offers."}
-            />
-          ) : (
-            offeredOrders.map((order) => {
-              const secondsRemaining = getOfferSecondsRemaining(order.offer_sent_at, nowMs);
-              const isExpired = secondsRemaining === 0;
-              const isUrgent = !isExpired && secondsRemaining <= 60;
-
-              return (
-                <Card key={order.id} className="border-primary ring-2 ring-primary/20">
-                  <CardHeader>
-                    <OrderHeading order={order} />
-                  </CardHeader>
-                  <CardContent className="grid gap-4">
-                    <div
-                      className={cn(
-                        "grid gap-2 rounded-lg border p-3",
-                        isExpired ? "bg-destructive/10 text-destructive" : isUrgent ? "bg-warning/15" : "bg-muted/30",
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-medium">{text.timeLeftToAccept}</span>
-                        <span className="font-mono text-xl font-semibold tabular-nums">{formatCountdown(secondsRemaining)}</span>
-                      </div>
-                      <Progress
-                        value={(secondsRemaining / OFFER_TIMEOUT_SECONDS) * 100}
-                        className={cn(
-                          isExpired && "bg-destructive/20",
-                          isUrgent && "bg-warning/25 [&>[data-slot=progress-indicator]]:bg-warning",
-                        )}
-                      />
-                      {isExpired ? <div className="text-xs">{text.offerExpired}</div> : null}
-                    </div>
-                    <OrderDetails order={order} />
-                  </CardContent>
-                  <CardFooter className="grid grid-cols-2 gap-3">
-                    <Button
-                      size="lg"
-                      className="h-12 text-base"
-                      onClick={() => actionM.mutate({ orderId: order.id, action: "accept" })}
-                      disabled={actionM.isPending || isExpired}
-                    >
-                      <CheckCircle2 />
-                      {text.accept}
-                    </Button>
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="h-12 text-base"
-                      onClick={() => actionM.mutate({ orderId: order.id, action: "decline" })}
-                      disabled={actionM.isPending || isExpired}
-                    >
-                      <XCircle />
-                      {text.decline}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              );
-            })
-          )}
-        </section>
-
-        <section className="min-w-0 space-y-4">
-          <div>
-            <h2 className="text-base font-semibold">{text.assignedDeliveries}</h2>
-            <p className="text-sm text-muted-foreground">Pick up the order, then mark it delivered with proof.</p>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Proof of delivery</CardTitle>
-              <CardDescription>Attached when you tap "{text.markDelivered}".</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="proof-signature">{text.proofSignature}</Label>
-                <Input
-                  id="proof-signature"
-                  placeholder="Name of the person who received it"
-                  value={proofSignature}
-                  onChange={(event) => setProofSignature(event.target.value)}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="proof-photo">Proof photo</Label>
-                <Input id="proof-photo" type="file" accept="image/*" onChange={(event) => setProofPhoto(event.target.files?.[0] ?? null)} />
-              </div>
-            </CardContent>
-          </Card>
-
-          {assignedOrders.length === 0 ? (
-            <EmptyState icon={PackageCheck} title={text.noAssigned} description="Accepted offers show up here as active deliveries." />
-          ) : (
-            assignedOrders.map((order) => (
-              <Card key={order.id}>
-                <CardHeader>
-                  <OrderHeading order={order} />
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  <OrderDetails order={order} />
-                  <ContactLinks order={order} />
-                </CardContent>
-                {order.status === "ASSIGNED" || order.status === "PICKED_UP" ? (
-                  <CardFooter>
-                    {order.status === "ASSIGNED" && (
-                      <Button
-                        size="lg"
-                        className="h-12 w-full text-base"
-                        onClick={() => actionM.mutate({ orderId: order.id, action: "picked-up" })}
-                        disabled={actionM.isPending}
-                      >
-                        <PackageCheck />
-                        {text.markPickedUp}
-                      </Button>
-                    )}
-                    {order.status === "PICKED_UP" && (
-                      <Button
-                        size="lg"
-                        className="h-12 w-full text-base"
-                        onClick={() => actionM.mutate({ orderId: order.id, action: "delivered" })}
-                        disabled={actionM.isPending}
-                      >
-                        <MapPinned />
-                        {text.markDelivered}
-                      </Button>
-                    )}
-                  </CardFooter>
-                ) : null}
-              </Card>
-            ))
-          )}
-        </section>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_1.4fr]">
+      <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{text.sendLocation}</CardTitle>
-            <CardDescription>Share your position so dispatch can see where you are.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="ping-lat">{text.latitude}</Label>
-                <Input id="ping-lat" inputMode="decimal" value={lat} onChange={(event) => setLat(event.target.value)} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="ping-lng">{text.longitude}</Label>
-                <Input id="ping-lng" inputMode="decimal" value={lng} onChange={(event) => setLng(event.target.value)} />
-              </div>
-            </div>
-            <Button variant="outline" size="lg" onClick={() => pingM.mutate()} disabled={pingM.isPending}>
-              {pingM.isPending ? <Spinner /> : <Navigation />}
-              {pingM.isPending ? text.sending : text.sendPing}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>{text.recentEarnings}</CardTitle>
+            <CardTitle className="text-base">{text.recentEarnings}</CardTitle>
             <CardDescription>
               {text.delivered}: <span className="tabular-nums">{transactions.length}</span>
             </CardDescription>

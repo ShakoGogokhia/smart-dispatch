@@ -33,6 +33,35 @@ function badgeToneFor(market: StorefrontMarket): Tone {
   return "neutral";
 }
 
+/**
+ * Pill label that sits on top of a photo. Default is a dark translucent scrim with white text so it stays
+ * readable on any image; pass background/color for solid toned chips (promo, deal, VIP).
+ */
+function ImageChip({
+  label,
+  icon,
+  dot,
+  background,
+  color,
+}: {
+  label: string;
+  icon?: keyof typeof Ionicons.glyphMap;
+  dot?: string;
+  background?: string;
+  color?: string;
+}) {
+  const fg = color ?? "#ffffff";
+  return (
+    <View style={[styles.imageChip, { backgroundColor: background ?? "rgba(0,0,0,0.58)" }]}>
+      {dot ? <View style={[styles.imageChipDot, { backgroundColor: dot }]} /> : null}
+      {icon ? <Ionicons name={icon} size={11} color={fg} /> : null}
+      <Text numberOfLines={1} style={[styles.imageChipText, { color: fg }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 /** Market card: banner + overlapping logo, name/code, address, rating, open/closed, hours, preview thumbs. */
 export function MarketCard({ market, onPress, style }: { market: StorefrontMarket; onPress: () => void; style?: StyleProp<ViewStyle> }) {
   const c = useColors();
@@ -57,25 +86,21 @@ export function MarketCard({ market, onPress, style }: { market: StorefrontMarke
       <View>
         <MediaImage uri={getMarketBannerUrl(market)} style={styles.banner} dimmed={!open} iconSize={30} />
         {!open ? (
-          <View style={[styles.closedStrip, { backgroundColor: c.background }]}>
-            <AppText variant="caption" tone="default" numberOfLines={1} style={styles.medium}>
-              Closed{hoursLabel ? ` · ${hoursLabel}` : ""}
-            </AppText>
+          <View style={styles.closedChipWrap} pointerEvents="none">
+            <ImageChip label={hoursLabel || "Closed"} dot={c.destructive} />
           </View>
         ) : null}
         <View style={styles.bannerBadges} pointerEvents="none">
-          <Row gap={6} wrap style={styles.flexShrink}>
-            {market.is_featured ? <Badge variant="outline">Featured</Badge> : null}
-            {promoLabel ? (
-              <Badge tone="primary" variant="solid" icon="pricetag-outline">
-                {promoLabel}
-              </Badge>
-            ) : null}
-          </Row>
+          <View style={styles.chipColumn}>
+            {market.is_featured ? <ImageChip label="Featured" icon="star" /> : null}
+            {promoLabel ? <ImageChip label={promoLabel} icon="pricetag" background={c.primary} color={c.primaryForeground} /> : null}
+          </View>
           {market.featured_badge ? (
-            <Badge tone={badgeToneFor(market)} variant="solid">
-              {market.featured_badge}
-            </Badge>
+            <ImageChip
+              label={market.featured_badge}
+              background={toneColors(c, badgeToneFor(market)).solid}
+              color={toneColors(c, badgeToneFor(market)).solidFg}
+            />
           ) : null}
         </View>
         <View style={[styles.logoWrap, { backgroundColor: c.card, borderColor: c.card }]}>
@@ -193,29 +218,15 @@ export function DiscoveryProductCard({ item, onPress, style }: { item: Discovery
       <View>
         <MediaImage uri={getItemImageUrls(item)[0]} style={styles.square} icon="cube-outline" dimmed={!marketOpen} />
         <View style={styles.productBadges} pointerEvents="none">
-          {hasDeal ? (
-            <Badge tone="destructive" variant="solid">
-              Deal
-            </Badge>
-          ) : null}
+          {hasDeal ? <ImageChip label="Deal" icon="flame" background={c.destructive} color={c.destructiveForeground} /> : null}
           {comboCount > 0 ? (
-            <View style={[styles.solidChip, { backgroundColor: info.solid }]}>
-              <Text style={[styles.solidChipText, { color: info.solidFg }]}>
-                {comboCount} combo{comboCount === 1 ? "" : "s"}
-              </Text>
-            </View>
+            <ImageChip label={`${comboCount} combo${comboCount === 1 ? "" : "s"}`} background={info.solid} color={info.solidFg} />
           ) : null}
-          {item.is_promoted ? (
-            <View style={[styles.solidChip, { backgroundColor: c.foreground }]}>
-              <Text style={[styles.solidChipText, { color: c.background }]}>Promoted</Text>
-            </View>
-          ) : null}
+          {item.is_promoted ? <ImageChip label="Promoted" icon="sparkles" /> : null}
         </View>
         {!marketOpen ? (
-          <View style={[styles.closedStripSmall, { backgroundColor: c.background }]}>
-            <AppText variant="caption" tone="default" style={styles.medium}>
-              Market closed
-            </AppText>
+          <View style={styles.closedChipWrapSmall} pointerEvents="none">
+            <ImageChip label="Market closed" dot={c.destructive} />
           </View>
         ) : null}
       </View>
@@ -277,9 +288,26 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   banner: { width: "100%", aspectRatio: 16 / 9 },
-  closedStrip: { position: "absolute", left: 0, right: 0, bottom: 0, paddingVertical: 5, paddingLeft: 84, paddingRight: 12, opacity: 0.92 },
-  closedStripSmall: { position: "absolute", left: 0, right: 0, bottom: 0, paddingVertical: 4, paddingHorizontal: 10, opacity: 0.92 },
-  bannerBadges: { position: "absolute", top: 8, left: 8, right: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  closedChipWrap: { position: "absolute", right: 10, bottom: 10, maxWidth: "66%" },
+  closedChipWrapSmall: { position: "absolute", left: 8, bottom: 8, right: 8, alignItems: "flex-start" },
+  bannerBadges: { position: "absolute", top: 10, left: 10, right: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  chipColumn: { flexShrink: 1, alignItems: "flex-start", gap: 6 },
+  imageChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 24,
+    paddingHorizontal: 9,
+    borderRadius: radius.full,
+    maxWidth: "100%",
+    shadowColor: "#000000",
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  imageChipDot: { width: 6, height: 6, borderRadius: 3 },
+  imageChipText: { fontSize: 12, fontWeight: "600", flexShrink: 1 },
   logoWrap: { position: "absolute", left: 16, bottom: -24, borderRadius: 14, borderWidth: 4, overflow: "hidden" },
   logo: { width: 52, height: 52, borderRadius: 10 },
   body: { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 16, gap: 10 },
@@ -291,8 +319,6 @@ const styles = StyleSheet.create({
   strike: { fontWeight: "400", textDecorationLine: "line-through" },
   square: { width: "100%", aspectRatio: 1 },
   productBadges: { position: "absolute", top: 8, left: 8, right: 8, flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  solidChip: { borderRadius: radius.sm, paddingHorizontal: 7, paddingVertical: 2 },
-  solidChipText: { fontSize: 12, fontWeight: "500" },
   productBody: { padding: 12, gap: 6 },
   price: { fontSize: 15, fontWeight: "600", fontVariant: ["tabular-nums"] },
   strikeSmall: { fontSize: 12, textDecorationLine: "line-through", fontVariant: ["tabular-nums"] },

@@ -156,6 +156,8 @@ export type Order = {
   status: string;
   pickup_address?: string | null;
   dropoff_address: string | null;
+  pickup_lat?: string | number | null;
+  pickup_lng?: string | number | null;
   dropoff_lat: string | number;
   dropoff_lng: string | number;
   created_at: string;
@@ -201,6 +203,7 @@ export type Order = {
     feedback?: string | null;
   };
   actions?: {
+    can_mark_ready?: boolean;
     can_cancel?: boolean;
     can_rate?: boolean;
     can_reorder?: boolean;

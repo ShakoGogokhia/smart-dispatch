@@ -239,6 +239,7 @@ export type Order = {
     feedback?: string | null;
   };
   actions?: {
+    can_mark_ready?: boolean;
     can_cancel?: boolean;
     can_rate?: boolean;
     can_reorder?: boolean;

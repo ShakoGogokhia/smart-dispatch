@@ -74,7 +74,7 @@ class DriverOrderController extends Controller
             $order->update([
                 'offered_driver_id' => null,
                 'offer_sent_at' => null,
-                'status' => 'READY_FOR_PICKUP',
+                'status' => OrderDispatchService::waitingStatus($order),
             ]);
 
             $this->dispatchService->offerOrder($order->fresh(), $driver->id);
@@ -161,10 +161,10 @@ class DriverOrderController extends Controller
         $order->update([
             'offered_driver_id' => null,
             'offer_sent_at' => null,
-            'status' => 'READY_FOR_PICKUP',
+            'status' => OrderDispatchService::waitingStatus($order),
         ]);
 
-        $this->dispatchService->offerOrder($order, $driver->id);
+        $this->dispatchService->offerOrder($order->fresh(), $driver->id);
 
         return response()->json($order->fresh(['market', 'items', 'customer', 'offeredDriver.user']));
     }
@@ -177,8 +177,17 @@ class DriverOrderController extends Controller
             return response()->json(['message' => 'This order is not assigned to you'], 422);
         }
 
+        if ($order->status !== 'ASSIGNED') {
+            return response()->json(['message' => 'This order has already been picked up'], 422);
+        }
+
+        if (!$order->ready_for_pickup_at) {
+            return response()->json(['message' => "The market hasn't finished preparing this order yet"], 422);
+        }
+
         $order->update([
             'picked_up_at' => now(),
+            'arrived_at_pickup_at' => $order->arrived_at_pickup_at ?? now(),
             'status' => 'PICKED_UP',
         ]);
 
@@ -199,6 +208,10 @@ class DriverOrderController extends Controller
 
         if (!$driver || (int) $order->assigned_driver_id !== (int) $driver->id) {
             return response()->json(['message' => 'This order is not assigned to you'], 422);
+        }
+
+        if ($order->status !== 'PICKED_UP') {
+            return response()->json(['message' => 'Pick up the order before marking it delivered'], 422);
         }
 
         $data = $request->validate([
@@ -270,6 +283,72 @@ class DriverOrderController extends Controller
         return response()->json($order->fresh(['market', 'items', 'customer', 'assignedDriver.user']));
     }
 
+    /** Driver reached the market. The pickup button appears once the market marks the order ready. */
+    public function arrivedPickup(Request $request, Order $order)
+    {
+        $driver = $request->user()->driver;
+
+        if (!$driver || (int) $order->assigned_driver_id !== (int) $driver->id) {
+            return response()->json(['message' => 'This order is not assigned to you'], 422);
+        }
+
+        if ($order->status !== 'ASSIGNED') {
+            return response()->json(['message' => 'You can only check in at the market before pickup'], 422);
+        }
+
+        if (!$order->arrived_at_pickup_at) {
+            $order->update(['arrived_at_pickup_at' => now()]);
+
+            OrderEvent::create([
+                'order_id' => $order->id,
+                'type' => 'DRIVER_ARRIVED_PICKUP',
+                'payload' => ['driver_id' => $driver->id, 'driver_name' => $driver->user?->name],
+            ]);
+
+            $this->notifications->notifyOrderUpdate(
+                $order->fresh('market'),
+                'Driver at the market',
+                "{$driver->user?->name} has arrived to pick up {$order->code}.",
+                'driver.arrived_pickup',
+            );
+        }
+
+        return response()->json($this->decorateDriverOrder($order->fresh(['market', 'items', 'customer', 'assignedDriver.user'])));
+    }
+
+    /** Driver reached the customer. Next step: hand over and mark delivered. */
+    public function arrivedDropoff(Request $request, Order $order)
+    {
+        $driver = $request->user()->driver;
+
+        if (!$driver || (int) $order->assigned_driver_id !== (int) $driver->id) {
+            return response()->json(['message' => 'This order is not assigned to you'], 422);
+        }
+
+        if ($order->status !== 'PICKED_UP') {
+            return response()->json(['message' => 'Pick up the order before checking in at the customer'], 422);
+        }
+
+        if (!$order->arrived_at_dropoff_at) {
+            $order->update(['arrived_at_dropoff_at' => now()]);
+
+            OrderEvent::create([
+                'order_id' => $order->id,
+                'type' => 'DRIVER_ARRIVED_DROPOFF',
+                'payload' => ['driver_id' => $driver->id, 'driver_name' => $driver->user?->name],
+            ]);
+
+            $this->notifications->notifyOrderUpdate(
+                $order->fresh('market'),
+                'Your courier has arrived',
+                "Your courier is at the delivery address with {$order->code}.",
+                'driver.arrived_dropoff',
+            );
+        }
+
+        return response()->json($this->decorateDriverOrder($order->fresh(['market', 'items', 'customer', 'assignedDriver.user'])));
+    }
+
     public function uploadProof(Request $request, Order $order)
     {
         $driver = $request->user()->driver;
@@ -313,6 +392,18 @@ class DriverOrderController extends Controller
         $weatherMultiplier = $order->driver_weather_multiplier ?? $this->driverEarningsService->weatherMultiplier($order->weather_condition);
         $earningAmount = $order->driver_earning_amount
             ?? $this->driverEarningsService->calculatePayoutAmount($distanceKm, $weatherMultiplier);
+
+        // Which single action the driver app should show next.
+        $order->setAttribute('driver_step', match (true) {
+            $order->status === 'OFFERED' => 'offer',
+            $order->status === 'ASSIGNED' && !$order->arrived_at_pickup_at => 'to_pickup',
+            $order->status === 'ASSIGNED' && !$order->ready_for_pickup_at => 'waiting_ready',
+            $order->status === 'ASSIGNED' => 'pickup',
+            $order->status === 'PICKED_UP' && !$order->arrived_at_dropoff_at => 'to_dropoff',
+            $order->status === 'PICKED_UP' => 'handover',
+            default => 'done',
+        });
+        $order->setAttribute('is_ready_for_pickup', (bool) $order->ready_for_pickup_at);
 
         $order->setAttribute('driver_compensation', [
             'distance_km' => $distanceKm,

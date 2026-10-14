@@ -133,7 +133,7 @@ export default function PublicMarketsPage() {
     queryFn: async () => (await api.get("/api/public/discovery-items")).data as DiscoveryFeed,
   });
 
-  const allMarkets = useMemo(() => marketsQ.data ?? [], [marketsQ.data]);
+  const allMarkets = useMemo(() => (Array.isArray(marketsQ.data) ? marketsQ.data : []), [marketsQ.data]);
   const query = search.trim().toLowerCase();
 
   // Only offer type chips for types that at least one live market uses.

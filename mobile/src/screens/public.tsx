@@ -32,6 +32,7 @@ import {
   type IconName,
 } from "@/src/components/ui";
 import { Brand, CartButton, StorefrontBar } from "@/src/components/storefront-bar";
+import { useWelcomeTour } from "@/src/components/welcome-tour";
 import { CartLines, CartSheet, ViewCartBar } from "@/src/components/storefront/cart";
 import { SummaryRow, type ReviewAccess } from "@/src/components/storefront/common";
 import {
@@ -179,6 +180,7 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
   const meQ = useMe(!!token);
   const scrollRef = useRef<ScrollView>(null);
   const marketsY = useRef(0);
+  const { openTour } = useWelcomeTour();
   const [search, setSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [refreshing, setRefreshing] = useState(false);
@@ -193,7 +195,8 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
     queryFn: async () => (await api.get("/api/public/discovery-items")).data as DiscoveryFeed,
   });
 
-  const allMarkets = useMemo(() => marketsQ.data ?? [], [marketsQ.data]);
+  // Guard against non-JSON/error responses (e.g. while the backend restarts) so the list never crashes.
+  const allMarkets = useMemo(() => (Array.isArray(marketsQ.data) ? marketsQ.data : []), [marketsQ.data]);
   const query = search.trim().toLowerCase();
 
   const searchedMarkets = useMemo(() => {
@@ -336,7 +339,7 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
           }}
         >
           <View style={styles.gap8}>
-            <ChipRow>
+            <ChipRow inset={16}>
               {QUICK_FILTERS.map((filter) => (
                 <Chip key={filter.value} label={filter.label} selected={quickFilter === filter.value} onPress={() => setQuickFilter(filter.value)} />
               ))}
@@ -433,7 +436,14 @@ export function PublicMarketsScreen({ navigation }: PublicMarketsProps) {
 
         {/* How it works */}
         <View style={styles.section}>
-          <SectionHeader title="How it works" />
+          <SectionHeader
+            title="How it works"
+            action={
+              <Button variant="outline" size="sm" icon="compass-outline" onPress={openTour}>
+                Product tour
+              </Button>
+            }
+          />
           {HOW_IT_WORKS.map((step, index) => (
             <Card key={step.title}>
               <Row gap={12} align="flex-start">
@@ -849,7 +859,7 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
               ) : undefined
             }
           />
-          <ChipRow>
+          <ChipRow inset={16}>
             {categories.map((entry) => (
               <Chip key={entry} label={entry === "All" ? "All items" : entry} selected={category === entry} onPress={() => selectCategory(entry)} />
             ))}
@@ -1680,7 +1690,7 @@ const styles = StyleSheet.create({
   stepIcon: { width: 40, height: 40, borderRadius: radius.lg, alignItems: "center", justifyContent: "center" },
   inlineLink: { paddingHorizontal: 0, height: 28 },
   footerBlock: { borderTopWidth: StyleSheet.hairlineWidth * 2, paddingTop: 20, gap: 8 },
-  filterBar: { marginHorizontal: -16, paddingHorizontal: 16, paddingVertical: 10, gap: 10, borderBottomWidth: StyleSheet.hairlineWidth * 2 },
+  filterBar: { marginHorizontal: -16, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth * 2 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   stepBadge: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   stepBadgeText: { fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] },

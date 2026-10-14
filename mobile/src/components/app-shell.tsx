@@ -23,6 +23,7 @@ import {
   withAlpha,
   type IconName,
 } from "@/src/components/ui";
+import { useWelcomeTour } from "@/src/components/welcome-tour";
 import { api } from "@/src/lib/api";
 import { formatDateTime } from "@/src/lib/format";
 import { getActiveMarketId, setActiveMarketId } from "@/src/lib/storage";
@@ -61,6 +62,7 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
   const c = useColors();
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const { openTour } = useWelcomeTour();
   const { language, setLanguage } = usePreferences();
   const meQ = useMe(true);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -335,6 +337,15 @@ export function AppShell({ children, navigation, screenName, title, subtitle, ma
 
         <View style={styles.section}>
           <AppText variant="caption" style={styles.sectionTitle}>PREFERENCES</AppText>
+          <ListItem
+            title="Product tour"
+            description="A quick walkthrough of every role"
+            icon="compass-outline"
+            onPress={() => {
+              setMenuOpen(false);
+              openTour();
+            }}
+          />
           <SegmentedControl
             value={language}
             onChange={(next) => void setLanguage(next)}

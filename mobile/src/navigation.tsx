@@ -1,6 +1,7 @@
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import { navigationRef } from "@/src/navigation-ref";
 import { usePreferences } from "@/src/providers/app-providers";
 import type { RootStackParamList } from "@/src/types/navigation";
 import { HomeScreen, LoginScreen, PublicMarketScreen, PublicMarketsScreen, CheckoutScreen } from "@/src/screens/public";
@@ -31,7 +32,7 @@ export function RootNavigator() {
   };
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <Stack.Navigator initialRouteName="Home" screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="PublicMarkets" component={PublicMarketsScreen} />

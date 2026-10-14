@@ -13,9 +13,22 @@ class OrderDispatchService
 {
     public const OFFER_TIMEOUT_SECONDS = 300;
 
+    /** A busy driver only gets the next offer when this close (km) to the current customer. */
+    public const NEXT_OFFER_RADIUS_KM = 0.5;
+
+    /**
+     * Status an unassigned order goes back to when an offer is declined or times out:
+     * READY_FOR_PICKUP once the market has prepared it, MARKET_ACCEPTED while it's still being prepared.
+     */
+    public static function waitingStatus(Order $order): string
+    {
+        return $order->ready_for_pickup_at ? 'READY_FOR_PICKUP' : 'MARKET_ACCEPTED';
+    }
+
+    /** Orders are offered as soon as the market accepts them, so the driver can head over while it's prepared. */
     public function offerOrder(Order $order, ?int $excludeDriverId = null): ?Order
     {
-        if ($order->assigned_driver_id || $order->status !== 'READY_FOR_PICKUP') {
+        if ($order->assigned_driver_id || !in_array($order->status, ['READY_FOR_PICKUP', 'MARKET_ACCEPTED'], true)) {
             return $order->fresh(['assignedDriver.user', 'offeredDriver.user']);
         }
 
@@ -25,7 +38,7 @@ class OrderDispatchService
             $order->update([
                 'offered_driver_id' => null,
                 'offer_sent_at' => null,
-                'status' => 'READY_FOR_PICKUP',
+                'status' => self::waitingStatus($order),
             ]);
 
             return $order->fresh(['assignedDriver.user', 'offeredDriver.user']);
@@ -53,7 +66,7 @@ class OrderDispatchService
     {
         Order::query()
             ->whereNull('assigned_driver_id')
-            ->whereIn('status', ['READY_FOR_PICKUP', 'OFFERED'])
+            ->whereIn('status', ['MARKET_ACCEPTED', 'READY_FOR_PICKUP', 'OFFERED'])
             ->get()
             ->each(function (Order $order) {
                 $currentOfferedDriverId = $order->offered_driver_id;
@@ -67,7 +80,7 @@ class OrderDispatchService
                         $order->update([
                             'offered_driver_id' => null,
                             'offer_sent_at' => null,
-                            'status' => 'READY_FOR_PICKUP',
+                            'status' => self::waitingStatus($order),
                         ]);
                     }
 
@@ -89,7 +102,9 @@ class OrderDispatchService
             ->whereHas('activeShift')
             ->when($excludeDriverId, fn ($query) => $query->where('id', '!=', $excludeDriverId))
             ->when($declinedDriverIds, fn ($query) => $query->whereNotIn('id', $declinedDriverIds))
-            ->get();
+            ->get()
+            ->filter(fn (Driver $driver) => $this->canReceiveNewOffer($driver, $order))
+            ->values();
 
         if ($drivers->isEmpty()) {
             return null;
@@ -143,6 +158,41 @@ class OrderDispatchService
         ]);
 
         return $fallback->first()['driver'] ?? null;
+    }
+
+    /**
+     * One job at a time: a driver with no active delivery can get offers; a driver who is delivering
+     * only gets the next offer once the current order is picked up and they're within
+     * NEXT_OFFER_RADIUS_KM of that customer. Never more than one pending offer per driver.
+     */
+    public function canReceiveNewOffer(Driver $driver, ?Order $forOrder = null): bool
+    {
+        $hasOtherPendingOffer = Order::query()
+            ->where('offered_driver_id', $driver->id)
+            ->where('status', 'OFFERED')
+            ->when($forOrder, fn ($query) => $query->whereKeyNot($forOrder->id))
+            ->exists();
+        if ($hasOtherPendingOffer) {
+            return false;
+        }
+
+        $active = $driver->assignedOrders()->whereIn('status', ['ASSIGNED', 'PICKED_UP'])->get();
+        if ($active->isEmpty()) {
+            return true;
+        }
+
+        if ($active->count() > 1) {
+            return false;
+        }
+
+        $current = $active->first();
+        $ping = $driver->latestPing;
+        if ($current->status !== 'PICKED_UP' || !$ping || $current->dropoff_lat === null || $current->dropoff_lng === null) {
+            return false;
+        }
+
+        return $this->distanceKm((float) $ping->lat, (float) $ping->lng, (float) $current->dropoff_lat, (float) $current->dropoff_lng)
+            <= self::NEXT_OFFER_RADIUS_KM;
     }
 
     protected function isDriverAvailable(int $driverId): bool

@@ -650,7 +650,7 @@ export default function OrdersPage() {
                   <DetailStat icon={UserRound} label="Customer" value={customerNameOf(detailOrder)} />
                 </div>
 
-                {!isCustomerOnly && (detailOrder.status === "MARKET_PENDING" || detailOrder.status === "MARKET_ACCEPTED") ? (
+                {!isCustomerOnly && (detailOrder.status === "MARKET_PENDING" || canMarkReady(detailOrder)) ? (
                   <div className="flex flex-wrap gap-2">
                     {detailOrder.status === "MARKET_PENDING" && (
                       <Button onClick={() => acceptOrder(detailOrder.id)} disabled={marketActionM.isPending}>
@@ -658,7 +658,7 @@ export default function OrdersPage() {
                         Accept order
                       </Button>
                     )}
-                    {detailOrder.status === "MARKET_ACCEPTED" && (
+                    {canMarkReady(detailOrder) && (
                       <Button onClick={() => markReady(detailOrder.id)} disabled={marketActionM.isPending}>
                         <PackageCheck />
                         Mark ready for pickup
@@ -969,6 +969,11 @@ function RecordRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Market can mark an accepted order ready, also while a driver is already on the way. */
+function canMarkReady(order: Order) {
+  return order.actions?.can_mark_ready ?? order.status === "MARKET_ACCEPTED";
+}
+
 function OrderActionRow({
   order,
   onOpenDetail,
@@ -990,7 +995,7 @@ function OrderActionRow({
         <CheckCircle2 />
         Accept
       </Button>
-    ) : order.status === "MARKET_ACCEPTED" ? (
+    ) : canMarkReady(order) ? (
       <Button size="sm" onClick={onMarkReady} disabled={pending}>
         <PackageCheck />
         Mark ready
@@ -1018,14 +1023,14 @@ function OrderActionRow({
             <Eye />
             Open detail
           </DropdownMenuItem>
-          {order.status === "MARKET_PENDING" || order.status === "MARKET_ACCEPTED" ? <DropdownMenuSeparator /> : null}
+          {order.status === "MARKET_PENDING" || canMarkReady(order) ? <DropdownMenuSeparator /> : null}
           {order.status === "MARKET_PENDING" && (
             <DropdownMenuItem onSelect={onAccept} disabled={pending}>
               <CheckCircle2 />
               Accept order
             </DropdownMenuItem>
           )}
-          {order.status === "MARKET_ACCEPTED" && (
+          {canMarkReady(order) && (
             <DropdownMenuItem onSelect={onMarkReady} disabled={pending}>
               <PackageCheck />
               Mark ready for pickup

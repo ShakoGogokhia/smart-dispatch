@@ -373,9 +373,9 @@ class OrderController extends Controller
         if (array_key_exists('status', $data)) {
             $allowed = [
                 'MARKET_PENDING' => ['MARKET_ACCEPTED', 'CANCELLED'],
-                'MARKET_ACCEPTED' => ['READY_FOR_PICKUP', 'CANCELLED'],
+                'MARKET_ACCEPTED' => ['READY_FOR_PICKUP', 'OFFERED', 'CANCELLED'],
                 'READY_FOR_PICKUP' => ['OFFERED', 'CANCELLED'],
-                'OFFERED' => ['ASSIGNED', 'CANCELLED', 'READY_FOR_PICKUP'],
+                'OFFERED' => ['ASSIGNED', 'CANCELLED', 'READY_FOR_PICKUP', 'MARKET_ACCEPTED'],
                 'ASSIGNED' => ['PICKED_UP', 'CANCELLED'],
                 'PICKED_UP' => ['DELIVERED', 'FAILED'],
                 'FAILED' => [],
@@ -422,6 +422,9 @@ class OrderController extends Controller
 
         $this->notifications->notifyOrderUpdate($order->fresh('market'), 'Order accepted', "{$order->code} was accepted by the market.", 'order.market_accepted');
 
+        // Find a driver now so they can head to the market while the order is being prepared.
+        $this->dispatchService->offerOrder($order->fresh());
+
         OrderEvent::create([
             'order_id' => $order->id,
             'type' => 'MARKET_ACCEPTED',
@@ -438,12 +441,13 @@ class OrderController extends Controller
     {
         abort_unless($this->canManageMarketOrder($request, $order), Response::HTTP_FORBIDDEN);
 
-        if (!in_array($order->status, ['MARKET_ACCEPTED', 'READY_FOR_PICKUP'], true)) {
+        if (!in_array($order->status, ['MARKET_ACCEPTED', 'READY_FOR_PICKUP', 'OFFERED', 'ASSIGNED'], true)) {
             return response()->json(['message' => 'Only accepted market orders can be marked ready'], 422);
         }
 
+        // A driver may already be offered/assigned (heading to the market): keep that status, just record readiness.
         $order->update([
-            'status' => 'READY_FOR_PICKUP',
+            'status' => $order->status === 'MARKET_ACCEPTED' ? 'READY_FOR_PICKUP' : $order->status,
             'ready_for_pickup_at' => now(),
             'estimated_delivery_at' => now()->addMinutes(35),
         ]);
@@ -723,6 +727,7 @@ class OrderController extends Controller
             'feedback' => $order->customer_feedback,
         ]);
         $order->setAttribute('actions', [
+            'can_mark_ready' => in_array($order->status, ['MARKET_ACCEPTED', 'OFFERED', 'ASSIGNED'], true) && !$order->ready_for_pickup_at && (bool) $order->market_id,
             'can_cancel' => in_array($order->status, ['MARKET_PENDING', 'MARKET_ACCEPTED', 'READY_FOR_PICKUP'], true),
             'can_rate' => $order->status === 'DELIVERED',
             'can_reorder' => $order->relationLoaded('items') ? $order->items->isNotEmpty() : $order->items()->exists(),

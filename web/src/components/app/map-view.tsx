@@ -11,15 +11,10 @@ import { cn } from "@/lib/utils";
 // icon rendered as broken images. Use the themed dot everywhere instead.
 L.Marker.prototype.options.icon = makeDotIcon("bg-primary");
 
-const TILES = {
-  light: {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-  },
-  dark: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-  },
+// Free OpenStreetMap tiles, no API key. Dark mode reuses them with a CSS filter (.map-dark in index.css).
+const OSM_TILE = {
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: "&copy; OpenStreetMap contributors",
 };
 
 /** Re-measure the map whenever its container changes size (sheets, dialogs, grid reflow). */
@@ -53,7 +48,7 @@ function FitOnce({ points }: { points?: Array<[number, number]> }) {
 }
 
 /**
- * Leaflet map with theme-aware tiles (free OpenStreetMap/CARTO, no API key).
+ * Leaflet map with free OpenStreetMap tiles (no API key); dark mode inverts them.
  * Children are react-leaflet layers (Marker, Polyline, Popup...) or `useMap` helpers.
  */
 export function MapView({
@@ -71,11 +66,10 @@ export function MapView({
   children?: ReactNode;
 }) {
   const { theme } = useTheme();
-  const tiles = TILES[theme];
 
   return (
-    <MapContainer center={center} zoom={zoom} className={cn("z-0 h-full w-full", className)} scrollWheelZoom>
-      <TileLayer key={theme} attribution={tiles.attribution} url={tiles.url} subdomains="abcd" maxZoom={19} />
+    <MapContainer center={center} zoom={zoom} className={cn("z-0 h-full w-full", theme === "dark" && "map-dark", className)} scrollWheelZoom>
+      <TileLayer attribution={OSM_TILE.attribution} url={OSM_TILE.url} maxZoom={19} />
       <AutoResize />
       <FitOnce points={fitTo} />
       {children}

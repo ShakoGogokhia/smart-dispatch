@@ -125,7 +125,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/driver/orders/feed', [DriverOrderController::class, 'feed']);
     Route::post('/driver/orders/{order}/accept', [DriverOrderController::class, 'accept']);
     Route::post('/driver/orders/{order}/decline', [DriverOrderController::class, 'decline']);
+    Route::post('/driver/orders/{order}/arrived-pickup', [DriverOrderController::class, 'arrivedPickup']);
     Route::post('/driver/orders/{order}/picked-up', [DriverOrderController::class, 'pickedUp']);
+    Route::post('/driver/orders/{order}/arrived-dropoff', [DriverOrderController::class, 'arrivedDropoff']);
     Route::post('/driver/orders/{order}/proof', [DriverOrderController::class, 'uploadProof'])->middleware('throttle:20,1');
     Route::post('/driver/orders/{order}/delivered', [DriverOrderController::class, 'delivered']);
 
