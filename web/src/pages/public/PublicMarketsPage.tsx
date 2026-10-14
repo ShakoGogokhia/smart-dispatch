@@ -60,14 +60,14 @@ function SearchField({
 
   return (
     <div className={cn("relative", className)}>
-      <Search className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground", large ? "left-4 size-5" : "left-3 size-4")} />
+      <Search className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground", large ? "left-3.5 size-4.5" : "left-3 size-4")} />
       <Input
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={large ? "Search markets by name, code, location, headline..." : "Search markets..."}
         aria-label="Search markets"
-        className={cn(large ? "h-12 rounded-lg bg-background pr-10 pl-12 text-base shadow-sm" : "h-9 pl-9")}
+        className={cn(large ? "h-11 rounded-lg bg-background pr-10 pl-11 text-[15px] shadow-xs" : "h-9 pl-9")}
       />
       {large && value ? (
         <Button
@@ -85,11 +85,33 @@ function SearchField({
   );
 }
 
-function HeroStat({ value, label }: { value: number; label: string }) {
+function HeroStat({
+  value,
+  label,
+  icon: Icon,
+  live = false,
+}: {
+  value: number;
+  label: string;
+  icon?: typeof Store;
+  live?: boolean;
+}) {
   return (
-    <div className="flex items-baseline gap-1.5">
-      <span className="text-lg font-semibold tabular-nums">{value}</span>
-      <span className="text-sm text-muted-foreground">{label}</span>
+    <div className="flex flex-col gap-1 rounded-lg border bg-background/70 px-3 py-2.5 backdrop-blur-sm md:flex-row md:items-center md:gap-3">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+        {live ? (
+          <span className="relative flex size-2.5">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+          </span>
+        ) : Icon ? (
+          <Icon className="size-3.5" />
+        ) : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-base font-semibold leading-tight tabular-nums">{value}</span>
+        <span className="block truncate text-xs text-muted-foreground">{label}</span>
+      </span>
     </div>
   );
 }
@@ -193,46 +215,57 @@ export default function PublicMarketsPage() {
 
       <main className="mx-auto w-full max-w-7xl flex-1 space-y-10 px-4 py-6 sm:px-6 md:py-8">
         {/* Hero */}
-        <section className="rounded-xl border bg-primary/5 px-5 py-8 sm:px-8 md:py-12">
-          <div className="max-w-2xl space-y-5">
-            <div className="space-y-2">
-              {meQ.data ? (
-                <p className="text-sm font-medium text-primary">Hi, {meQ.data.name.split(" ")[0]}</p>
-              ) : null}
-              <h1 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
-                Order from local markets, delivered fast
-              </h1>
-              <p className="text-base text-muted-foreground">
-                Find a market near you, add what you need, and track your delivery live.
-              </p>
+        <section className="relative overflow-hidden rounded-2xl border bg-card shadow-xs">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(55% 90% at 100% 0%, color-mix(in oklab, var(--primary) 14%, transparent), transparent 70%), radial-gradient(40% 70% at 0% 100%, color-mix(in oklab, var(--primary) 6%, transparent), transparent 70%)",
+            }}
+          />
+
+          <div className="relative grid gap-5 p-5 sm:p-6 md:grid-cols-[minmax(0,1fr)_15rem] md:items-center md:gap-10 md:px-8 md:py-7">
+            <div className="space-y-4">
+              <div>
+                {meQ.data ? (
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
+                    Welcome back, {meQ.data.name.split(" ")[0]}
+                  </span>
+                ) : null}
+                <h1 className={cn("text-2xl font-semibold tracking-tight text-balance sm:text-3xl", meQ.data && "mt-2.5")}>
+                  Local markets, <span className="text-primary">delivered fast</span>
+                </h1>
+                <p className="mt-1.5 text-sm text-muted-foreground sm:text-[15px]">
+                  Order from nearby stores and follow your delivery live.
+                </p>
+              </div>
+
+              <SearchField value={search} onChange={setSearch} size="lg" className="max-w-xl" />
+
+              <div className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
+                <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground hover:text-foreground">
+                  <Link to="/track">
+                    <MapPin />
+                    Track an order
+                  </Link>
+                </Button>
+                <span className="text-border" aria-hidden>
+                  |
+                </span>
+                <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                  <Link to={meQ.data ? authedPath : "/login"}>
+                    {meQ.data ? "Continue workspace" : "Join workspace"}
+                    <ArrowRight />
+                  </Link>
+                </Button>
+              </div>
             </div>
 
-            <SearchField value={search} onChange={setSearch} size="lg" />
-
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              <HeroStat value={totalMarkets} label="live markets" />
-              <HeroStat value={totalItems} label="items" />
-              <HeroStat value={totalOpen} label="open now" />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button asChild>
-                <a href="#markets">
-                  Browse markets
-                  <ArrowRight />
-                </a>
-              </Button>
-              <Button asChild variant="outline">
-                <Link to="/track">
-                  <MapPin />
-                  Track an order
-                </Link>
-              </Button>
-              <Button asChild variant="ghost">
-                <Link to={meQ.data ? authedPath : "/login"}>
-                  {meQ.data ? "Continue workspace" : "Join workspace"}
-                </Link>
-              </Button>
+            <div className="grid grid-cols-3 gap-2 md:grid-cols-1">
+              <HeroStat icon={Store} value={totalMarkets} label="Live markets" />
+              <HeroStat icon={Package} value={totalItems} label="Items to order" />
+              <HeroStat value={totalOpen} label="Open right now" live />
             </div>
           </div>
         </section>
