@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, AlertTriangle, Clock3, MapPinned, RefreshCw, Route, Satellite, Search, TimerReset, Truck } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { Marker, Polyline, Popup, useMap } from "react-leaflet";
+
+import { MapView } from "@/components/app/map-view";
 
 import { makeDotIcon } from "@/components/operations/map-markers";
 import { EmptyState } from "@/components/app/empty-state";
@@ -18,7 +19,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import type { LiveAlertPayload, LiveHistoryPayload, LivePayload } from "@/types/api";
 
@@ -106,17 +106,9 @@ function FlyToDriver({ position }: { position: [number, number] | null }) {
 
 export default function LiveMapPage() {
   const text = copy.en;
-  const { theme } = useTheme();
   const pollInterval = Number(import.meta.env.VITE_POLL_INTERVAL ?? 4000);
   const centerLat = Number(import.meta.env.VITE_MAP_DEFAULT_LAT ?? 41.7151);
   const centerLng = Number(import.meta.env.VITE_MAP_DEFAULT_LNG ?? 44.8271);
-  const tileUrl =
-    theme === "dark"
-      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-  const tileAttribution =
-    theme === "dark" ? "&copy; OpenStreetMap &copy; CARTO" : "&copy; OpenStreetMap";
-
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DriverFilter>("all");
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
@@ -221,8 +213,11 @@ export default function LiveMapPage() {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Card className="relative h-[calc(100svh-12rem)] min-h-[420px] gap-0 overflow-hidden rounded-xl py-0">
-          <MapContainer center={[centerLat, centerLng]} zoom={12} style={{ height: "100%", width: "100%" }}>
-            <TileLayer attribution={tileAttribution} url={tileUrl} />
+          <MapView
+            center={[centerLat, centerLng]}
+            zoom={12}
+            fitTo={locations.length ? locations.map((location) => [Number(location.lat), Number(location.lng)] as [number, number]) : undefined}
+          >
 
             {tracks.map((track) =>
               track.points.length > 1 ? (
@@ -257,7 +252,7 @@ export default function LiveMapPage() {
             })}
 
             <FlyToDriver position={selectedPosition} />
-          </MapContainer>
+          </MapView>
 
           <div className="pointer-events-none absolute top-3 right-3 z-[1000] flex max-w-[calc(100%-5rem)] flex-col items-end gap-2">
             <div className="pointer-events-auto rounded-lg border bg-card/95 px-3 py-2 text-xs shadow-sm backdrop-blur">

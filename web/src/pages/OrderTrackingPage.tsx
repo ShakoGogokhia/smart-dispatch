@@ -17,13 +17,16 @@ import {
   X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { MapContainer, Marker, TileLayer } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { Marker } from "react-leaflet";
+
+import { MapView } from "@/components/app/map-view";
+import { makeDotIcon, toLatLng } from "@/components/operations/map-markers";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/app/empty-state";
 import { OrderStatusBadge, StatusBadge, humanizeStatus, toneForStatus } from "@/components/app/status-badge";
 import { StorefrontHeader } from "@/components/app/storefront-header";
+import { OrderReview } from "@/components/reviews/order-review";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { auth } from "@/lib/auth";
 import { formatDateTime, formatOrderStatus } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { TrackingPayload } from "@/types/api";
@@ -50,11 +54,13 @@ export default function OrderTrackingPage() {
 
   const order = trackingQ.data;
   const driverPosition = order?.driver?.latest_ping;
-  const mapCenter = useMemo<[number, number] | null>(() => {
-    if (driverPosition) return [Number(driverPosition.lat), Number(driverPosition.lng)];
-    if (order?.dropoff_lat && order?.dropoff_lng) return [Number(order.dropoff_lat), Number(order.dropoff_lng)];
-    return null;
-  }, [driverPosition, order?.dropoff_lat, order?.dropoff_lng]);
+  const driverLatLng = useMemo(() => toLatLng(driverPosition?.lat, driverPosition?.lng), [driverPosition?.lat, driverPosition?.lng]);
+  const dropoffLatLng = useMemo(() => toLatLng(order?.dropoff_lat, order?.dropoff_lng), [order?.dropoff_lat, order?.dropoff_lng]);
+  const mapCenter = driverLatLng ?? dropoffLatLng;
+  const trackingPoints = useMemo(
+    () => [driverLatLng, dropoffLatLng].filter((point): point is [number, number] => point !== null),
+    [driverLatLng, dropoffLatLng],
+  );
 
   const statusUpper = (order?.status ?? "").toUpperCase();
   const isStopped = statusUpper === "CANCELLED" || statusUpper === "FAILED";
@@ -192,6 +198,9 @@ export default function OrderTrackingPage() {
                     </CardContent>
                   </Card>
 
+                  {/* Rate your order (only the signed-in customer who placed it; hidden otherwise) */}
+                  {isDelivered && auth.getToken() ? <OrderReview orderId={order.id} hideWhenUnavailable /> : null}
+
                   {/* Timeline */}
                   <Card>
                     <CardHeader>
@@ -280,11 +289,10 @@ export default function OrderTrackingPage() {
                     </div>
                     {mapCenter ? (
                       <div className="h-[320px] border-t">
-                        <MapContainer center={mapCenter} zoom={13} style={{ height: "100%", width: "100%" }}>
-                          <TileLayer attribution="&copy; OpenStreetMap" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                          {driverPosition && <Marker position={[Number(driverPosition.lat), Number(driverPosition.lng)]} />}
-                          {order.dropoff_lat && order.dropoff_lng && <Marker position={[Number(order.dropoff_lat), Number(order.dropoff_lng)]} />}
-                        </MapContainer>
+                        <MapView center={mapCenter} zoom={13} fitTo={trackingPoints}>
+                          {driverLatLng && <Marker position={driverLatLng} icon={makeDotIcon("bg-primary")} />}
+                          {dropoffLatLng && <Marker position={dropoffLatLng} icon={makeDotIcon("bg-success")} />}
+                        </MapView>
                       </div>
                     ) : (
                       <div className="border-t p-4">

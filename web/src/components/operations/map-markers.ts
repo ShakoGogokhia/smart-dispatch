@@ -14,3 +14,11 @@ export function makeDotIcon(colorClass: string, { size = 20, selected = false }:
     popupAnchor: [0, -size / 2],
   });
 }
+
+/** Valid [lat, lng] or null — guards against null/"" coordinates turning into 0,0. */
+export function toLatLng(lat: unknown, lng: unknown): [number, number] | null {
+  if (lat === null || lat === undefined || lat === "" || lng === null || lng === undefined || lng === "") return null;
+  const a = Number(lat);
+  const b = Number(lng);
+  return Number.isFinite(a) && Number.isFinite(b) ? [a, b] : null;
+}

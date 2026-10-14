@@ -11,7 +11,6 @@ import {
   Badge,
   Button,
   Card,
-  Chip,
   IconButton,
   Input,
   ListItem,
@@ -26,6 +25,7 @@ import {
   withAlpha,
 } from "@/src/components/ui";
 import type { IconName } from "@/src/components/ui";
+import { OrderReview } from "@/src/components/reviews/order-review";
 import { formatDateTime, formatMoney, type AppLanguage } from "@/src/lib/format";
 import type { Order } from "@/src/types/api";
 
@@ -189,6 +189,7 @@ export function CustomerOrderCard({
   onTrack,
   onReorder,
   onCancel,
+  onRate,
   reorderPending,
 }: {
   order: Order;
@@ -197,6 +198,7 @@ export function CustomerOrderCard({
   onTrack: () => void;
   onReorder: () => void;
   onCancel: () => void;
+  onRate?: () => void;
   reorderPending: boolean;
 }) {
   const c = useColors();
@@ -253,7 +255,12 @@ export function CustomerOrderCard({
       ) : null}
 
       <View style={[styles.customerFooter, { borderTopColor: c.border }]}>
-        <Button size="sm" icon="navigate-outline" onPress={onTrack}>
+        {order.status === "DELIVERED" && onRate ? (
+          <Button size="sm" icon="star-outline" onPress={onRate}>
+            Rate order
+          </Button>
+        ) : null}
+        <Button size="sm" variant={order.status === "DELIVERED" && onRate ? "outline" : "default"} icon="navigate-outline" onPress={onTrack}>
           Track
         </Button>
         <Button size="sm" variant="outline" icon="eye-outline" onPress={onOpenDetail}>
@@ -284,12 +291,6 @@ export function OrderDetailSheet({
   onAccept,
   onMarkReady,
   onTrack,
-  rating,
-  setRating,
-  feedback,
-  setFeedback,
-  onRate,
-  ratePending,
   reason,
   setReason,
   refundReason,
@@ -313,12 +314,6 @@ export function OrderDetailSheet({
   onAccept: () => void;
   onMarkReady: () => void;
   onTrack: () => void;
-  rating: string;
-  setRating: (value: string) => void;
-  feedback: string;
-  setFeedback: (value: string) => void;
-  onRate: () => void;
-  ratePending: boolean;
   reason: string;
   setReason: (value: string) => void;
   refundReason: string;
@@ -385,6 +380,8 @@ export function OrderDetailSheet({
             </Row>
           ) : null}
 
+          {isCustomerOnly && order.status === "DELIVERED" ? <OrderReview orderId={order.id} /> : null}
+
           <DetailSection title="Order progress">
             <OrderTimeline steps={order.timeline ?? []} language={language} />
           </DetailSection>
@@ -435,18 +432,6 @@ export function OrderDetailSheet({
                 {order.delivery_proof?.signature_name ? ` | Signature: ${order.delivery_proof.signature_name}` : ""}
               </AppText>
             </Panel>
-          </DetailSection>
-
-          <DetailSection title="Rate delivery" description="Available once the order has been delivered." icon="star-outline">
-            <Row gap={6} wrap>
-              {["5", "4", "3", "2", "1"].map((value) => (
-                <Chip key={value} label={`${value} / 5`} icon="star" selected={rating === value} onPress={() => setRating(value)} />
-              ))}
-            </Row>
-            <Input label="Feedback" value={feedback} onChangeText={setFeedback} placeholder="How did it go?" />
-            <Button icon="star-outline" onPress={onRate} disabled={!order.actions?.can_rate} loading={ratePending} style={styles.selfStart}>
-              Submit rating
-            </Button>
           </DetailSection>
 
           <DetailSection title="Order changes" description="Buttons are enabled when the action is allowed for this order.">
@@ -500,7 +485,6 @@ const styles = StyleSheet.create({
   semibold: { fontWeight: "600" },
   tabular: { fontVariant: ["tabular-nums"] },
   mt2: { marginTop: 2 },
-  selfStart: { alignSelf: "flex-start" },
   badgeColumn: { alignItems: "flex-end", gap: 4 },
   records: { gap: 6 },
   recordValue: { flexShrink: 1, textAlign: "right" },

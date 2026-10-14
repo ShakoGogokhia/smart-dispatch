@@ -192,6 +192,19 @@
 
   html {
     scroll-behavior: smooth;
+    /* Always reserve the scrollbar's space so the layout doesn't jump when it appears or hides. */
+    scrollbar-gutter: stable;
+  }
+
+  /*
+   * Dialogs, sheets and dropdowns (Radix) lock page scroll and add right padding/margin to make up
+   * for the hidden scrollbar. With the gutter reserved above, that compensation would shift the page
+   * the other way, so turn it off: opening a cart or the account menu no longer moves the content.
+   */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+    --removed-body-scroll-bar-size: 0px !important;
   }
 
   body {

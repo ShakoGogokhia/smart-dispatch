@@ -22,6 +22,7 @@ import { LoadingState } from "@/components/app/loading-state";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard, StatGrid } from "@/components/app/stat-card";
 import { StatusBadge, toneForStatus, humanizeStatus } from "@/components/app/status-badge";
+import { OrderReviewDialog } from "@/components/reviews/order-review";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -53,6 +54,7 @@ export default function CustomerHistoryPage() {
   const orders = useMemo(() => historyQ.data?.data ?? [], [historyQ.data]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [reviewTarget, setReviewTarget] = useState<{ id: number; code: string } | null>(null);
 
   const stats = useMemo(() => {
     const delivered = orders.filter((order) => (order.status ?? "").toUpperCase() === "DELIVERED").length;
@@ -282,6 +284,12 @@ export default function CustomerHistoryPage() {
                           Track
                         </Link>
                       </Button>
+                      {(order.status ?? "").toUpperCase() === "DELIVERED" ? (
+                        <Button size="sm" variant="outline" onClick={() => setReviewTarget({ id: order.id, code: order.code })}>
+                          <Star />
+                          {order.rating_summary?.rating ? "Edit review" : "Rate order"}
+                        </Button>
+                      ) : null}
                       <Button size="sm" variant="outline" onClick={() => reorder(order.id)} disabled={!order.actions?.can_reorder || reorderM.isPending}>
                         <RotateCcw />
                         Reorder
@@ -304,6 +312,8 @@ export default function CustomerHistoryPage() {
           )}
         </>
       )}
+
+      <OrderReviewDialog order={reviewTarget} onClose={() => setReviewTarget(null)} />
     </div>
   );
 }

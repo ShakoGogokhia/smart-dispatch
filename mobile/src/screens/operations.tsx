@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from "react";
 import { Alert as RNAlert, Pressable, StyleSheet, View } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
 import { AppShell } from "@/src/components/app-shell";
+import { LeafletMap, type LeafletMapHandle, type MapMarker, type MapPolyline } from "@/src/components/leaflet-map";
 import {
   CustomerOrderCard,
   OpsOrderCard,
@@ -13,6 +13,7 @@ import {
   OrderDetailSheet,
 } from "@/src/components/operations/orders";
 import { HBar, LegendDot, RankBadge } from "@/src/components/operations/shared";
+import { OrderReview } from "@/src/components/reviews/order-review";
 import {
   Alert,
   AppText,
@@ -126,8 +127,7 @@ export function OrdersScreen({ navigation }: OrdersProps) {
   const [dropoffLng, setDropoffLng] = useState("44.8271");
   const [search, setSearch] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
-  const [rating, setRating] = useState("5");
-  const [feedback, setFeedback] = useState("");
+  const [reviewOrder, setReviewOrder] = useState<Order | null>(null);
   const [reason, setReason] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -207,16 +207,6 @@ export function OrdersScreen({ navigation }: OrdersProps) {
     },
   });
 
-  const rateM = useMutation({
-    mutationFn: async (orderId: number) => (await api.post(`/api/orders/${orderId}/rate`, { rating: Number(rating), feedback: feedback || null })).data,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["orders"] });
-      await queryClient.invalidateQueries({ queryKey: ["order-detail"] });
-      setFeedback("");
-      setRating("5");
-    },
-  });
-
   const allOrders = useMemo(() => ordersQ.data?.data ?? [], [ordersQ.data?.data]);
 
   const filteredOrders = useMemo(() => {
@@ -261,7 +251,6 @@ export function OrdersScreen({ navigation }: OrdersProps) {
     getErrorMessage(marketActionM.error) ||
     getErrorMessage(cancelM.error) ||
     getErrorMessage(reorderM.error) ||
-    getErrorMessage(rateM.error) ||
     getErrorMessage(refundM.error);
 
   const toggleStatus = (value: StatusFilter) => setStatusFilter((current) => (current === value ? "all" : value));
@@ -408,6 +397,7 @@ export function OrdersScreen({ navigation }: OrdersProps) {
               onTrack={() => trackOrder(order.code)}
               onReorder={() => reorderM.mutate(order.id)}
               onCancel={() => setCancelTargetId(order.id)}
+              onRate={() => setReviewOrder(order)}
               reorderPending={reorderM.isPending && reorderM.variables === order.id}
             />
           ))}
@@ -505,6 +495,15 @@ export function OrdersScreen({ navigation }: OrdersProps) {
         <Input label="Reason (optional)" value={reason} onChangeText={setReason} placeholder="Tell the market why you're cancelling" multiline />
       </Sheet>
 
+      <Sheet
+        visible={reviewOrder != null}
+        title="Rate your order"
+        description={reviewOrder ? `${reviewOrder.code}${reviewOrder.market?.name ? ` · ${reviewOrder.market.name}` : ""}` : undefined}
+        onClose={() => setReviewOrder(null)}
+      >
+        {reviewOrder ? <OrderReview orderId={reviewOrder.id} framed={false} /> : null}
+      </Sheet>
+
       <OrderDetailSheet
         visible={selectedOrderId != null}
         order={detailOrder}
@@ -518,12 +517,6 @@ export function OrdersScreen({ navigation }: OrdersProps) {
         onAccept={() => detailOrder && acceptOrder(detailOrder.id)}
         onMarkReady={() => detailOrder && markReady(detailOrder.id)}
         onTrack={() => detailOrder && trackOrder(detailOrder.code)}
-        rating={rating}
-        setRating={setRating}
-        feedback={feedback}
-        setFeedback={setFeedback}
-        onRate={() => detailOrder && rateM.mutate(detailOrder.id)}
-        ratePending={rateM.isPending}
         reason={reason}
         setReason={setReason}
         refundReason={refundReason}
@@ -700,7 +693,7 @@ export function LiveMapScreen({ navigation }: LiveMapProps) {
   const { language } = usePreferences();
   const c = useColors();
   const text = copy[language];
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<LeafletMapHandle>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DriverFilter>("all");
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
@@ -769,17 +762,25 @@ export function LiveMapScreen({ navigation }: LiveMapProps) {
     setSelectedDriverId(driverId);
     const location = locations.find((entry) => entry.driver_id === driverId);
     if (location) {
-      mapRef.current?.animateToRegion(
-        {
-          latitude: toNumber(location.lat, centerLat),
-          longitude: toNumber(location.lng, centerLng),
-          latitudeDelta: 0.03,
-          longitudeDelta: 0.03,
-        },
-        600,
-      );
+      mapRef.current?.flyTo(toNumber(location.lat, centerLat), toNumber(location.lng, centerLng), 15);
     }
   };
+
+  const mapLines: MapPolyline[] = tracks.map((track) => ({
+    id: `track-${track.driver_id}`,
+    points: track.points.map((point) => ({ lat: toNumber(point.lat, centerLat), lng: toNumber(point.lng, centerLng) })),
+    color: c.primary,
+    width: 4,
+  }));
+  const mapMarkers: MapMarker[] = locations.map((location) => ({
+    id: location.driver_id,
+    lat: toNumber(location.lat, centerLat),
+    lng: toNumber(location.lng, centerLng),
+    color: stateColor[driverState(location.driver_id)],
+    title: driverName(location.driver_id),
+    description: formatDateTime(location.updated_at || location.created_at, language),
+    selected: location.driver_id === selectedDriverId,
+  }));
 
   const isFetching = liveQ.isFetching || alertsQ.isFetching || historyQ.isFetching;
   const refreshAll = () => {
@@ -813,41 +814,16 @@ export function LiveMapScreen({ navigation }: LiveMapProps) {
 
       <Card padded={false}>
         <View style={styles.mapWrapper}>
-          <MapView
+          <LeafletMap
             ref={mapRef}
             style={styles.map}
-            initialRegion={{
-              latitude: centerLat,
-              longitude: centerLng,
-              latitudeDelta: 0.2,
-              longitudeDelta: 0.2,
-            }}
-          >
-            {tracks.map((track) =>
-              track.points.length > 1 ? (
-                <Polyline
-                  key={`track-${track.driver_id}`}
-                  coordinates={track.points.map((point) => ({ latitude: toNumber(point.lat, centerLat), longitude: toNumber(point.lng, centerLng) }))}
-                  strokeColor={withAlpha(c.primary, 0.7)}
-                  strokeWidth={4}
-                />
-              ) : null,
-            )}
-            {locations.map((location) => {
-              const state = driverState(location.driver_id);
-              return (
-                <Marker
-                  key={`${location.driver_id}-${state}`}
-                  coordinate={{ latitude: toNumber(location.lat, centerLat), longitude: toNumber(location.lng, centerLng) }}
-                  title={driverName(location.driver_id)}
-                  description={formatDateTime(location.updated_at || location.created_at, language)}
-                  pinColor={stateColor[state]}
-                  zIndex={location.driver_id === selectedDriverId ? 1000 : 0}
-                  onPress={() => setSelectedDriverId(location.driver_id)}
-                />
-              );
-            })}
-          </MapView>
+            center={{ lat: centerLat, lng: centerLng }}
+            zoom={12}
+            fitOnLoad
+            markers={mapMarkers}
+            polylines={mapLines}
+            onMarkerPress={(id) => setSelectedDriverId(Number(id))}
+          />
           <View style={[styles.mapOverlay, { backgroundColor: withAlpha(c.card, 0.95), borderColor: c.border }]}>
             <AppText variant="caption" tone="default" style={styles.medium}>
               Telemetry map

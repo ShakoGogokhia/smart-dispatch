@@ -4,7 +4,8 @@ import type { StyleProp, ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
-import { Alert, AppText, Avatar, Button, Input, Label, Panel, Row, useColors, withAlpha, type IconName } from "@/src/components/ui";
+import { StarRating } from "@/src/components/reviews/star-rating";
+import { Alert, AppText, Avatar, Button, Input, Label, Panel, Row, Skeleton, radius, useColors, withAlpha, type IconName } from "@/src/components/ui";
 
 import { formatReviewDate } from "./utils";
 
@@ -60,23 +61,27 @@ export function Stars({ value, size = 14 }: { value?: number | null; size?: numb
   );
 }
 
-export function StarPicker({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+export type ReviewAccess = "signed-out" | "checking" | "ineligible" | "eligible";
+
+/** Shown instead of a review form when the viewer isn't a verified buyer (or isn't signed in). */
+export function ReviewAccessNote({ access, ineligibleText, onSignIn }: { access: Exclude<ReviewAccess, "eligible">; ineligibleText: string; onSignIn: () => void }) {
   const c = useColors();
+  if (access === "checking") {
+    return <Skeleton height={40} />;
+  }
+  if (access === "signed-out") {
+    return (
+      <Button variant="link" size="sm" icon="log-in-outline" onPress={onSignIn} style={styles.selfStart}>
+        Sign in to review
+      </Button>
+    );
+  }
   return (
-    <View style={styles.starPicker} accessibilityRole="radiogroup" accessibilityLabel="Rating">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Pressable
-          key={star}
-          onPress={() => onChange(star)}
-          accessibilityRole="radio"
-          accessibilityState={{ checked: star === value }}
-          accessibilityLabel={`Rate ${star} star${star > 1 ? "s" : ""}`}
-          hitSlop={4}
-          style={styles.starButton}
-        >
-          <Ionicons name={star <= value ? "star" : "star-outline"} size={28} color={star <= value ? c.warning : withAlpha(c.mutedForeground, 0.5)} />
-        </Pressable>
-      ))}
+    <View style={[styles.note, { borderColor: c.border }]}>
+      <Ionicons name="lock-closed-outline" size={15} color={c.mutedForeground} />
+      <AppText variant="small" tone="muted" style={styles.flex}>
+        {ineligibleText}
+      </AppText>
     </View>
   );
 }
@@ -131,7 +136,7 @@ export function ReviewForm({
     <Panel style={styles.formPanel}>
       <View style={styles.gap6}>
         <Label>{title}</Label>
-        <StarPicker value={rating} onChange={onRatingChange} />
+        <StarRating value={rating} onChange={onRatingChange} label={title} />
       </View>
       <Input label="Comment (optional)" value={comment} onChangeText={onCommentChange} placeholder={placeholder} multiline />
       {error ? <Alert tone="destructive" title={error} /> : null}
@@ -212,8 +217,8 @@ const styles = StyleSheet.create({
   dimmed: { opacity: 0.6 },
   ratingInline: { flexDirection: "row", alignItems: "center", gap: 4 },
   stars: { flexDirection: "row", alignItems: "center", gap: 2 },
-  starPicker: { flexDirection: "row", alignItems: "center", gap: 4 },
-  starButton: { padding: 2 },
+  selfStart: { alignSelf: "flex-start" },
+  note: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderWidth: 1, borderStyle: "dashed", borderRadius: radius.lg, padding: 12 },
   formPanel: { gap: 14, padding: 14 },
   stepper: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 8, overflow: "hidden", alignSelf: "flex-start" },
   stepperButton: { alignItems: "center", justifyContent: "center" },

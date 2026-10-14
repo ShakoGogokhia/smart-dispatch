@@ -1,5 +1,5 @@
-import { lazy, Suspense, type ReactNode } from "react";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { lazy, Suspense, useLayoutEffect, type ReactNode } from "react";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 
 import AppLayout from "@/components/AppLayout";
 import RequireAuth from "@/components/RequireAuth";
@@ -70,6 +70,15 @@ function PageLoader() {
   );
 }
 
+/** Start every page at the top (React Router keeps the previous page's scroll position otherwise). */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [pathname]);
+  return null;
+}
+
 function withSuspense(element: ReactNode) {
   return <Suspense fallback={<PageLoader />}>{element}</Suspense>;
 }
@@ -77,6 +86,7 @@ function withSuspense(element: ReactNode) {
 export default function App() {
   return (
     <>
+      <ScrollToTop />
       <WelcomeTour />
       <Routes>
         <Route path="/" element={withSuspense(<PublicMarketsPage />)} />

@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Minus, Plus, Store } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/app/empty-state";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -57,6 +58,9 @@ export function ProductDialog({
   reviews,
   reviewsLoading,
   isLoggedIn,
+  canReview,
+  eligibilityLoading = false,
+  signInHref,
   reviewRating,
   onReviewRatingChange,
   reviewComment,
@@ -84,6 +88,10 @@ export function ProductDialog({
   reviews?: ReviewRecord[];
   reviewsLoading: boolean;
   isLoggedIn: boolean;
+  /** Verified buyer: the item was in one of the user's delivered orders. */
+  canReview: boolean;
+  eligibilityLoading?: boolean;
+  signInHref: string;
   reviewRating: number;
   onReviewRatingChange: (value: number) => void;
   reviewComment: string;
@@ -429,7 +437,13 @@ export function ProductDialog({
               <EmptyState compact title="No reviews yet" description="Be the first to review this item." />
             )}
 
-            {isLoggedIn ? (
+            {!isLoggedIn ? (
+              <p className="text-xs text-muted-foreground">
+                <Link to={signInHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                  Sign in to review
+                </Link>
+              </p>
+            ) : eligibilityLoading ? null : canReview ? (
               <ReviewForm
                 id="item-review-comment"
                 title="Your rating"
@@ -443,7 +457,9 @@ export function ProductDialog({
                 submitLabel={`Post ${reviewRating}-star review`}
                 onSubmit={onSubmitReview}
               />
-            ) : null}
+            ) : (
+              <p className="text-xs text-muted-foreground">You can review this item after you've received it in an order.</p>
+            )}
           </div>
         </div>
 

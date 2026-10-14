@@ -6,7 +6,7 @@ import { formatMoney, toNumber } from "@/src/lib/format";
 import { usePreferences } from "@/src/providers/app-providers";
 import type { ReviewRecord } from "@/src/types/api";
 
-import { MediaImage, QtyStepper, RatingInline, ReviewForm, ReviewListItem } from "./common";
+import { MediaImage, QtyStepper, RatingInline, ReviewAccessNote, ReviewForm, ReviewListItem, type ReviewAccess } from "./common";
 import { StockBadge } from "./market-product-card";
 import { calcItemFinalPrice, getComboIncludedItems, getRemovableIngredients, type StorefrontItem } from "./utils";
 
@@ -35,7 +35,8 @@ export function ProductSheet({
   onAddToCart,
   reviews,
   reviewsLoading,
-  isLoggedIn,
+  reviewAccess,
+  onSignIn,
   reviewRating,
   onReviewRatingChange,
   reviewComment,
@@ -57,7 +58,8 @@ export function ProductSheet({
   onAddToCart: () => void;
   reviews?: ReviewRecord[];
   reviewsLoading: boolean;
-  isLoggedIn: boolean;
+  reviewAccess: ReviewAccess;
+  onSignIn: () => void;
   reviewRating: number;
   onReviewRatingChange: (value: number) => void;
   reviewComment: string;
@@ -257,7 +259,7 @@ export function ProductSheet({
       ) : (
         <EmptyState compact icon="chatbubble-outline" title="No reviews yet" description="Be the first to review this item." />
       )}
-      {isLoggedIn ? (
+      {reviewAccess === "eligible" ? (
         <ReviewForm
           title="Your rating"
           rating={reviewRating}
@@ -271,7 +273,7 @@ export function ProductSheet({
           onSubmit={onSubmitReview}
         />
       ) : (
-        <AppText variant="caption">Sign in to leave a review.</AppText>
+        <ReviewAccessNote access={reviewAccess} ineligibleText="You can review this item after you've received it in an order." onSignIn={onSignIn} />
       )}
     </Sheet>
   );

@@ -83,6 +83,7 @@ class PublicMarketController extends Controller
             return [
                 'id' => $market->id,
                 'name' => $market->name,
+                'slug' => $market->slug,
                 'code' => $market->code,
                 'market_type' => $market->market_type ?: 'general',
                 'address' => $market->address,
@@ -151,7 +152,7 @@ class PublicMarketController extends Controller
                 $marketQuery->where('is_active', true);
             })
             ->with([
-                'market:id,name,code,is_active,uses_operating_schedule,operating_hours,is_manually_closed,manual_close_comment',
+                'market:id,name,slug,code,is_active,uses_operating_schedule,operating_hours,is_manually_closed,manual_close_comment',
             ])
             ->leftJoinSub($orderCounts, 'order_counts', function ($join) {
                 $join->on('items.id', '=', 'order_counts.item_id');
@@ -246,6 +247,7 @@ class PublicMarketController extends Controller
         return [
             'id' => $market->id,
             'name' => $market->name,
+            'slug' => $market->slug,
             'code' => $market->code,
             'market_type' => $market->market_type ?: 'general',
             'address' => $market->address,
@@ -484,6 +486,7 @@ class PublicMarketController extends Controller
             'market' => $item->market ? [
                 'id' => $item->market->id,
                 'name' => $item->market->name,
+                'slug' => $item->market->slug,
                 'code' => $item->market->code,
                 'is_active' => (bool) $item->market->is_active,
                 'uses_operating_schedule' => (bool) ($item->market->uses_operating_schedule ?? false),

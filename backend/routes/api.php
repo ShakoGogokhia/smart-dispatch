@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\OrderReviewController;
 use App\Http\Controllers\Api\VehicleController;
 use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\ShiftController;
@@ -89,6 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/favorites', [FavoriteController::class, 'index']);
     Route::post('/favorites/toggle', [FavoriteController::class, 'toggle']);
     Route::post('/markets/{market}/reviews', [ReviewController::class, 'storeMarket']);
+    Route::get('/markets/{market}/review-eligibility', [ReviewController::class, 'eligibility']);
     Route::post('/items/{item}/reviews', [ReviewController::class, 'store']);
     Route::get('/workflow-approvals', [WorkflowApprovalController::class, 'index']);
     Route::post('/workflow-approvals', [WorkflowApprovalController::class, 'store']);
@@ -106,6 +108,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/payment/simulate', [PaymentController::class, 'simulate'])->middleware('throttle:20,1');
     Route::post('/orders/{order}/payment/refund', [PaymentController::class, 'refund'])->middleware('role:admin');
     Route::post('/orders/{order}/rate', [OrderController::class, 'rate']);
+    Route::get('/orders/{order}/review', [OrderReviewController::class, 'show']);
+    Route::post('/orders/{order}/review', [OrderReviewController::class, 'store']);
     Route::post('/orders/{order}/reorder', [OrderController::class, 'reorder']);
     Route::post('/orders/{order}/events', [OrderEventController::class, 'store']);
 

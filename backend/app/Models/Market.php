@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Market extends Model
 {
@@ -59,6 +60,49 @@ class Market extends Model
         'banner_url',
         'image_url',
     ];
+
+    protected static function booted(): void
+    {
+        // Every market gets a stable, URL-friendly slug (used in storefront links: /m/{slug}).
+        static::saving(function (Market $market) {
+            if (! $market->slug && Schema::hasColumn('markets', 'slug')) {
+                $market->slug = static::uniqueSlug($market->name ?: $market->code, $market->id);
+            }
+        });
+    }
+
+    /** "Fresh Market" -> "fresh-market" (or "fresh-market-2" when taken). Never purely numeric, so it can't clash with ids. */
+    public static function uniqueSlug(?string $source, ?int $ignoreId = null): string
+    {
+        $base = Str::slug((string) $source) ?: 'market';
+        if (ctype_digit($base)) {
+            $base = "market-{$base}";
+        }
+
+        $slug = $base;
+        $suffix = 2;
+        while (static::query()
+            ->where('slug', $slug)
+            ->when($ignoreId, fn ($query) => $query->whereKeyNot($ignoreId))
+            ->exists()) {
+            $slug = "{$base}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
+    }
+
+    /** Route model binding accepts either the numeric id or the slug: /markets/12 and /markets/fresh-market. */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if ($field) {
+            return parent::resolveRouteBinding($value, $field);
+        }
+
+        return ctype_digit((string) $value)
+            ? $this->whereKey($value)->first()
+            : $this->where('slug', $value)->first();
+    }
 
     public function owner()
     {

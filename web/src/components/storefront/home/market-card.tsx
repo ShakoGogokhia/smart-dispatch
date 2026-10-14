@@ -29,7 +29,7 @@ export function MarketCard({ market, className }: { market: StorefrontMarket; cl
 
   return (
     <Link
-      to={`/m/${market.id}`}
+      to={`/m/${market.slug || market.id}`}
       aria-label={`${market.name}${isOpen ? "" : " (closed)"}`}
       className={cn(
         "group flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow outline-none hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/50",

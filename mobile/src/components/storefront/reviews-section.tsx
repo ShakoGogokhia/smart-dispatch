@@ -3,7 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { AppText, Card, EmptyState, Progress, Row, Separator, Skeleton, useColors } from "@/src/components/ui";
 
-import { ReviewForm, ReviewListItem, Stars } from "./common";
+import { ReviewAccessNote, ReviewForm, ReviewListItem, Stars, type ReviewAccess } from "./common";
 import type { MarketReviewRecord } from "./utils";
 
 export function MarketReviewsSection({
@@ -12,7 +12,8 @@ export function MarketReviewsSection({
   reviews,
   isLoading,
   isError,
-  isLoggedIn,
+  reviewAccess,
+  onSignIn,
   rating,
   onRatingChange,
   comment,
@@ -26,7 +27,8 @@ export function MarketReviewsSection({
   reviews?: MarketReviewRecord[];
   isLoading: boolean;
   isError: boolean;
-  isLoggedIn: boolean;
+  reviewAccess: ReviewAccess;
+  onSignIn: () => void;
   rating: number;
   onRatingChange: (value: number) => void;
   comment: string;
@@ -97,7 +99,7 @@ export function MarketReviewsSection({
         <EmptyState compact icon="chatbubble-outline" title="No market reviews yet" description="Be the first to review this market." />
       )}
 
-      {isLoggedIn ? (
+      {reviewAccess === "eligible" ? (
         <ReviewForm
           title="Your market rating"
           rating={rating}
@@ -111,7 +113,11 @@ export function MarketReviewsSection({
           onSubmit={onSubmit}
         />
       ) : (
-        <AppText variant="caption">Sign in to leave a review.</AppText>
+        <ReviewAccessNote
+          access={reviewAccess}
+          ineligibleText="You can review this market after one of your orders from it is delivered."
+          onSignIn={onSignIn}
+        />
       )}
     </Card>
   );

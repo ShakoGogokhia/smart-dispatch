@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 
+import { LeafletMap, type MapMarker } from "@/src/components/leaflet-map";
+import { OrderReview } from "@/src/components/reviews/order-review";
 import { StorefrontBar } from "@/src/components/storefront-bar";
 import {
   Alert,
@@ -28,12 +29,13 @@ import {
 import type { IconName } from "@/src/components/ui";
 import { api } from "@/src/lib/api";
 import { formatDateTime } from "@/src/lib/format";
-import { usePreferences } from "@/src/providers/app-providers";
+import { useAuth, usePreferences } from "@/src/providers/app-providers";
 import type { RootStackParamList } from "@/src/types/navigation";
 
 type TrackingProps = NativeStackScreenProps<RootStackParamList, "OrderTracking">;
 
 type TrackingPayload = {
+  id?: number;
   code: string;
   status: string;
   pickup_address?: string | null;
@@ -60,6 +62,7 @@ function toCoord(value: number | string | null | undefined) {
 export function OrderTrackingScreen({ route, navigation }: TrackingProps) {
   const c = useColors();
   const { language } = usePreferences();
+  const { token } = useAuth();
   const [draftCode, setDraftCode] = useState(route.params?.code ?? "");
   const [code, setCode] = useState(route.params?.code ?? "");
   const trackingQ = useQuery({
@@ -200,6 +203,9 @@ export function OrderTrackingScreen({ route, navigation }: TrackingProps) {
                 </View>
               </Card>
 
+              {/* Rate your order (only the signed-in customer who placed it; hidden on 401/403) */}
+              {isDelivered && token && order.id ? <OrderReview orderId={order.id} /> : null}
+
               {/* Stepper */}
               <Card title="Progress" description="Each step is checked off as your order moves along.">
                 {(order.timeline ?? []).length === 0 ? (
@@ -226,13 +232,16 @@ export function OrderTrackingScreen({ route, navigation }: TrackingProps) {
               >
                 {mapCenter ? (
                   <View style={[styles.mapWrap, { borderTopColor: c.border, backgroundColor: c.muted }]}>
-                    <MapView
+                    <LeafletMap
                       style={StyleSheet.absoluteFill}
-                      initialRegion={{ ...mapCenter, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
-                    >
-                      {driverCoord ? <Marker coordinate={driverCoord} title="Driver" pinColor={c.primary} /> : null}
-                      {dropoffCoord ? <Marker coordinate={dropoffCoord} title="Drop-off" pinColor={c.success} /> : null}
-                    </MapView>
+                      center={{ lat: mapCenter.latitude, lng: mapCenter.longitude }}
+                      zoom={14}
+                      fitOnLoad
+                      markers={[
+                        ...(driverCoord ? [{ id: "driver", lat: driverCoord.latitude, lng: driverCoord.longitude, color: c.primary, title: "Driver" }] : []),
+                        ...(dropoffCoord ? [{ id: "dropoff", lat: dropoffCoord.latitude, lng: dropoffCoord.longitude, color: c.success, title: "Drop-off" }] : []),
+                      ] satisfies MapMarker[]}
+                    />
                   </View>
                 ) : (
                   <View style={[styles.mapEmpty, { borderTopColor: c.border }]}>

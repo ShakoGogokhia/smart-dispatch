@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Activity,
   BarChart3,
@@ -240,8 +240,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }
   }, [autoMarketId, routeMarketId, storedMarketId]);
 
+  const mainRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
     setMobileOpen(false);
+  }, [currentPath]);
+
+  // The workspace scrolls inside <main>, so reset it too when the page changes.
+  useLayoutEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [currentPath]);
 
   function logout() {
@@ -495,7 +502,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </DropdownMenu>
         </header>
 
-        <main className="scrollbar-thin min-w-0 flex-1 overflow-y-auto">
+        <main ref={mainRef} className="scrollbar-thin min-w-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-7xl px-4 py-5 pb-24 md:px-6 md:py-6 lg:pb-8">{children}</div>
         </main>
 

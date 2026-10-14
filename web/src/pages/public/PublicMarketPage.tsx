@@ -1,6 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, PackageSearch, Search, ShoppingBag, Store, X } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -53,8 +53,10 @@ const UNCATEGORIZED = "Other";
 
 function PublicMarketScreen({ marketId }: { marketId: string }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const isLoggedIn = !!auth.getToken();
+  const signInHref = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -114,6 +116,23 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
     queryFn: async () => (await api.get("/api/favorites")).data as FavoritePayload,
     enabled: !!auth.getToken(),
   });
+
+  // Verified-buyer check: reviews are only accepted after a delivered order.
+  const eligibilityQ = useQuery({
+    queryKey: ["review-eligibility", marketId],
+    queryFn: async () =>
+      (await api.get(`/api/markets/${marketId}/review-eligibility`)).data as {
+        can_review_market: boolean;
+        reviewable_item_ids: number[];
+      },
+    enabled: isLoggedIn && !!marketId,
+    retry: false,
+  });
+  const canReviewMarket = eligibilityQ.data?.can_review_market ?? false;
+  const reviewableItemIds = useMemo(
+    () => new Set((eligibilityQ.data?.reviewable_item_ids ?? []).map(Number)),
+    [eligibilityQ.data?.reviewable_item_ids],
+  );
 
   const reviewsQ = useQuery({
     queryKey: ["item-reviews", selectedItemId],
@@ -558,6 +577,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
                 isLoading={marketReviewsQ.isLoading}
                 isError={marketReviewsQ.isError}
                 isLoggedIn={isLoggedIn}
+                canReview={canReviewMarket}
+                eligibilityLoading={eligibilityQ.isLoading}
+                signInHref={signInHref}
                 rating={marketReviewRating}
                 onRatingChange={setMarketReviewRating}
                 comment={marketReviewComment}
@@ -670,6 +692,9 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
         reviews={reviewsQ.data}
         reviewsLoading={reviewsQ.isLoading}
         isLoggedIn={isLoggedIn}
+        canReview={selectedItemId != null && reviewableItemIds.has(selectedItemId)}
+        eligibilityLoading={eligibilityQ.isLoading}
+        signInHref={signInHref}
         reviewRating={reviewRating}
         onReviewRatingChange={setReviewRating}
         reviewComment={reviewComment}
@@ -683,9 +708,59 @@ function PublicMarketScreen({ marketId }: { marketId: string }) {
 }
 
 export default function PublicMarketPage() {
-  const { marketId = "" } = useParams();
+  // The URL holds the market's slug (/m/fresh-market) or, for old links, its numeric id (/m/12).
+  const { marketId: param = "" } = useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const isNumeric = /^\d+$/.test(param);
 
-  if (!marketId) {
+  // Same query key/endpoint the screen uses, so a numeric URL doesn't fetch twice.
+  const marketQ = useQuery({
+    queryKey: ["public-market", param],
+    queryFn: async () => (await api.get(`/api/public/markets/${param}`)).data as StorefrontMarket,
+    enabled: !!param,
+  });
+
+  const market = marketQ.data;
+  // Cart, favorites and checkout keep working with the numeric id.
+  const resolvedId = isNumeric ? param : market?.id ? String(market.id) : "";
+
+  // Show the canonical slug URL; seed the cache so the swap doesn't refetch or remount.
+  useEffect(() => {
+    if (!market?.slug || market.slug === param) return;
+    queryClient.setQueryData(["public-market", market.slug], market);
+    queryClient.setQueryData(["public-market", String(market.id)], market);
+    navigate(`/m/${market.slug}`, { replace: true });
+  }, [market, navigate, param, queryClient]);
+
+  if (param && !resolvedId) {
+    return (
+      <div className="min-h-screen bg-background">
+        <StorefrontHeader />
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 md:py-8">
+          {marketQ.isError ? (
+            <EmptyState
+              icon={Store}
+              title="Market not found"
+              description="This market link doesn't exist or is no longer available."
+              action={
+                <Button asChild variant="outline">
+                  <Link to="/">
+                    <ArrowLeft />
+                    Back to markets
+                  </Link>
+                </Button>
+              }
+            />
+          ) : (
+            <MarketHeroSkeleton />
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  if (!resolvedId) {
     return (
       <div className="min-h-screen bg-background">
         <StorefrontHeader />
@@ -708,5 +783,5 @@ export default function PublicMarketPage() {
     );
   }
 
-  return <PublicMarketScreen key={marketId} marketId={marketId} />;
+  return <PublicMarketScreen key={resolvedId} marketId={resolvedId} />;
 }

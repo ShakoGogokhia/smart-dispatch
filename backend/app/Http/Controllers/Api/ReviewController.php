@@ -6,10 +6,26 @@ use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\Market;
 use App\Models\ProductReview;
+use App\Services\ReviewEligibilityService;
 use Illuminate\Http\Request;
 
 class ReviewController extends Controller
 {
+    public function __construct(private readonly ReviewEligibilityService $eligibility)
+    {
+    }
+
+    /** What the signed-in user may review in this market (drives the storefront review forms). */
+    public function eligibility(Request $request, Market $market)
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'can_review_market' => $this->eligibility->canReviewMarket($user, $market->id),
+            'reviewable_item_ids' => $this->eligibility->reviewableItemIds($user, $market->id),
+        ]);
+    }
+
     public function index(Item $item)
     {
         if (!ProductReview::tableExists()) {
@@ -39,18 +55,26 @@ class ReviewController extends Controller
             'order_id' => ['nullable', 'exists:orders,id'],
         ]);
 
-        $review = ProductReview::create([
-            'item_id' => $item->id,
-            'market_id' => $item->market_id,
-            'user_id' => $request->user()->id,
-            'order_id' => $data['order_id'] ?? null,
-            'rating' => $data['rating'],
-            'comment' => $data['comment'] ?? null,
-        ]);
+        if (! $this->eligibility->canReviewItem($request->user(), (int) $item->market_id, (int) $item->id)) {
+            return response()->json([
+                'message' => 'You can review this item after an order containing it has been delivered to you.',
+            ], 403);
+        }
+
+        // One review per customer per item: posting again updates it.
+        $review = ProductReview::updateOrCreate(
+            ['user_id' => $request->user()->id, 'item_id' => $item->id],
+            [
+                'market_id' => $item->market_id,
+                'order_id' => $data['order_id'] ?? null,
+                'rating' => $data['rating'],
+                'comment' => $data['comment'] ?? null,
+            ],
+        );
 
         return response()->json([
-            ...$this->serializeReview($review),
-        ], 201);
+            ...$this->serializeReview($review->loadMissing('user:id,name')),
+        ], $review->wasRecentlyCreated ? 201 : 200);
     }
 
     public function marketIndex(Market $market)
@@ -86,18 +110,25 @@ class ReviewController extends Controller
             'order_id' => ['nullable', 'exists:orders,id'],
         ]);
 
-        $review = ProductReview::create([
-            'item_id' => null,
-            'market_id' => $market->id,
-            'user_id' => $request->user()->id,
-            'order_id' => $data['order_id'] ?? null,
-            'rating' => $data['rating'],
-            'comment' => $data['comment'] ?? null,
-        ]);
+        if (! $this->eligibility->canReviewMarket($request->user(), $market->id)) {
+            return response()->json([
+                'message' => 'You can review this market after one of your orders from it has been delivered.',
+            ], 403);
+        }
+
+        // One market review per customer: posting again updates it.
+        $review = ProductReview::updateOrCreate(
+            ['user_id' => $request->user()->id, 'market_id' => $market->id, 'item_id' => null],
+            [
+                'order_id' => $data['order_id'] ?? null,
+                'rating' => $data['rating'],
+                'comment' => $data['comment'] ?? null,
+            ],
+        );
 
         return response()->json([
-            ...$this->serializeReview($review),
-        ], 201);
+            ...$this->serializeReview($review->loadMissing('user:id,name')),
+        ], $review->wasRecentlyCreated ? 201 : 200);
     }
 
     private function serializeReview(ProductReview $review): array

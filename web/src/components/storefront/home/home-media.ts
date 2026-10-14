@@ -9,6 +9,7 @@ export type DiscoveryItem = {
   market?: {
     id: number;
     name: string;
+    slug?: string | null;
     code: string;
     is_active?: boolean;
     operating_status?: StorefrontMarket["operating_status"];

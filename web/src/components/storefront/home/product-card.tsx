@@ -22,7 +22,7 @@ export function ProductCard({ item, className }: { item: DiscoveryItem; classNam
 
   return (
     <Link
-      to={`/m/${item.market_id}`}
+      to={`/m/${item.market?.slug || item.market_id}`}
       aria-label={`${item.name} at ${item.market?.name ?? "market"}${marketIsOpen ? "" : " (closed)"}`}
       className={cn(
         "group flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow outline-none hover:shadow-md focus-visible:ring-[3px] focus-visible:ring-ring/50",

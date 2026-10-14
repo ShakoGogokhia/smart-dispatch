@@ -33,7 +33,7 @@ import {
 } from "@/src/components/ui";
 import { Brand, CartButton, StorefrontBar } from "@/src/components/storefront-bar";
 import { CartLines, CartSheet, ViewCartBar } from "@/src/components/storefront/cart";
-import { SummaryRow } from "@/src/components/storefront/common";
+import { SummaryRow, type ReviewAccess } from "@/src/components/storefront/common";
 import {
   DiscoveryProductCard,
   DiscoveryProductCardSkeleton,
@@ -502,6 +502,12 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
   const { marketId } = route.params;
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(0);
+
+  // Opening another market reuses this screen; always start it at the top.
+  useEffect(() => {
+    scrollY.current = 0;
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [marketId]);
   const catalogY = useRef(0);
   const reviewsY = useRef(0);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -577,6 +583,24 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
     enabled: !!marketId,
     retry: false,
   });
+
+  // Only verified buyers (a delivered order from this market / containing the item) may post reviews.
+  const eligibilityQ = useQuery({
+    queryKey: ["review-eligibility", marketId],
+    queryFn: async () =>
+      (await api.get(`/api/markets/${marketId}/review-eligibility`)).data as { can_review_market: boolean; reviewable_item_ids: number[] },
+    enabled: !!token && !!marketId,
+    retry: false,
+  });
+
+  const reviewAccessFor = (eligible: boolean): ReviewAccess =>
+    !token ? "signed-out" : eligibilityQ.isLoading ? "checking" : eligible ? "eligible" : "ineligible";
+
+  const signInToReview = () => {
+    setSelectedItemId(null);
+    setPendingRoute({ name: "PublicMarket", params: { marketId } });
+    navigation.navigate("Login");
+  };
 
   const favoriteM = useMutation({
     mutationFn: async (payload: { market_id?: number; item_id?: number }) => (await api.post("/api/favorites/toggle", payload)).data,
@@ -924,7 +948,8 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
               reviews={marketReviewsQ.data}
               isLoading={marketReviewsQ.isLoading}
               isError={marketReviewsQ.isError}
-              isLoggedIn={!!token}
+              reviewAccess={reviewAccessFor(!!eligibilityQ.data?.can_review_market)}
+              onSignIn={signInToReview}
               rating={marketReviewRating}
               onRatingChange={setMarketReviewRating}
               comment={marketReviewComment}
@@ -971,7 +996,8 @@ export function PublicMarketScreen({ navigation, route }: PublicMarketProps) {
         }}
         reviews={reviewsQ.data}
         reviewsLoading={reviewsQ.isLoading}
-        isLoggedIn={!!token}
+        reviewAccess={reviewAccessFor(selectedItemId != null && (eligibilityQ.data?.reviewable_item_ids ?? []).includes(selectedItemId))}
+        onSignIn={signInToReview}
         reviewRating={reviewRating}
         onReviewRatingChange={setReviewRating}
         reviewComment={reviewComment}

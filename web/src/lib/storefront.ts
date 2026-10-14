@@ -41,6 +41,8 @@ export type StorefrontItemPreview = {
 export type StorefrontMarket = {
   id: number;
   name: string;
+  /** URL-friendly identifier used in storefront links (/m/{slug}). */
+  slug?: string | null;
   code: string;
   market_type?: string | null;
   address?: string | null;

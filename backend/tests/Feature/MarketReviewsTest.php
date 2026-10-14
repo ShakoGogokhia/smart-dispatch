@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Item;
 use App\Models\Market;
+use App\Models\Order;
 use App\Models\ProductReview;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -72,6 +73,27 @@ class MarketReviewsTest extends TestCase
             'code' => 'NGT001',
             'owner_user_id' => $owner->id,
             'is_active' => true,
+        ]);
+
+        // Only customers with a delivered order from the market may review it.
+        Order::create([
+            'market_id' => $market->id,
+            'customer_user_id' => $customer->id,
+            'code' => 'ORD-REVIEW-1',
+            'customer_name' => $customer->name,
+            'customer_phone' => '555-0100',
+            'pickup_lat' => 41.7151,
+            'pickup_lng' => 44.8271,
+            'dropoff_lat' => 41.7211,
+            'dropoff_lng' => 44.8011,
+            'pickup_address' => 'Pickup point',
+            'dropoff_address' => 'Dropoff point',
+            'priority' => 2,
+            'size' => 1,
+            'subtotal' => 20,
+            'discount_total' => 0,
+            'total' => 20,
+            'status' => 'DELIVERED',
         ]);
 
         $token = $customer->createToken('market-review')->plainTextToken;

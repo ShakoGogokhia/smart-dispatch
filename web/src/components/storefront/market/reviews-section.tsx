@@ -1,5 +1,6 @@
 import { forwardRef } from "react";
 import { MessageSquare, Star } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { EmptyState } from "@/components/app/empty-state";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,11 @@ type Props = {
   isLoading: boolean;
   isError: boolean;
   isLoggedIn: boolean;
+  /** Verified buyer: one of the user's orders from this market was delivered. */
+  canReview: boolean;
+  /** Eligibility is still loading (hide the note/form until we know). */
+  eligibilityLoading?: boolean;
+  signInHref: string;
   rating: number;
   onRatingChange: (value: number) => void;
   comment: string;
@@ -33,6 +39,9 @@ export const MarketReviewsSection = forwardRef<HTMLElement, Props>(function Mark
     isLoading,
     isError,
     isLoggedIn,
+    canReview,
+    eligibilityLoading = false,
+    signInHref,
     rating,
     onRatingChange,
     comment,
@@ -108,7 +117,13 @@ export const MarketReviewsSection = forwardRef<HTMLElement, Props>(function Mark
               <EmptyState compact icon={MessageSquare} title="No market reviews yet" description="Be the first to review this market." />
             )}
 
-            {isLoggedIn ? (
+            {!isLoggedIn ? (
+              <p className="text-xs text-muted-foreground">
+                <Link to={signInHref} className="font-medium text-primary underline-offset-4 hover:underline">
+                  Sign in to review
+                </Link>
+              </p>
+            ) : eligibilityLoading ? null : canReview ? (
               <ReviewForm
                 id="market-review-comment"
                 title="Your market rating"
@@ -123,7 +138,9 @@ export const MarketReviewsSection = forwardRef<HTMLElement, Props>(function Mark
                 onSubmit={onSubmit}
               />
             ) : (
-              <p className="text-xs text-muted-foreground">Sign in to leave a review.</p>
+              <p className="text-xs text-muted-foreground">
+                You can review this market after one of your orders from it is delivered.
+              </p>
             )}
           </div>
         </CardContent>

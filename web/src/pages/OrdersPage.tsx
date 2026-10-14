@@ -26,17 +26,19 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AxiosError } from "axios";
-import { MapContainer, Marker, TileLayer } from "react-leaflet";
+import { Marker } from "react-leaflet";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import "leaflet/dist/leaflet.css";
+
+import { MapView } from "@/components/app/map-view";
 
 import { EmptyState } from "@/components/app/empty-state";
 import { LoadingState } from "@/components/app/loading-state";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard, StatGrid } from "@/components/app/stat-card";
 import { StatusBadge, humanizeStatus, toneForStatus } from "@/components/app/status-badge";
-import { makeDotIcon } from "@/components/operations/map-markers";
+import { makeDotIcon, toLatLng } from "@/components/operations/map-markers";
+import { OrderReview, OrderReviewDialog } from "@/components/reviews/order-review";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -76,7 +78,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { formatDateTime, formatMoney, formatOrderStatus } from "@/lib/format";
-import { useTheme } from "@/lib/theme";
 import { useMe } from "@/lib/useMe";
 import { cn } from "@/lib/utils";
 import type { Order, Paginated } from "@/types/api";
@@ -121,7 +122,6 @@ function customerNameOf(order: Order) {
 export default function OrdersPage() {
   const meQ = useMe();
   const queryClient = useQueryClient();
-  const { theme } = useTheme();
 
   const [dropoffAddress, setDropoffAddress] = useState("Tbilisi Center");
   const [dropoffLat, setDropoffLat] = useState("41.7151");
@@ -129,13 +129,12 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
-  const [rating, setRating] = useState("5");
-  const [feedback, setFeedback] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [marketFilter, setMarketFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<{ id: number; code: string } | null>(null);
 
   const roles = meQ.data?.roles ?? [];
   const isCustomerOnly =
@@ -209,17 +208,6 @@ export default function OrdersPage() {
     },
   });
 
-  const rateM = useMutation({
-    mutationFn: async (orderId: number) =>
-      (await api.post(`/api/orders/${orderId}/rate`, { rating: Number(rating), feedback: feedback || null })).data,
-    onSuccess: async () => {
-      setRating("5");
-      setFeedback("");
-      await queryClient.invalidateQueries({ queryKey: ["orders"] });
-      await queryClient.invalidateQueries({ queryKey: ["order-detail"] });
-    },
-  });
-
   // UI-only feedback helpers (toasts); the mutations themselves are unchanged.
   const notify = (success: string) => ({
     onSuccess: () => toast.success(success),
@@ -277,7 +265,6 @@ export default function OrdersPage() {
     getErrorMessage(marketActionM.error) ||
     getErrorMessage(cancelM.error) ||
     getErrorMessage(reorderM.error) ||
-    getErrorMessage(rateM.error) ||
     getErrorMessage(refundM.error);
 
   const toggleStatus = (value: StatusFilter) => setStatusFilter((current) => (current === value ? "all" : value));
@@ -452,6 +439,7 @@ export default function OrdersPage() {
               onOpenDetail={() => setSelectedOrderId(order.id)}
               onCancel={() => setCancelTargetId(order.id)}
               onReorder={() => reorder(order.id)}
+              onRate={() => setReviewTarget({ id: order.id, code: order.code })}
             />
           ))}
         </div>
@@ -626,6 +614,8 @@ export default function OrdersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <OrderReviewDialog order={reviewTarget} onClose={() => setReviewTarget(null)} />
+
       {/* Order detail */}
       <Sheet open={selectedOrderId != null} onOpenChange={(open) => !open && setSelectedOrderId(null)}>
         <SheetContent className="w-full gap-0 sm:max-w-xl">
@@ -718,31 +708,10 @@ export default function OrdersPage() {
                 {detailOrder.assigned_driver?.latest_ping && detailOrder.status === "PICKED_UP" && (
                   <DetailSection title="Live driver tracking" description="Tracking appears after pickup so the timeline stays signal-first.">
                     <div className="h-[260px] overflow-hidden rounded-lg border">
-                      <MapContainer
-                        center={[
-                          Number(detailOrder.assigned_driver.latest_ping.lat),
-                          Number(detailOrder.assigned_driver.latest_ping.lng),
-                        ]}
-                        zoom={13}
-                        style={{ height: "100%", width: "100%" }}
-                      >
-                        <TileLayer
-                          attribution={theme === "dark" ? "&copy; OpenStreetMap &copy; CARTO" : "&copy; OpenStreetMap"}
-                          url={
-                            theme === "dark"
-                              ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                              : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          }
-                        />
-                        <Marker
-                          position={[
-                            Number(detailOrder.assigned_driver.latest_ping.lat),
-                            Number(detailOrder.assigned_driver.latest_ping.lng),
-                          ]}
-                          icon={makeDotIcon("bg-primary")}
-                        />
-                        <Marker position={[Number(detailOrder.dropoff_lat), Number(detailOrder.dropoff_lng)]} icon={makeDotIcon("bg-success")} />
-                      </MapContainer>
+                      <TrackingMap
+                        driver={toLatLng(detailOrder.assigned_driver.latest_ping.lat, detailOrder.assigned_driver.latest_ping.lng)}
+                        dropoff={toLatLng(detailOrder.dropoff_lat, detailOrder.dropoff_lng)}
+                      />
                     </div>
                     <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
@@ -799,37 +768,9 @@ export default function OrdersPage() {
                   </div>
                 </DetailSection>
 
-                <DetailSection title="Rate delivery" description="Available once the order has been delivered." icon={Star}>
-                  <div className="grid gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
-                    <div className="grid gap-2">
-                      <Label htmlFor="order-rating">Rating</Label>
-                      <Select value={rating} onValueChange={setRating}>
-                        <SelectTrigger id="order-rating" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {["5", "4", "3", "2", "1"].map((value) => (
-                            <SelectItem key={value} value={value}>
-                              {value} / 5
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="order-feedback">Feedback</Label>
-                      <Input id="order-feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="How did it go?" />
-                    </div>
-                  </div>
-                  <Button
-                    className="w-fit"
-                    onClick={() => rateM.mutate(detailOrder.id, notify("Thanks for your rating"))}
-                    disabled={!detailOrder.actions?.can_rate || rateM.isPending}
-                  >
-                    <Star />
-                    Submit rating
-                  </Button>
-                </DetailSection>
+                {detailOrder.status === "DELIVERED" && (isCustomerOnly || (meQ.data?.id != null && detailOrder.customer?.id === meQ.data.id)) ? (
+                  <OrderReview orderId={detailOrder.id} />
+                ) : null}
 
                 <DetailSection title="Order changes" description="Reorder, cancel or request a refund. Buttons are enabled when the action is allowed for this order.">
                   <div className="grid gap-2">
@@ -923,11 +864,13 @@ function CustomerOrderCard({
   onOpenDetail,
   onCancel,
   onReorder,
+  onRate,
 }: {
   order: Order;
   onOpenDetail: () => void;
   onCancel: () => void;
   onReorder: () => void;
+  onRate: () => void;
 }) {
   const steps = order.timeline ?? [];
   const doneSteps = steps.filter((step) => step.done).length;
@@ -976,7 +919,13 @@ function CustomerOrderCard({
       </CardContent>
 
       <CardFooter className="flex flex-wrap gap-2">
-        <Button asChild>
+        {order.status === "DELIVERED" ? (
+          <Button onClick={onRate}>
+            <Star />
+            Rate order
+          </Button>
+        ) : null}
+        <Button asChild variant={order.status === "DELIVERED" ? "outline" : "default"}>
           <Link to={`/track/${encodeURIComponent(order.code)}`}>
             <Navigation />
             Track
@@ -1144,5 +1093,18 @@ function FlatDetailRow({
         <div className="mt-0.5 text-sm break-words">{value}</div>
       </div>
     </div>
+  );
+}
+
+/** Driver + drop-off map for the order detail sheet. */
+function TrackingMap({ driver, dropoff }: { driver: [number, number] | null; dropoff: [number, number] | null }) {
+  const center = driver ?? dropoff;
+  if (!center) return null;
+  const points = [driver, dropoff].filter((point): point is [number, number] => point !== null);
+  return (
+    <MapView center={center} zoom={13} fitTo={points}>
+      {driver && <Marker position={driver} icon={makeDotIcon("bg-primary")} />}
+      {dropoff && <Marker position={dropoff} icon={makeDotIcon("bg-success")} />}
+    </MapView>
   );
 }
